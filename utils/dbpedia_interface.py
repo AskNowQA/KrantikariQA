@@ -302,7 +302,6 @@ class DBPedia:
 
 		except:
 			return nlutils.get_label_via_parsing(_resource_uri)
-		
 
 	def get_most_specific_class(self, _resource_uri):
 		'''
@@ -412,6 +411,8 @@ class DBPedia:
 			return left_properties	
 
 	def get_entity(self,_resource_uri,_relation,outgoing = True):
+		_resource_uri = "<" + _resource_uri + ">"
+		_relation = "<" + _relation + ">"
 		if outgoing:
 			''' Query is to find the object'''
 			temp_query = GET_OBJECT % {'target_resource':_resource_uri,'property':_relation}
@@ -420,11 +421,11 @@ class DBPedia:
 			temp_query = GET_SUBJECT % {'target_resource':_resource_uri,'property':_relation}
 		response = self.shoot_custom_query(temp_query)
 		try:
-			entity_list = [x[u'entity'][u'value'].encode('ascii', 'ignore') for x in response]
+			entity_list = [x[u'entity'][u'value'].encode('ascii', 'ignore') for x in response[u'results'][u'bindings'] ]
+			return entity_list
 		except:
 			#TODO: Find and handle exceptions appropriately
-			traceback.print_exc()
-		return  entity_list
+			print traceback.print_exc()
 
 
 

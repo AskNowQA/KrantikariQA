@@ -396,13 +396,15 @@ class DBPedia:
 		response = self.shoot_custom_query(CHECK_URL % {'target_resource':url})
 		return response["boolean"]
 
-	def get_properties(self, _uri, _right=True, _left=True):
+	def get_properties(self, _uri, _right=True, _left=True,label = True):
 		if _right:
 			right_properties = list(set(self.get_properties_of_resource(_resource_uri = _uri)))
-			right_properties = [nlutils.get_label_via_parsing(rel) for rel in right_properties]
+			if label:
+				right_properties = [nlutils.get_label_via_parsing(rel) for rel in right_properties]
 		if _left:
 			left_properties = list(set(self.get_properties_of_resource(_resource_uri = _uri, right= False)))
-			left_properties = [nlutils.get_label_via_parsing(rel) for rel in left_properties]
+			if label:
+				left_properties = [nlutils.get_label_via_parsing(rel) for rel in left_properties]
 		if _right and _left:
 			return right_properties, left_properties
 		elif _right:

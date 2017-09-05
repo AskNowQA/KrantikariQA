@@ -1,0 +1,42 @@
+(lp0
+(dp1
+Vverbalized_question
+p2
+VWhat is the <river> whose <mouth mountain> is <St. Louis> and <right tributary> is <Madison River>?
+p3
+sV_id
+p4
+V560edd5735a04aed942d6c71d7d47f1f
+p5
+sVsparql_template_id
+p6
+I308
+sVsparql_query
+p7
+VSELECT DISTINCT ?uri WHERE {?uri <http://dbpedia.org/ontology/mouthMountain> <http://dbpedia.org/resource/St._Louis> . ?uri <http://dbpedia.org/ontology/rightTributary> <http://dbpedia.org/resource/Madison_River>  . ?uri <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/University>}
+p8
+sVcorrected_question
+p9
+VWhich university with athletics department in NCAA Division I Football Bowl Subdivision has nickname Tulane Green Wave ?
+p10
+sa(dp11
+Vverbalized_question
+p12
+VWhat are the <companies> whose <programming language>'s <designer> is <Bjarne Stroustrup>?
+p13
+sV_id
+p14
+V0954b94157bc4c35a1bcb0ec0107cb74
+p15
+sVsparql_template_id
+p16
+I306
+sVsparql_query
+p17
+VSELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/designer> <http://dbpedia.org/resource/Bjarne_Stroustrup> . ?uri <http://dbpedia.org/property/programmingLanguage> ?x  . ?uri <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/School>}
+p18
+sVcorrected_question
+p19
+VList down the schools whose mascot is an animal from the order of Even toed Ungulates?
+p20
+sa.

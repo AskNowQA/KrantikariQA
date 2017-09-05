@@ -26,7 +26,8 @@ import natural_language_utilities as nlutils
 import labels_mulitple_form
 
 #GLOBAL MACROS
-DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/','http://live.dbpedia.org/sparql/']
+# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/','http://live.dbpedia.org/sparql/']
+DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
 MAX_WAIT_TIME = 1.0
 
 #SPARQL Templates
@@ -53,6 +54,10 @@ GET_CLASS_PATH = '''SELECT DISTINCT ?type WHERE { %(target_class)s rdfs:subClass
 GET_SUPERCLASS = '''SELECT DISTINCT ?type WHERE { %(target_class)s rdfs:subClassOf ?type }'''
 
 CHECK_URL = '''ASk {<%(target_resource)s> a owl:Thing} '''
+
+GET_SUBJECT = '''SELECT DISTINCT ?entity WHERE { ?entity %(property)s %(target_resource)s } '''
+
+GET_OBJECT = '''SELECT DISTINCT ?entity WHERE {	%(target_resource)s %(property)s ?entity } '''
 
 class DBPedia:
 	def __init__(self,_method='round-robin',_verbose=False,_db_name = 0,caching = True):
@@ -219,17 +224,21 @@ class DBPedia:
 
 			Return - array of values of first variable of query
 			NOTE: Only give it queries with one variable
+
 		'''
 		try:
 			response = self.shoot_custom_query(_sparql_query)
 		except:
 			traceback.print_exc()
 
+		values = {}
+		if 'ASK WHERE {' in _sparql_query:
+			values['boolean'] = response['boolean']
+			return values
 		#Now to parse the response
 		variables = [x for x in response[u'head'][u'vars']]
 
 		#NOTE: Assuming that there's only one variable
-		values = {}
 		for index in xrange(0,len(variables)):
 			value = [ x[variables[index]][u'value'].encode('ascii','ignore') for x in response[u'results'][u'bindings'] ]
 			values[variables[index]] = value
@@ -401,6 +410,22 @@ class DBPedia:
 			return right_properties
 		else:
 			return left_properties	
+
+	def get_entity(self,_resource_uri,_relation,outgoing = True):
+		if outgoing:
+			''' Query is to find the object'''
+			temp_query = GET_OBJECT % {'target_resource':_resource_uri,'property':_relation}
+		else:
+			'''Query is to find subject '''
+			temp_query = GET_SUBJECT % {'target_resource':_resource_uri,'property':_relation}
+		response = self.shoot_custom_query(temp_query)
+		try:
+			entity_list = [x[u'entity'][u'value'].encode('ascii', 'ignore') for x in response]
+		except:
+			#TODO: Find and handle exceptions appropriately
+			traceback.print_exc()
+		return  entity_list
+
 
 
 

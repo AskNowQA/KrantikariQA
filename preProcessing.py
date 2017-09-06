@@ -26,7 +26,7 @@ K_HOP_1 = 5 #selects the number of relations in the first hop in the right direc
 K_HOP_2 = 5 #selects the number of relations in second hop in the right direction
 K_HOP_1_u = 2 #selects the number of relations in second hop in the wrong direction
 K_HOP_2_u = 2 #selects the number of relations in second hop in the wrong direction
-PASSED = False
+PASSED = True
 
 def get_rank_rel(_relationsip_list, rel):
     '''
@@ -206,6 +206,7 @@ for node in data:
         data_node[u'training'][data_node[u'entity'][0]] = {}
         data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0]))]
         data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
+        data_node[u'constraints'] = {}
         final_data.append(data_node)
         # pprint(node)
         # raw_input()
@@ -226,10 +227,11 @@ for node in data:
         data_node[u'training'][data_node[u'entity'][0]] = {}
         data_node[u'training'][data_node[u'entity'][0]][u'rel1'] =  [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0]))]
         data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
+        data_node[u'constraints'] = {}
         final_data.append(data_node)
         # pprint(data_node)
         # raw_input()
-    elif node[u"sparql_template_id"]  == 3 and not PASSED:
+    elif node[u"sparql_template_id"]  == 3 or node[u"sparql_template_id"]  == 303 and not PASSED:
         '''
             {    u'_id': u'dad51bf9d0294cac99d176aba17c0241',
                  u'corrected_question': u'Name some leaders of the parent organisation of the Gestapo?',
@@ -249,22 +251,74 @@ for node in data:
         data_node[u'training'][data_node[u'entity'][0]] = {}
         data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0]))]
         data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0],[(rel1,True),(rel2,True)])
-        pprint(data_node)
-        raw_input()
+        if node[u"sparql_template_id"] == 303:
+            data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
+        else:
+            data_node[u'constraints'] = {}
+        final_data.append(data_node)
+        # pprint(data_node)
+        # raw_input()
 
-    elif node[u"sparql_template_id"]  == 303 :
+    elif node[u"sparql_template_id"]  == 5 and not PASSED:
         '''
+            >Verify this !!
             {
-                u'_id': u'380224a93b1e441994c4b9785881aa6c',
-                u'corrected_question': u'Where was the battle fought where 2nd Foreign Infantry Regiment participated  ?',
-                u'sparql_query': u'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/2nd_Foreign_Infantry_Regiment> <http://dbpedia.org/ontology/battle> ?x . ?x <http://dbpedia.org/ontology/territory> ?uri  . ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/MilitaryConflict>}',
-                u'sparql_template_id': 303,
-                u'verbalized_question': u'What is the <territory> of the <military conflict> which is the <participant in conflict> of <2nd Foreign Infantry Regiment> ?'}
+                u'_id': u'00a3465694634edc903510572f23b487',
+                u'corrected_question': u'Which party has come in power in Mumbai North?',
+                u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/constituency> <http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)> . ?x <http://dbpedia.org/ontology/party> ?uri  . }',
+                u'sparql_template_id': 5,
+                u'verbalized_question': u'What is the <party> of the <office holders> whose <constituency> is <Mumbai North (Lok Sabha constituency)>?'
             }
         '''
         pprint(node)
+        data_node = node
         triples = get_triples(node[u'sparql_query'])
-        data_node[u'constraints'] = { triples[2].split(" ")[0] : triples[2].split(" ")[1][1:-1]}
-        rel3 = triples[2].split(" ")[0]
-        # print rel3
-        # raw_input()
+        rel1 = triples[0].split(" ")[1][1:-1]
+        rel2 = triples[1].split(" ")[1][1:-1]
+        data_node[u'entity'] = []
+        data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+        data_node[u'path'] = ["-" + rel1, "+" + rel2]
+        data_node[u'training'] = {}
+        data_node[u'training'][data_node[u'entity'][0]] = {}
+        data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
+                                                                    list(dbp.get_properties(data_node[u'entity'][0]))]
+        data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0], [(rel1, False), (rel2, True)])
+        if node[u"sparql_template_id"] == 305:
+            data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
+        else:
+            data_node[u'constraints'] = {}
+        pprint(data_node)
+        raw_input()
+        final_data.append(data_node)
+
+    elif node[u'sparql_template_id']  == 6:
+        '''
+            {
+                u'_id': u'd3695db03a5e45ae8906a2527508e7c5',
+                u'corrected_question': u'Who have done their PhDs under a National Medal of Science winner?',
+                u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/prizes> <http://dbpedia.org/resource/National_Medal_of_Science> . ?uri <http://dbpedia.org/property/doctoralAdvisor> ?x  . }',
+                u'sparql_template_id': 6,
+                u'verbalized_question': u"What are the <scientists> whose <advisor>'s <prizes> is <National Medal of Science>?"
+            }
+        '''
+        pprint(node)
+        data_node = node
+        triples = get_triples(node[u'sparql_query'])
+        rel1 = triples[0].split(" ")[1][1:-1]
+        rel2 = triples[1].split(" ")[1][1:-1]
+        data_node[u'entity'] = []
+        data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+        data_node[u'path'] = ["-" + rel1, "-" + rel2]
+        data_node[u'training'] = {}
+        data_node[u'training'][data_node[u'entity'][0]] = {}
+        data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
+                                                                    list(dbp.get_properties(data_node[u'entity'][0]))]
+        data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
+            data_node[u'entity'][0], [(rel1, False), (rel2, False)])
+        if node[u"sparql_template_id"] == 305:
+            data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
+        else:
+            data_node[u'constraints'] = {}
+        pprint(data_node)
+        raw_input()
+        final_data.append(data_node)

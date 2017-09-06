@@ -189,13 +189,15 @@ for node in data:
     '''
         For now focusing on just simple question
     '''
-    if node[u"sparql_template_id"] == 1 and not PASSED:
+    if node[u"sparql_template_id"] == [1,301,401,101] and not PASSED :
         '''
-        {u'_id': u'9a7523469c8c45b58ec65ed56af6e306',
-            u'corrected_question': u'What are the schools whose city is Reading, Berkshire?',
-            u'sparql_query': u' SELECT DISTINCT ?uri WHERE {?uri <http://dbpedia.org/ontology/city> <http://dbpedia.org/resource/Reading,_Berkshire> } ',
-             u'sparql_template_id': 1,
-             u'verbalized_question': u'What are the <schools> whose <city> is <Reading, Berkshire>?'}
+            {
+                u'_id': u'9a7523469c8c45b58ec65ed56af6e306',
+                u'corrected_question': u'What are the schools whose city is Reading, Berkshire?',
+                u'sparql_query': u' SELECT DISTINCT ?uri WHERE {?uri <http://dbpedia.org/ontology/city> <http://dbpedia.org/resource/Reading,_Berkshire> } ',
+                u'sparql_template_id': 1,
+                u'verbalized_question': u'What are the <schools> whose <city> is <Reading, Berkshire>?'
+            }
 
         '''
         data_node = node
@@ -207,10 +209,15 @@ for node in data:
         data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0]))]
         data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
         data_node[u'constraints'] = {}
+        if node[u"sparql_template_id"] == 301 or node[u"sparql_template_id"] == 401:
+            data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
+        else:
+            data_node[u'constraints'] = {}
+
+        if node[u"sparql_template_id"] in [401,101]:
+            data_node[u'constraints'] = {'count' : True}
         final_data.append(data_node)
-        # pprint(node)
-        # raw_input()
-    elif node[u"sparql_template_id"] == 2 and not PASSED:
+    elif node[u"sparql_template_id"] in [2,302,402,102] and not PASSED:
         '''
             {	u'_id': u'8216e5b6033a407191548689994aa32e',
                 u'corrected_question': u'Name the municipality of Roberto Clemente Bridge ?',
@@ -219,6 +226,7 @@ for node in data:
                 u'verbalized_question': u'What is the <municipality> of Roberto Clemente Bridge ?'
             }
         '''
+        #TODO: Verify the 302 template
         data_node = node
         triples = get_triples(node[u'sparql_query'])
         data_node[u'entity'] = []
@@ -228,10 +236,16 @@ for node in data:
         data_node[u'training'][data_node[u'entity'][0]][u'rel1'] =  [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0]))]
         data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
         data_node[u'constraints'] = {}
+        if node[u"sparql_template_id"] == 302 or node[u"sparql_template_id"] == 402:
+            data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
+        else:
+            data_node[u'constraints'] = {}
+        if node[u"sparql_template_id"] in [402,102]:
+            data_node[u'constraints'] = {'count' : True}
         final_data.append(data_node)
         # pprint(data_node)
         # raw_input()
-    elif node[u"sparql_template_id"]  == 3 or node[u"sparql_template_id"]  == 303 and not PASSED:
+    elif node[u"sparql_template_id"]  in [3,303,309,9,403,409,103,109] and not PASSED:
         '''
             {    u'_id': u'dad51bf9d0294cac99d176aba17c0241',
                  u'corrected_question': u'Name some leaders of the parent organisation of the Gestapo?',
@@ -251,15 +265,17 @@ for node in data:
         data_node[u'training'][data_node[u'entity'][0]] = {}
         data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0]))]
         data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0],[(rel1,True),(rel2,True)])
-        if node[u"sparql_template_id"] == 303:
+        if node[u"sparql_template_id"] in [303,309,403,409]:
             data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
         else:
             data_node[u'constraints'] = {}
+        if node[u"sparql_template_id"] in [403,409,103,109]:
+            data_node[u'constraints'] = {'count' : True}
         final_data.append(data_node)
         # pprint(data_node)
         # raw_input()
 
-    elif node[u"sparql_template_id"]  == 5 and not PASSED:
+    elif node[u"sparql_template_id"] in [5,305,405,105,111] and not PASSED:
         '''
             >Verify this !!
             {
@@ -283,15 +299,17 @@ for node in data:
         data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
                                                                     list(dbp.get_properties(data_node[u'entity'][0]))]
         data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0], [(rel1, False), (rel2, True)])
-        if node[u"sparql_template_id"] == 305:
+        if node[u"sparql_template_id"] in [305,405] :
             data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
         else:
             data_node[u'constraints'] = {}
+        if node[u"sparql_template_id"] in [105,405,111]:
+            data_node[u'constraints'] = {'count' : True}
         pprint(data_node)
         raw_input()
         final_data.append(data_node)
 
-    elif node[u'sparql_template_id']  == 6:
+    elif node[u'sparql_template_id']  == [6, 306, 406, 106] and not PASSED:
         '''
             {
                 u'_id': u'd3695db03a5e45ae8906a2527508e7c5',
@@ -315,10 +333,12 @@ for node in data:
                                                                     list(dbp.get_properties(data_node[u'entity'][0]))]
         data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
             data_node[u'entity'][0], [(rel1, False), (rel2, False)])
-        if node[u"sparql_template_id"] == 305:
+        if node[u"sparql_template_id"] in [306,406]:
             data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
         else:
             data_node[u'constraints'] = {}
+        if node[u"sparql_template_id"] in [406,106]:
+            data_node[u'constraints'] = {'count' : True}
         pprint(data_node)
         raw_input()
         final_data.append(data_node)

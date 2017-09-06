@@ -1,12 +1,6 @@
 '''
-    Filter out all the single triple query pattern.
-    Arrange them in a curiculum learning pattern
-    Take a entity and make the following json file
-    {
-        "question"
-        "sparql id"
-        "entity" : []
-    }
+    The assumption is that the constraint is either on
+    uri or x . The constraints can be count or type.
 '''
 
 import traceback
@@ -32,7 +26,7 @@ K_HOP_1 = 5 #selects the number of relations in the first hop in the right direc
 K_HOP_2 = 5 #selects the number of relations in second hop in the right direction
 K_HOP_1_u = 2 #selects the number of relations in second hop in the wrong direction
 K_HOP_2_u = 2 #selects the number of relations in second hop in the wrong direction
-PASSED = True
+PASSED = False
 
 def get_rank_rel(_relationsip_list, rel):
     '''
@@ -255,5 +249,22 @@ for node in data:
         data_node[u'training'][data_node[u'entity'][0]] = {}
         data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0]))]
         data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0],[(rel1,True),(rel2,True)])
-        # pprint(data_node)
+        pprint(data_node)
+        raw_input()
+
+    elif node[u"sparql_template_id"]  == 303 :
+        '''
+            {
+                u'_id': u'380224a93b1e441994c4b9785881aa6c',
+                u'corrected_question': u'Where was the battle fought where 2nd Foreign Infantry Regiment participated  ?',
+                u'sparql_query': u'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/2nd_Foreign_Infantry_Regiment> <http://dbpedia.org/ontology/battle> ?x . ?x <http://dbpedia.org/ontology/territory> ?uri  . ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/MilitaryConflict>}',
+                u'sparql_template_id': 303,
+                u'verbalized_question': u'What is the <territory> of the <military conflict> which is the <participant in conflict> of <2nd Foreign Infantry Regiment> ?'}
+            }
+        '''
+        pprint(node)
+        triples = get_triples(node[u'sparql_query'])
+        data_node[u'constraints'] = { triples[2].split(" ")[0] : triples[2].split(" ")[1][1:-1]}
+        rel3 = triples[2].split(" ")[0]
+        # print rel3
         # raw_input()

@@ -24,18 +24,16 @@ def phrase_similarity(_phrase_1, _phrase_2):
     for phrase in phrase_1:
         try:
             print phrase
-            vw_phrase_1.append(model.word_vec(phrase))
+            vw_phrase_1.append(model.word_vec(phrase.lower()))
             print type(model.vw(phrase))
         except:
             print traceback.print_exc()
             continue
     for phrase in phrase_2:
         try:
-            vw_phrase_2.append(model.word_vec(phrase))
+            vw_phrase_2.append(model.word_vec(phrase.lower()))
         except:
             continue
-    print vw_phrase_1
-    print vw_phrase_2
     if len(vw_phrase_1) == 0 or len(vw_phrase_2) == 0:
         return 0
     v_phrase_1 = ConvertVectorSetToVecAverageBased(vw_phrase_1)

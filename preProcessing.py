@@ -9,6 +9,7 @@ from pprint import pprint
 
 # Custom files
 import utils.dbpedia_interface as db_interface
+import utils.phrase_similarity as sim
 
 file_directory = "resources/data_set.json"
 json_data = open(file_directory).read()
@@ -26,15 +27,38 @@ K_HOP_1 = 5 #selects the number of relations in the first hop in the right direc
 K_HOP_2 = 5 #selects the number of relations in second hop in the right direction
 K_HOP_1_u = 2 #selects the number of relations in second hop in the wrong direction
 K_HOP_2_u = 2 #selects the number of relations in second hop in the wrong direction
-PASSED = True
+PASSED = False
+
+
 
 def get_rank_rel(_relationsip_list, rel):
     '''
         The objective is to rank the relationship using some trivial similarity measure wrt rel
+        [[list of outgoing rels],[list of incoming rels]] (rel,True)  'http://dbpedia.org/ontology/childOrganisation'
+        Need to verify the function 
     '''
-    _relationsip_list
-    return _relationsip_list
+    # get_label http://dbpedia.org/ontology/childOrganisation -> child organization
+    #Transforming the list of items into a list of tuple
+    score = []
+    new_rel_list = []
+    outgoing_temp = []
+    for rels in _relationsip_list[0]:
+        score.append((rels,sim.phrase_similarity(dbp.get_label(rel),dbp.get_label(rels))))
+    new_rel_list.append(sorted(score, key=lambda student: student[1]))
 
+    score = []
+    for rels in _relationsip_list[1]:
+        score.append((rels,sim.phrase_similarity(dbp.get_label(rel),dbp.get_label(rels))))
+    new_rel_list.append(sorted(score, key=lambda student: student[1]))
+
+    final_rel_list = []
+
+    final_rel_list.append([x[1] for x in new_rel_list[0]])
+    final_rel_list.append([x[1] for x in new_rel_list[1]])
+
+    return final_rel_list
+
+    # return _relationsip_list
 
 def get_set_list(_list):
     for i in xrange(0,len(_list)):
@@ -243,7 +267,7 @@ for node in data:
         if node[u"sparql_template_id"] in [402,102]:
             data_node[u'constraints'] = {'count' : True}
         final_data.append(data_node)
-        # pprint(data_node)
+        pprint(data_node)
         # raw_input()
     elif node[u"sparql_template_id"]  in [3,303,309,9,403,409,103,109] and not PASSED:
         '''
@@ -272,7 +296,7 @@ for node in data:
         if node[u"sparql_template_id"] in [403,409,103,109]:
             data_node[u'constraints'] = {'count' : True}
         final_data.append(data_node)
-        # pprint(data_node)
+        pprint(data_node)
         # raw_input()
 
     elif node[u"sparql_template_id"] in [5,305,405,105,111] and not PASSED:
@@ -306,7 +330,7 @@ for node in data:
         if node[u"sparql_template_id"] in [105,405,111]:
             data_node[u'constraints'] = {'count' : True}
         pprint(data_node)
-        raw_input()
+        # raw_input()
         final_data.append(data_node)
 
     elif node[u'sparql_template_id']  == [6, 306, 406, 106] and not PASSED:
@@ -340,5 +364,5 @@ for node in data:
         if node[u"sparql_template_id"] in [406,106]:
             data_node[u'constraints'] = {'count' : True}
         pprint(data_node)
-        raw_input()
+        # raw_input()
         final_data.append(data_node)

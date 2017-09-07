@@ -35,7 +35,7 @@ def get_rank_rel(_relationsip_list, rel):
     '''
         The objective is to rank the relationship using some trivial similarity measure wrt rel
         [[list of outgoing rels],[list of incoming rels]] (rel,True)  'http://dbpedia.org/ontology/childOrganisation'
-        Need to verify the function 
+        Need to verify the function
     '''
     # get_label http://dbpedia.org/ontology/childOrganisation -> child organization
     #Transforming the list of items into a list of tuple
@@ -43,18 +43,21 @@ def get_rank_rel(_relationsip_list, rel):
     new_rel_list = []
     outgoing_temp = []
     for rels in _relationsip_list[0]:
-        score.append((rels,sim.phrase_similarity(dbp.get_label(rel),dbp.get_label(rels))))
-    new_rel_list.append(sorted(score, key=lambda student: student[1]))
+        score.append((rels,sim.phrase_similarity(dbp.get_label(rel[0]),dbp.get_label(rels))))
+    new_rel_list.append(sorted(score, key=lambda score: score[1]))
 
     score = []
     for rels in _relationsip_list[1]:
-        score.append((rels,sim.phrase_similarity(dbp.get_label(rel),dbp.get_label(rels))))
-    new_rel_list.append(sorted(score, key=lambda student: student[1]))
+        score.append((rels,sim.phrase_similarity(dbp.get_label(rel[0]),dbp.get_label(rels))))
+    new_rel_list.append(sorted(score, key=lambda score: score[1]))
 
     final_rel_list = []
 
-    final_rel_list.append([x[1] for x in new_rel_list[0]])
-    final_rel_list.append([x[1] for x in new_rel_list[1]])
+    final_rel_list.append([x[0] for x in new_rel_list[0]])
+    final_rel_list.append([x[0] for x in new_rel_list[1]])
+
+    print rel
+    pprint(final_rel_list)
 
     return final_rel_list
 
@@ -269,7 +272,7 @@ for node in data:
         final_data.append(data_node)
         pprint(data_node)
         # raw_input()
-    elif node[u"sparql_template_id"]  in [3,303,309,9,403,409,103,109] and not PASSED:
+    elif node[u"sparql_template_id"]  in [3,303,309,9,403,409,103,109] :
         '''
             {    u'_id': u'dad51bf9d0294cac99d176aba17c0241',
                  u'corrected_question': u'Name some leaders of the parent organisation of the Gestapo?',

@@ -23,11 +23,10 @@ def phrase_similarity(_phrase_1, _phrase_2):
     vw_phrase_2 = []
     for phrase in phrase_1:
         try:
-            print phrase
+            # print phrase
             vw_phrase_1.append(model.word_vec(phrase.lower()))
-            print type(model.vw(phrase))
         except:
-            print traceback.print_exc()
+            # print traceback.print_exc()
             continue
     for phrase in phrase_2:
         try:

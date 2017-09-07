@@ -26,8 +26,8 @@ import natural_language_utilities as nlutils
 import labels_mulitple_form
 
 #GLOBAL MACROS
-# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/','http://live.dbpedia.org/sparql/']
-DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
+DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/','http://live.dbpedia.org/sparql/']
+# DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
 MAX_WAIT_TIME = 1.0
 
 #SPARQL Templates
@@ -253,7 +253,7 @@ class DBPedia:
 
 			Always returns one value
 		'''
-
+		# print _resource_uri, "**"
 		if not nlutils.has_url(_resource_uri):
 			warnings.warn("The passed resource %s is not a proper URI but probably a shorthand. This is strongly discouraged." % _resource_uri)
 			_resource_uri = nlutils.convert_shorthand_to_uri(_resource_uri)

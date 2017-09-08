@@ -146,7 +146,7 @@ def parse(_raw):
     @TODO: Generalize this for more than one topic entity.
     """
 
-    if DEBUG: print "Question: ", _raw[u'corrected_question']
+    # if DEBUG: print "Question: ", str(_raw[u'corrected_question'])
 
     # Get the question
     question = _raw[u'corrected_question']
@@ -163,111 +163,103 @@ def parse(_raw):
     # Now, embed this path.
     path_vec = vectorize(path)
 
-    # Create False paths
+    """
+        Create all possible paths and then choose some of them.
+
+        @TODO: Generalize this for n-hops
+    """
     false_paths = []
-    if __name__ == '__main__':
-        while len(false_paths) < MAX_FALSE_PATHS:
-            """
-                Logic:
-                    -> randomly path length. If the original path has two hops, be more skewed towards more two hops.
-                    -> at every hop, randomly select a pos or a neg path.
-                        -> case1: equally probable  @TODO: Going with this for now.
-                        -> case2: depends upon **number** of predicates in both lists.
-                    -> add to the list.
 
-                @TODO: Generalize this for n-hops
-            """
-            new_fp = [entity_sf]
+    # Collect 1st hop ones.
+    for pospath in _raw[u'training'][entity][u'rel1'][0]:
+        new_fp = [entity_sf, '+'] + tokenize(pospath)
+        false_paths.append(new_fp)
 
-            path_length = np.random.choice(distributions[1]) if len(_raw[path]) == 1 else np.random.choice(distributions[2])
+    for negpath in _raw[u'training'][entity][u'rel1'][1]:
+        new_fp = [entity_sf, '-'] + tokenize(negpath)
+        false_paths.append(new_fp)
 
-            # If path_length is one:
-            if path_length == 1:
-                possible_directions = []
-                # Check which direction has possible paths.
-                if len(_raw[u'training'][entity][u'rel1'][0]) > 0:
-                    possible_directions.append(0)
-                if len(_raw[u'training'][entity][u'rel1'][1]) > 0:
-                    possible_directions.append(1)
+    # Collect 2nd hop ones
+    for poshop1 in _raw[u'training'][entity][u'rel2'][0]:
+        new_fp = [entity_sf, '+']
 
-                if not possible_directions:
-                    # In both cases, there arent any paths.
-                    if DEBUG: print "No more possible paths. Stop making paths for this pred."
-                    break
+        hop1 = poshop1.keys()[0]
+        hop1sf = dbp.get_label(hop1)
+        new_fp += tokenize(hop1sf)
 
-                # Choose between pos/neg paths.
-                direction = np.random.choice(possible_directions)     # 0 -> pos; 1 -> neg
+        for poshop2 in poshop1[hop1][0]:
+            temp_fp = new_fp[:] + ['+'] + tokenize(poshop2)
+            false_paths.append(temp_fp)
 
-                # Pop a random predicate from the rel1 predicates and append it to new fp
-                try:
-                    selected_pred = _raw[u'training'][entity][u'rel1'][direction].pop(
-                        np.random.choice(_raw[u'training'][entity][u'rel1'][direction]))
-                # @TODO: At this point, check if the pred has popped from the list or not.
-                except IndexError:
-                    # Trying to pop from an empty list.
-                    break
+        for neghop2 in poshop1[hop1][1]:
+            temp_fp = new_fp[:] + ['-'] + tokenize(neghop2)
+            false_paths.append(temp_fp)
 
-                # In case the predicate is made up of multiple words, split and add them as different items in the list.
-                selected_pred = selected_pred.split()
+    for neghop1 in _raw[u'training'][entity][u'rel2'][0]:
+        new_fp = [entity_sf, '-']
 
-                # On this last addition (predicate), then apppend the pos/neg sign as decided by the direction.
-                # @TODO: This sign can be appended to all the words and not just the first one.
-                if direction == 0:
-                    selected_pred[0] = '+' + selected_pred[0]
-                else:
-                    selected_pred[0] = '-' + selected_pred[0]
+        hop1 = neghop1.keys()[0]
+        hop1sf = dbp.get_label(hop1)
+        new_fp += tokenize(hop1sf)
 
-                # Finally append it to the false path
-                if __name__ == '__main__':
-                    new_fp.append(selected_pred)
+        for poshop2 in neghop1[hop1][0]:
+            temp_fp = new_fp[:] + ['+'] + tokenize(poshop2)
+            false_paths.append(temp_fp)
 
-            elif path_length == 2:
-                # @TODO: Assuming that the JSON is clean. (No entry with only 1hop pred, and no pred for 2nd hop).
+        for neghop2 in neghop1[hop1][1]:
+            temp_fp = new_fp[:] + ['-'] + tokenize(neghop2)
+            false_paths.append(temp_fp)
 
-                possible_directions_1hop = []
-                if len(_raw[u'training'][entity][u'rel2'][0]) > 0:
-                    possible_directions.append(0)
-                if len(_raw[u'training'][entity][u'rel1'][1]) > 0:
-                    possible_directions.append(1)
+    # From all these paths, randomly choose some.
+    false_paths = np.random.choice(false_paths, MAX_FALSE_PATHS)
 
-                if not possible_directions:
-                    # In both cases, there aren't any paths.
-                    break
+    # @TODO: Test them all.
 
-                # Choose between pos/neg paths.
-                direction = np.random.choice(possible_directions)     # 0 -> pos; 1 -> neg
-
-                # Select a random predicate from the rel1 preds
-                try:
-                    selected_pred = np.random.choice(_raw[u'training'][entity][u'rel1'][direction])
-                except ValueError:
-                    # Trying to choose from an empty list.
-                    break
-
-                
-
-                # Break out a secondary path out this as well.
-                # In case the predicate is made up of multiple words, split and add them as different items in the list.
-                selected_pred = selected_pred.split()
-
-                # On this last addition (predicate), then apppend the pos/neg sign as decided by the direction.
-                # @TODO: This sign can be appended to all the words and not just the first one.
-                if direction == 0:
-                    selected_pred[0] = '+' + selected_pred[0]
-                else:
-                    selected_pred[0] = '-' + selected_pred[0]
-
-                # Choose b/w +/- on the first hop
+    # @TODO: Encode them all.
+    return path, false_paths
 
 
-    #That's your x.
 
-    # Now to embed this path.
+if __name__ == "__main__":
+    """
+        Embeddding Tests:
+            1. Load an embedding
+            2. Check it for some sentences
+            3. Fire up a loop for token tests
+            4. Run it on LC QuAD and report the number of questions with unks and total unks encountered.
+    """
+    options = raw_input("Type in the numbers corresponding to the tests you want to run.")
 
+    if "1" in options:
+        prepare("GLOVE")
+        print "Finished loading the embedding. Moving on."
 
-    pass
+    if "2" in options:
+        sents = [
+            "Who is the president of United States?",
+            "For which band does Joe Hahn perform?",
+            "Name some people playing for the Turkish handball league?"
+        ]
 
-"""
+        for sentence in sents:
+            embedding = vectorize(sentence)
+            pprint(embedding)
+            raw_input(sentence)
+
+    if "3" in options:
+        while True:
+            tok = raw_input("Enter your word")
+            if tok.lower() in ["stop", "bye", "q", "quit", "exit"]: break
+            print vectorize(tok)
+
+    if "4" in options:
+        # @TODO: implement this.
+        pass
+
+    """
+        Parsing tests.
+    """
+    data = """
     Structure of Input JSON.
     {u'_id': u'00a3465694634edc903510572f23b487',
      u'constraints': {},
@@ -333,47 +325,6 @@ def parse(_raw):
                                                                                                                                                         ['primary Topic']]}]]}},
      u'verbalized_question': u'What is the <party> of the <office holders> whose <constituency> is <Mumbai North (Lok Sabha constituency)>?'}
 """
-
-
-# Prepare X and Y
-# @TODO
-
-if __name__ == "__main__":
-    """
-        Embeddding Tests:
-            1. Load an embedding
-            2. Check it for some sentences
-            3. Fire up a loop for token tests
-            4. Run it on LC QuAD and report the number of questions with unks and total unks encountered.
-    """
-    options = raw_input("Type in the numbers corresponding to the tests you want to run.")
-
-    if "1" in options:
-        prepare("GLOVE")
-        print "Finished loading the embedding. Moving on."
-
-    if "2" in options:
-        sents = [
-            "Who is the president of United States?",
-            "For which band does Joe Hahn perform?",
-            "Name some people playing for the Turkish handball league?"
-        ]
-
-        for sentence in sents:
-            embedding = vectorize(sentence)
-            pprint(embedding)
-            raw_input(sentence)
-
-    if "3" in options:
-        while True:
-            tok = raw_input("Enter your word")
-            if tok.lower() in ["stop", "bye", "q", "quit", "exit"]: break
-            print vectorize(tok)
-
-    if "4" in options:
-        # @TODO: implement this.
-        pass
-
-    """
-        Parsing tests.
-    """
+    tp, fp = parse(data)
+    pprint(tp)
+    pprint(fp)

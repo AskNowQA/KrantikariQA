@@ -269,7 +269,9 @@ class DBPedia:
 
 		except KeyError:
 			#Label not found in file. Throw it as a query to DBpedia
+			# print "####", "its a key error"
 			try:
+				# print _resource_uri
 				response = self.shoot_custom_query(GET_LABEL_OF_RESOURCE % {'target_resource': _resource_uri})
 			
 				results = [x[u'label'][u'value'].encode('ascii','ignore') for x in response[u'results'][u'bindings'] ]

@@ -58,6 +58,7 @@ def get_rank_rel(_relationsip_list, rel):
 
     print rel
     pprint(final_rel_list)
+    raw_input('check')
 
     return final_rel_list
 
@@ -171,7 +172,7 @@ def updated_get_relationship_hop(_entity, _relation):
     outgoing_relationships = []
     incoming_relationships = []
     for ent in entities:
-        rel = dbp.get_properties(ent)
+        rel = dbp.get_properties(ent,label=False)
         outgoing_relationships =  outgoing_relationships + list(set(rel[0]))
         incoming_relationships = incoming_relationships + list(set(rel[1]))
     outgoing_relationships = list(set(outgoing_relationships))

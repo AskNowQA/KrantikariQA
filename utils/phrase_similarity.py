@@ -2,6 +2,7 @@
     calculates the simialrity between two phrases using word2vec
 
 '''
+#TODO: Check how well is this performing
 
 import gensim
 import numpy as np
@@ -38,6 +39,6 @@ def phrase_similarity(_phrase_1, _phrase_2):
     v_phrase_1 = ConvertVectorSetToVecAverageBased(vw_phrase_1)
     v_phrase_2 = ConvertVectorSetToVecAverageBased(vw_phrase_2)
     cosine_similarity = np.dot(v_phrase_1, v_phrase_2) / (np.linalg.norm(v_phrase_1) * np.linalg.norm(v_phrase_2))
-    return cosine_similarity
+    return float(cosine_similarity)
 
-print phrase_similarity("military branchere","child organization")
+print type(float(phrase_similarity("military branchere","child organization")))

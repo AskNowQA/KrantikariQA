@@ -9,8 +9,11 @@
 
 """
 import os
+import re
+import ujson
 import pickle
 import warnings
+import traceback
 import numpy as np
 
 from pprint import pprint
@@ -84,8 +87,9 @@ def prepare(_embedding = EMBEDDING):
 def vectorize(_tokens, _report_unks = False):
     """
         Function to embed a sentence and return it as a list of vectors.
+        WARNING: Give it already split. I ain't splitting it for ye.
 
-        :param _input: The sentence you want embedded.
+        :param _input: The sentence you want embedded. (Assumed pre-tokenized input)
         :param _report_unks: Whether or not return the out of vocab words
         :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
     """
@@ -101,35 +105,55 @@ def vectorize(_tokens, _report_unks = False):
     op = []
     unks = []
     for token in _tokens:
-        try:
 
-            #
+        # Small cap everything
+        token = token.lower()
 
-            if EMBEDDING == "GLOVE": token_embedding = embedding_glove[token]
-            elif EMBEDDING == 'WORD2VEC': token_embedding = embedding_word2vec[token]
-        except KeyError:
-            if _report_unks: unks.append(token)
-            token_embedding = np.zeros(300, dtype=np.float32)
+        if token == "+":
+            token_embedding = np.repeat(1,300)
+        elif token == "-":
+            token_embedding = np.repeat(-1, 300)
+        else:
+            try:
+                if EMBEDDING == "GLOVE": token_embedding = embedding_glove[token]
+                elif EMBEDDING == 'WORD2VEC': token_embedding = embedding_word2vec[token]
+
+            except KeyError:
+                if _report_unks: unks.append(token)
+                token_embedding = np.zeros(300, dtype=np.float32)
+
         op += [token_embedding]
 
-    if DEBUG: print _tokens, "\n",
+    # if DEBUG: print _tokens, "\n",
 
-    return np.asarray(op) if _report_unks else np.asarray(op), unks
+    return (np.asarray(op), unks) if _report_unks else np.asarray(op)
 
 
-def tokenize(_input):
+def tokenize(_input, _ignore_brackets = False):
     """
         Tokenize a question.
         Changes:
             - removes question marks
             - removes commas
             - removes trailing spaces
+            - can remove text inside one-level brackets.
 
-
-        :param _input: str
+        @TODO: Improve tokenization
+        :param _input: str, _ignore_brackets: bool
         :return: list of tokens
     """
-    return _input.replace("?", "").replace(",", "").strip().split()
+    cleaner_input = _input.replace("?", "").replace(",", "").strip()
+    if _ignore_brackets:
+        # If there's some text b/w brackets, remove it. @TODO: NESTED parenthesis not covered.
+        pattern = r'\([^\)]*\)'
+        matcher = re.search(pattern, cleaner_input, 0)
+
+        if matcher:
+            substring = matcher.group()
+
+            cleaner_input = cleaner_input[:cleaner_input.index(substring)] + cleaner_input[_input.index(substring) + len(substring):]
+
+    return cleaner_input.strip().split()
 
 
 def parse(_raw):
@@ -151,40 +175,43 @@ def parse(_raw):
     # Get the question
     question = _raw[u'corrected_question']
 
+    # Tokenize the question
+    question = tokenize(question)
+
     # Now, embed the question.
-    ques_vec = vectorize(tokenize(question), False)
+    ques_vec = vectorize(question, False)
 
     # Make the correct path
     entity = _raw[u'entity'][0]
-    entity_sf = dbp.get_label(entity)   # @TODO: When dealing with two entities, fix this.
-    path_sf = [x[0]+dbp.get_label(x[1:]) for x in _raw[u'path']]
-    path = [entity_sf] + path_sf
+    entity_sf = tokenize(dbp.get_label(entity), _ignore_brackets=True)   # @TODO: When dealing with two entities, fix this.
+    path_sf = []
+    for x in _raw[u'path']:
+        path_sf.append(x[0])
+        path_sf.append(dbp.get_label(x[1:]))
+    # path_sf = [x[0] + dbp.get_label(x[1:]) for x in _raw[u'path']]
+    path = entity_sf + path_sf
 
-    # Now, embed this path.
-    path_vec = vectorize(path)
 
     """
         Create all possible paths and then choose some of them.
-
-        @TODO: Generalize this for n-hops
     """
     false_paths = []
 
     # Collect 1st hop ones.
     for pospath in _raw[u'training'][entity][u'rel1'][0]:
-        new_fp = [entity_sf, '+'] + tokenize(pospath)
+        new_fp = entity_sf + ['+'] + tokenize(pospath)
         false_paths.append(new_fp)
 
     for negpath in _raw[u'training'][entity][u'rel1'][1]:
-        new_fp = [entity_sf, '-'] + tokenize(negpath)
+        new_fp = entity_sf + ['-'] + tokenize(negpath)
         false_paths.append(new_fp)
 
     # Collect 2nd hop ones
     for poshop1 in _raw[u'training'][entity][u'rel2'][0]:
-        new_fp = [entity_sf, '+']
+        new_fp = entity_sf + ['+']
 
         hop1 = poshop1.keys()[0]
-        hop1sf = dbp.get_label(hop1)
+        hop1sf = dbp.get_label(hop1.replace(",",""))
         new_fp += tokenize(hop1sf)
 
         for poshop2 in poshop1[hop1][0]:
@@ -195,11 +222,11 @@ def parse(_raw):
             temp_fp = new_fp[:] + ['-'] + tokenize(neghop2)
             false_paths.append(temp_fp)
 
-    for neghop1 in _raw[u'training'][entity][u'rel2'][0]:
-        new_fp = [entity_sf, '-']
+    for neghop1 in _raw[u'training'][entity][u'rel2'][1]:
+        new_fp = entity_sf + ['-']
 
         hop1 = neghop1.keys()[0]
-        hop1sf = dbp.get_label(hop1)
+        hop1sf = dbp.get_label(hop1.replace(",",""))
         new_fp += tokenize(hop1sf)
 
         for poshop2 in neghop1[hop1][0]:
@@ -213,16 +240,21 @@ def parse(_raw):
     # From all these paths, randomly choose some.
     false_paths = np.random.choice(false_paths, MAX_FALSE_PATHS)
 
-    # @TODO: Test them all.
+    # Vectorize paths
+    v_path = vectorize(path)
+    v_false_paths = [ vectorize(x) for x in false_paths ]
 
-    # @TODO: Encode them all.
-    return path, false_paths
+    if DEBUG:
+        print path
+        print "now fps"
+        print false_paths
 
-
+    # Throw it out.
+    return v_path, v_false_paths
 
 if __name__ == "__main__":
     """
-        Embeddding Tests:
+        Embedding Tests:
             1. Load an embedding
             2. Check it for some sentences
             3. Fire up a loop for token tests
@@ -242,7 +274,7 @@ if __name__ == "__main__":
         ]
 
         for sentence in sents:
-            embedding = vectorize(sentence)
+            embedding = vectorize(tokenize(sentence))
             pprint(embedding)
             raw_input(sentence)
 
@@ -250,81 +282,142 @@ if __name__ == "__main__":
         while True:
             tok = raw_input("Enter your word")
             if tok.lower() in ["stop", "bye", "q", "quit", "exit"]: break
-            print vectorize(tok)
+            tok = tok.strip()
+
+            # Quickly manage the multi word problem
+            if ' ' in tok:
+                tok = tok.split()
+            else:
+                tok = [tok]
+
+            result = vectorize(tok)
+            print result
+            try:
+                print result.shape
+            except AttributeError:
+                traceback.print_exc()
 
     if "4" in options:
         # @TODO: implement this.
         pass
 
+
     """
         Parsing tests.
     """
     data = """
-    Structure of Input JSON.
-    {u'_id': u'00a3465694634edc903510572f23b487',
-     u'constraints': {},
-     u'corrected_question': u'Which party has come in power in Mumbai North?',
-     u'entity': [u'http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)'],
-     u'path': [u'-http://dbpedia.org/property/constituency',
-               u'+http://dbpedia.org/ontology/party'],
-     u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/constituency> <http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)> . ?x <http://dbpedia.org/ontology/party> ?uri  . }',
-     u'sparql_template_id': 5,
-     u'training': {u'http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)': {u'rel1': [['wiki Page Uses Template',
-                                                                                                     'owl',
-                                                                                                     'hypernym',
-                                                                                                     '22-rdf-syntax-ns',
-                                                                                                     'wiki Page Wiki Link',
-                                                                                                     'candidate',
-                                                                                                     'prov',
-                                                                                                     'wiki Page Wiki Link Text',
-                                                                                                     'votes',
-                                                                                                     'wiki Page Length',
-                                                                                                     'rdf-schema',
-                                                                                                     'wiki Page ID',
-                                                                                                     'is Primary Topic Of',
-                                                                                                     'wiki Page Out Degree',
-                                                                                                     'party',
-                                                                                                     'percentage',
-                                                                                                     'wiki Page Revision ID',
-                                                                                                     'abstract',
-                                                                                                     'change',
-                                                                                                     'subject'],
-                                                                                                    ['leaders Seat',
-                                                                                                     'blank1 Info Sec',
-                                                                                                     'wiki Page Wiki Link',
-                                                                                                     'wiki Page Redirects',
-                                                                                                     'region',
-                                                                                                     'primary Topic',
-                                                                                                     'constituency',
-                                                                                                     'constituency Mp',
-                                                                                                     'is Cited By']],
-                                                                                          u'rel2': [[{'http://dbpedia.org/property/party': [[],
-                                                                                                                                            []]},
-                                                                                                     {'http://dbpedia.org/property/percentage': [[],
-                                                                                                                                                 []]}],
-                                                                                                    [{'http://dbpedia.org/property/constituency': [['owl',
-                                                                                                                                                    'hypernym'],
-                                                                                                                                                   ['predecessor',
-                                                                                                                                                    'leader Name',
-                                                                                                                                                    'is Cited By',
-                                                                                                                                                    'wiki Page Wiki Link',
-                                                                                                                                                    'before']]},
-                                                                                                     {'http://xmlns.com/foaf/0.1/primaryTopic': [[],
-                                                                                                                                                 []]},
-                                                                                                     {'http://dbpedia.org/property/blank1InfoSec': [['blank2 Info Sec',
-                                                                                                                                                     'blank2 Name Sec'],
-                                                                                                                                                    ['locale',
-                                                                                                                                                     'city',
-                                                                                                                                                     'is Cited By',
-                                                                                                                                                     'wiki Page Wiki Link',
-                                                                                                                                                     'residence']]},
-                                                                                                     {'http://dbpedia.org/property/isCitedBy': [[],
-                                                                                                                                                []]},
-                                                                                                     {'http://dbpedia.org/ontology/wikiPageRedirects': [['wiki Page Uses Template',
-                                                                                                                                                         'wiki Page Wiki Link'],
-                                                                                                                                                        ['primary Topic']]}]]}},
-     u'verbalized_question': u'What is the <party> of the <office holders> whose <constituency> is <Mumbai North (Lok Sabha constituency)>?'}
-"""
-    tp, fp = parse(data)
+    {
+	"_id": "00a3465694634edc903510572f23b487",
+	"constraints": {},
+	"corrected_question": "Which party has come in power in Mumbai North?",
+	"entity": ["http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)"],
+	"path": ["-http://dbpedia.org/property/constituency",
+		"+http://dbpedia.org/ontology/party"
+	],
+	"sparql_query": "SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/constituency> <http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)> . ?x <http://dbpedia.org/ontology/party> ?uri  . }",
+	"sparql_template_id": 5,
+	"training": {
+		"http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)": {
+			"rel1": [
+				["wiki Page Uses Template",
+					"owl",
+					"hypernym",
+					"22-rdf-syntax-ns",
+					"wiki Page Wiki Link",
+					"candidate",
+					"prov",
+					"wiki Page Wiki Link Text",
+					"votes",
+					"wiki Page Length",
+					"rdf-schema",
+					"wiki Page ID",
+					"is Primary Topic Of",
+					"wiki Page Out Degree",
+					"party",
+					"percentage",
+					"wiki Page Revision ID",
+					"abstract",
+					"change",
+					"subject"
+				],
+				["leaders Seat",
+					"blank1 Info Sec",
+					"wiki Page Wiki Link",
+					"wiki Page Redirects",
+					"region",
+					"primary Topic",
+					"constituency",
+					"constituency Mp",
+					"is Cited By"
+				]
+			],
+			"rel2": [
+				[{
+						",http://dbpedia.org/property/party": [
+							[],
+							[]
+						]
+					},
+					{
+						",http://dbpedia.org/property/percentage": [
+							[],
+							[]
+						]
+					}
+				],
+				[{
+						",http://dbpedia.org/property/constituency": [
+							[",owl",
+								",hypernym"
+							],
+							[",predecessor",
+								",leader Name",
+								",is Cited By",
+								",wiki Page Wiki Link",
+								",before"
+							]
+						]
+					},
+					{
+						",http://xmlns.com/foaf/0.1/primaryTopic": [
+							[],
+							[]
+						]
+					},
+					{
+						",http://dbpedia.org/property/blank1InfoSec": [
+							[",blank2 Info Sec",
+								",blank2 Name Sec"
+							],
+							[",locale",
+								",city",
+								",is Cited By",
+								",wiki Page Wiki Link",
+								",residence"
+							]
+						]
+					},
+					{
+						",http://dbpedia.org/property/isCitedBy": [
+							[],
+							[]
+						]
+					},
+					{
+						",http://dbpedia.org/ontology/wikiPageRedirects": [
+							[",wiki Page Uses Template",
+								",wiki Page Wiki Link"
+							],
+							[",primary Topic"]
+						]
+					}
+				]
+			]
+		}
+	},
+	"verbalized_question": "What is the <party> of the <office holders> whose <constituency> is <Mumbai North (Lok Sabha constituency)>?"
+}
+    """
+    tp, fp = parse(ujson.loads(data))
     pprint(tp)
     pprint(fp)

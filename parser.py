@@ -179,17 +179,17 @@ def parse(_raw):
     question = tokenize(question)
 
     # Now, embed the question.
-    ques_vec = vectorize(question, False)
+    v_question = vectorize(question, False)
 
     # Make the correct path
     entity = _raw[u'entity'][0]
-    entity_sf = tokenize(dbp.get_label(entity), _ignore_brackets=True)   # @TODO: When dealing with two entities, fix this.
+    entity_sf = tokenize(dbp.get_label(entity), _ignore_brackets=True)   # @TODO: When dealing with many ent, fix this.
     path_sf = []
     for x in _raw[u'path']:
         path_sf.append(x[0])
         path_sf.append(dbp.get_label(x[1:]))
     # path_sf = [x[0] + dbp.get_label(x[1:]) for x in _raw[u'path']]
-    path = entity_sf + path_sf
+    true_path = entity_sf + path_sf
 
 
     """
@@ -199,11 +199,11 @@ def parse(_raw):
 
     # Collect 1st hop ones.
     for pospath in _raw[u'training'][entity][u'rel1'][0]:
-        new_fp = entity_sf + ['+'] + tokenize(pospath)
+        new_fp = entity_sf + ['+'] + tokenize(dbp.get_label(pospath))
         false_paths.append(new_fp)
 
     for negpath in _raw[u'training'][entity][u'rel1'][1]:
-        new_fp = entity_sf + ['-'] + tokenize(negpath)
+        new_fp = entity_sf + ['-'] + tokenize(dbp.get_label(negpath))
         false_paths.append(new_fp)
 
     # Collect 2nd hop ones
@@ -215,11 +215,11 @@ def parse(_raw):
         new_fp += tokenize(hop1sf)
 
         for poshop2 in poshop1[hop1][0]:
-            temp_fp = new_fp[:] + ['+'] + tokenize(poshop2)
+            temp_fp = new_fp[:] + ['+'] + tokenize(dbp.get_label(poshop2[0]))
             false_paths.append(temp_fp)
 
         for neghop2 in poshop1[hop1][1]:
-            temp_fp = new_fp[:] + ['-'] + tokenize(neghop2)
+            temp_fp = new_fp[:] + ['-'] + tokenize(dbp.get_label(neghop2[0]))
             false_paths.append(temp_fp)
 
     for neghop1 in _raw[u'training'][entity][u'rel2'][1]:
@@ -230,27 +230,45 @@ def parse(_raw):
         new_fp += tokenize(hop1sf)
 
         for poshop2 in neghop1[hop1][0]:
-            temp_fp = new_fp[:] + ['+'] + tokenize(poshop2)
+            temp_fp = new_fp[:] + ['+'] + tokenize(dbp.get_label(poshop2[0]))
             false_paths.append(temp_fp)
 
         for neghop2 in neghop1[hop1][1]:
-            temp_fp = new_fp[:] + ['-'] + tokenize(neghop2)
+            temp_fp = new_fp[:] + ['-'] + tokenize(dbp.get_label(neghop2[0]))
             false_paths.append(temp_fp)
 
     # From all these paths, randomly choose some.
     false_paths = np.random.choice(false_paths, MAX_FALSE_PATHS)
 
     # Vectorize paths
-    v_path = vectorize(path)
+    v_true_path = vectorize(true_path)
     v_false_paths = [ vectorize(x) for x in false_paths ]
 
     if DEBUG:
-        print path
+        print true_path
         print "now fps"
         print false_paths
 
     # Throw it out.
-    return v_path, v_false_paths
+    return v_question, v_true_path, v_false_paths
+
+
+def run(_readfilename='resources/data.json', _writefilename='resources/parsed_data.json', _debug = DEBUG):
+    """
+
+    :param _readfilename:   the filename (directory info included) to read the JSONs that need parsing
+    :param _writefilename:  the file to which the parsed (embedded+padded) data is to be written to
+    :param _debug:          the boolean param can be overwritten if wanted.
+    :return: statuscode(?)
+    """
+    global DEBUG
+
+    # Override the DEBUG boolean
+    DEBUG = _debug
+
+    # Read JSONs
+    data = ujson.load(open(_readfilename))['data']
+
 
 if __name__ == "__main__":
     """
@@ -306,118 +324,143 @@ if __name__ == "__main__":
         Parsing tests.
     """
     data = """
-    {
-	"_id": "00a3465694634edc903510572f23b487",
-	"constraints": {},
-	"corrected_question": "Which party has come in power in Mumbai North?",
-	"entity": ["http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)"],
-	"path": ["-http://dbpedia.org/property/constituency",
-		"+http://dbpedia.org/ontology/party"
-	],
-	"sparql_query": "SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/constituency> <http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)> . ?x <http://dbpedia.org/ontology/party> ?uri  . }",
-	"sparql_template_id": 5,
-	"training": {
-		"http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)": {
-			"rel1": [
-				["wiki Page Uses Template",
-					"owl",
-					"hypernym",
-					"22-rdf-syntax-ns",
-					"wiki Page Wiki Link",
-					"candidate",
-					"prov",
-					"wiki Page Wiki Link Text",
-					"votes",
-					"wiki Page Length",
-					"rdf-schema",
-					"wiki Page ID",
-					"is Primary Topic Of",
-					"wiki Page Out Degree",
-					"party",
-					"percentage",
-					"wiki Page Revision ID",
-					"abstract",
-					"change",
-					"subject"
-				],
-				["leaders Seat",
-					"blank1 Info Sec",
-					"wiki Page Wiki Link",
-					"wiki Page Redirects",
-					"region",
-					"primary Topic",
-					"constituency",
-					"constituency Mp",
-					"is Cited By"
-				]
-			],
-			"rel2": [
-				[{
-						",http://dbpedia.org/property/party": [
-							[],
-							[]
-						]
-					},
-					{
-						",http://dbpedia.org/property/percentage": [
-							[],
-							[]
-						]
-					}
-				],
-				[{
-						",http://dbpedia.org/property/constituency": [
-							[",owl",
-								",hypernym"
-							],
-							[",predecessor",
-								",leader Name",
-								",is Cited By",
-								",wiki Page Wiki Link",
-								",before"
-							]
-						]
-					},
-					{
-						",http://xmlns.com/foaf/0.1/primaryTopic": [
-							[],
-							[]
-						]
-					},
-					{
-						",http://dbpedia.org/property/blank1InfoSec": [
-							[",blank2 Info Sec",
-								",blank2 Name Sec"
-							],
-							[",locale",
-								",city",
-								",is Cited By",
-								",wiki Page Wiki Link",
-								",residence"
-							]
-						]
-					},
-					{
-						",http://dbpedia.org/property/isCitedBy": [
-							[],
-							[]
-						]
-					},
-					{
-						",http://dbpedia.org/ontology/wikiPageRedirects": [
-							[",wiki Page Uses Template",
-								",wiki Page Wiki Link"
-							],
-							[",primary Topic"]
-						]
-					}
-				]
-			]
-		}
-	},
-	"verbalized_question": "What is the <party> of the <office holders> whose <constituency> is <Mumbai North (Lok Sabha constituency)>?"
-}
+    {u'_id': u'dad51bf9d0294cac99d176aba17c0241',
+ u'constraints': {},
+ u'corrected_question': u'Name some leaders of the parent organisation of the Gestapo?',
+ u'entity': [u'http://dbpedia.org/resource/Gestapo'],
+ u'path': [u'+http://dbpedia.org/ontology/parentOrganisation',
+           u'+http://dbpedia.org/ontology/leader'],
+ u'sparql_query': u'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Gestapo> <http://dbpedia.org/ontology/parentOrganisation> ?x . ?x <http://dbpedia.org/ontology/leader> ?uri  . }',
+ u'sparql_template_id': 3,
+ u'training': {u'http://dbpedia.org/resource/Gestapo': {u'rel1': [['owl',
+                                                                   'hypernym',
+                                                                   'chief3 Position',
+                                                                   'longm',
+                                                                   'point',
+                                                                   'longs',
+                                                                   'abstract',
+                                                                   'jurisdiction',
+                                                                   'headquarter',
+                                                                   'depiction',
+                                                                   'thumbnail',
+                                                                   'wiki Page ID',
+                                                                   'wgs84 pos',
+                                                                   'logo',
+                                                                   'chief2 Name',
+                                                                   'chief3 Name',
+                                                                   'minister1 Pfo',
+                                                                   'subject',
+                                                                   'lats',
+                                                                   'prov',
+                                                                   'logo Caption',
+                                                                   'latd',
+                                                                   'rdf-schema',
+                                                                   'parent Organisation',
+                                                                   'chief2 Position',
+                                                                   'latm',
+                                                                   'vrank',
+                                                                   'longd',
+                                                                   'type',
+                                                                   'formation Date',
+                                                                   'picture Caption',
+                                                                   'picture',
+                                                                   'latns',
+                                                                   'wiki Page Wiki Link',
+                                                                   'formation Year',
+                                                                   'picture Width',
+                                                                   'minister3 Pfo',
+                                                                   'minister2 Pfo',
+                                                                   'chief1 Position',
+                                                                   'is Primary Topic Of',
+                                                                   'longew',
+                                                                   'extinction Year',
+                                                                   '22-rdf-syntax-ns',
+                                                                   'name',
+                                                                   'wiki Page Revision ID',
+                                                                   'location',
+                                                                   'leader',
+                                                                   'preceding',
+                                                                   'wiki Page External Link',
+                                                                   'minister2 Name',
+                                                                   'logo Width',
+                                                                   'extinction Date',
+                                                                   'minister3 Name',
+                                                                   'number Of Employees'],
+                                                                  ['hypernym',
+                                                                   'military Branch',
+                                                                   'wiki Page Wiki Link',
+                                                                   'wiki Page Redirects',
+                                                                   'primary Topic',
+                                                                   'operator',
+                                                                   'child Organisation',
+                                                                   'military Unit',
+                                                                   'occupation']],
+                                                        u'rel2': [[{('http://purl.org/linguistics/gold/hypernym', 0): [[('http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                                                                                                                         0),
+                                                                                                                        ('http://dbpedia.org/ontology/abstract',
+                                                                                                                         0),
+                                                                                                                        ('http://dbpedia.org/ontology/wikiPageExternalLink',
+                                                                                                                         0),
+                                                                                                                        ('http://www.w3.org/2000/01/rdf-schema#comment',
+                                                                                                                         0),
+                                                                                                                        ('http://purl.org/dc/terms/subject',
+                                                                                                                         0)],
+                                                                                                                       [('http://www.w3.org/2000/01/rdf-schema#seeAlso',
+                                                                                                                         0),
+                                                                                                                        ('http://dbpedia.org/ontology/genre',
+                                                                                                                         0)]]},
+                                                                   {('http://dbpedia.org/property/chief1Position', 0): [[],
+                                                                                                                        []]},
+                                                                   {('http://dbpedia.org/property/pictureWidth', 0): [[],
+                                                                                                                      []]},
+                                                                   {('http://dbpedia.org/ontology/leader', 0): [[('http://dbpedia.org/ontology/chancellor',
+                                                                                                                  0.25629696249961853),
+                                                                                                                 ('http://dbpedia.org/ontology/president',
+                                                                                                                  0.4555639922618866),
+                                                                                                                 ('http://dbpedia.org/property/predecessor',
+                                                                                                                  0.22485944628715515),
+                                                                                                                 ('http://dbpedia.org/ontology/successor',
+                                                                                                                  0.346670538187027),
+                                                                                                                 ('http://dbpedia.org/ontology/party',
+                                                                                                                  0.3244604170322418)],
+                                                                                                                [('http://dbpedia.org/ontology/leader',
+                                                                                                                  1.0),
+                                                                                                                 ('http://dbpedia.org/ontology/predecessor',
+                                                                                                                  0.22485944628715515)]]},
+                                                                   {('http://dbpedia.org/ontology/type', 0): [[('http://dbpedia.org/ontology/wikiPageRevisionID',
+                                                                                                                0.1671476662158966),
+                                                                                                               ('http://dbpedia.org/ontology/wikiPageRedirects',
+                                                                                                                0.15071119368076324),
+                                                                                                               ('http://dbpedia.org/ontology/wikiPageWikiLink',
+                                                                                                                0.2794013023376465),
+                                                                                                               ('http://xmlns.com/foaf/0.1/isPrimaryTopicOf',
+                                                                                                                0.2849138677120209),
+                                                                                                               ('http://dbpedia.org/ontology/wikiPageID',
+                                                                                                                0.1964295655488968)],
+                                                                                                              [('http://dbpedia.org/ontology/wikiPageWikiLink',
+                                                                                                                0.2794013023376465),
+                                                                                                               ('http://dbpedia.org/ontology/type',
+                                                                                                                1.0000001192092896)]]}],
+                                                                  [{('http://xmlns.com/foaf/0.1/primaryTopic', 0): [[],
+                                                                                                                    []]},
+                                                                   {('http://dbpedia.org/ontology/militaryUnit', 0): [[('http://dbpedia.org/ontology/militaryCommand',
+                                                                                                                        0.7043700218200684),
+                                                                                                                       ('http://dbpedia.org/ontology/militaryUnit',
+                                                                                                                        1.0000001192092896)],
+                                                                                                                      [('http://dbpedia.org/property/perps',
+                                                                                                                        0.11293423175811768),
+                                                                                                                       ('http://xmlns.com/foaf/0.1/primaryTopic',
+                                                                                                                        0.09695448726415634),
+                                                                                                                       ('http://dbpedia.org/ontology/wikiPageRedirects',
+                                                                                                                        0.06400137394666672),
+                                                                                                                       ('http://dbpedia.org/ontology/wikiPageWikiLink',
+                                                                                                                        0.16404154896736145),
+                                                                                                                       ('http://dbpedia.org/ontology/wikiPageDisambiguates',
+                                                                                                                        0)]]}]]}},
+ u'verbalized_question': u'What is the <leader> of the <government agency> which is the <parent organisation> of <Gestapo> ?'}
     """
-    tp, fp = parse(ujson.loads(data))
+
+    q, tp, fp = parse(ujson.loads(data))
+    pprint(q)
     pprint(tp)
     pprint(fp)

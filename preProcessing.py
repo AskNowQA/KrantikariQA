@@ -42,13 +42,13 @@ def get_rank_rel(_relationsip_list, rel,score=False):
     new_rel_list = []
     outgoing_temp = []
     for rels in _relationsip_list[0]:
-        score.append((rels,sim.phrase_similarity(dbp.get_label(rel[0]),dbp.get_label(rels))))
+        score.append((rels,sim.phrase_similarity(dbp.get_label(rel[0][0]),dbp.get_label(rels))))
      # print sorted(score, key=lambda score: score[1], reverse=True)
     new_rel_list.append(sorted(score, key=lambda score: score[1],reverse=True))
 
     score = []
     for rels in _relationsip_list[1]:
-        score.append((rels,sim.phrase_similarity(dbp.get_label(rel[0]),dbp.get_label(rels))))
+        score.append((rels,sim.phrase_similarity(dbp.get_label(rel[0][0]),dbp.get_label(rels))))
     new_rel_list.append(sorted(score, key=lambda score: score[1],reverse=True))
 
     final_rel_list = []
@@ -219,11 +219,14 @@ def create_dataset():
     file_directory = "resources/data_set.json"
     json_data = open(file_directory).read()
     data = json.loads(json_data)
+    counter = 0
 
     for node in data:
         '''
             For now focusing on just simple question
         '''
+        print counter
+        counter = counter + 1
         if node[u"sparql_template_id"] in [1,301,401,101] and not PASSED :
             '''
                 {
@@ -484,7 +487,7 @@ def create_simple_dataset():
 #TODO: Store as json : final answer dataset
 
 print "@simple_datasest call"
-create_simple_dataset()
+create_dataset()
 
-with open('answer_data.json', 'w') as fp:
-    json.dump(final_answer_dataset, fp)
+with open('train_data.json', 'w') as fp:
+    json.dump(final_data, fp)

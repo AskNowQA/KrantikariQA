@@ -416,7 +416,7 @@ class DBPedia:
 
 	def get_entity(self,_resource_uri,_relation,outgoing = True):
 		_resource_uri = "<" + _resource_uri + ">"
-		_relation = "<" + _relation + ">"
+		_relation = "<" + _relation[0] + ">"
 		if outgoing:
 			''' Query is to find the object'''
 			temp_query = GET_OBJECT % {'target_resource':_resource_uri,'property':_relation}

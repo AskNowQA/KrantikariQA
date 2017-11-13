@@ -1,2 +1,2 @@
 # KrantikariQA
-An InformationGain based Question Answering over knowledge Graph system.
+An Information Gain based Question Answering system over knowledge graph systems.

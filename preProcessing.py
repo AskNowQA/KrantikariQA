@@ -7,6 +7,7 @@
 import traceback
 import json
 from pprint import pprint
+import os
 
 # Custom files
 import utils.dbpedia_interface as db_interface
@@ -27,8 +28,17 @@ K_HOP_2 = 5 #selects the number of relations in second hop in the right directio
 K_HOP_1_u = 2 #selects the number of relations in second hop in the wrong direction
 K_HOP_2_u = 2 #selects the number of relations in second hop in the wrong direction
 PASSED = False
+WRITE_INTERVAL = 10 ##interval for perodic write in a file
+FILE_LOCATION = 'pre_processes_files' #place to store the files
+'''
+Global variables
+'''
+skip = 0
 
-
+try:
+    os.makedirs(FILE_LOCATION)
+except:
+    print "folder already exists"
 
 def get_rank_rel(_relationsip_list, rel,_score=False):
     '''
@@ -151,7 +161,6 @@ def updated_get_relationship_hop(_entity, _relation):
     '''
     entities = [_entity]    #entites are getting pushed here
     for rel in _relation:
-        print rel
         outgoing = rel[1]
         if outgoing:
             ''' get the objects '''
@@ -216,25 +225,27 @@ def get_stochastic_relationship_hop(_entity, _relation):
 
 
 
-final_data = []
 
 fo = open('interm_output.txt',"w")
 
 debug = True
 controller = []
 def create_dataset(debug=False):
-
+    final_data = []
     file_directory = "resources/data_set.json"
     json_data = open(file_directory).read()
     data = json.loads(json_data)
     counter = 0
-
+    skip = 0
     for node in data:
         '''
             For now focusing on just simple question
         '''
         print counter
         counter = counter + 1
+        if skip > 0:
+            skip = skip -1
+            continue
         if node[u"sparql_template_id"] in [1,301,401,101] and not PASSED :
             '''
                 {
@@ -301,7 +312,7 @@ def create_dataset(debug=False):
                 if data_node['sparql_template_id'] not in controller:
                     pprint(data_node)
                     controller.append(data_node['sparql_template_id'])
-            # raw_input()
+                    # raw_input()
         elif node[u"sparql_template_id"]  in [3,303,309,9,403,409,103,109] :
             '''
                 {    u'_id': u'dad51bf9d0294cac99d176aba17c0241',
@@ -335,7 +346,7 @@ def create_dataset(debug=False):
                 if data_node['sparql_template_id'] not in controller:
                     pprint(data_node)
                     controller.append(data_node['sparql_template_id'])
-            # raw_input()
+                    # raw_input()
 
         elif node[u"sparql_template_id"] in [5,305,405,105,111] and not PASSED:
             '''
@@ -417,6 +428,10 @@ def create_dataset(debug=False):
                     controller.append(data_node['sparql_template_id'])
 
         # print final_data[-1]
+        if len(final_data) > WRITE_INTERVAL:
+            with open(FILE_LOCATION+"/" + str(counter)+".json", 'w') as fp:
+                json.dump(final_data, fp)
+            final_data = []
 def test(_entity, _relation):
     out, incoming = dbp.get_properties(_entity, _relation, label=False)
     rel = (_relation, True)
@@ -521,8 +536,8 @@ def create_simple_dataset():
 
 #TODO: Store as json : final answer dataset
 
-print "@simple_datasest call"
-create_dataset(debug = True)
+print "datasest call"
+create_dataset(debug = False)
 
 with open('train_data.json', 'w') as fp:
     json.dump(final_data, fp)

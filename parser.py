@@ -266,6 +266,8 @@ def run(_readfilename='resources/data.json', _writefilename='resources/parsed_da
     # Override the DEBUG boolean
     DEBUG = _debug
 
+    # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
+
     # Read JSONs
     data = ujson.load(open(_readfilename))['data']
 
@@ -323,7 +325,104 @@ if __name__ == "__main__":
     """
         Parsing tests.
     """
-    data = """
+    data = """{u'_id': u'00a3465694634edc903510572f23b487',
+ u'constraints': {},
+ u'corrected_question': u'Which party has come in power in Mumbai North?',
+ u'entity': [u'http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)'],
+ u'path': [u'-http://dbpedia.org/property/constituency',
+           u'+http://dbpedia.org/ontology/party'],
+ u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/constituency> <http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)> . ?x <http://dbpedia.org/ontology/party> ?uri  . }',
+ u'sparql_template_id': 5,
+ u'training': {u'http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)': {u'rel1': [['http://dbpedia.org/property/party',
+                                                                                                 'http://dbpedia.org/property/percentage',
+                                                                                                 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                                                                                                 'http://purl.org/dc/terms/subject',
+                                                                                                 'http://dbpedia.org/property/change',
+                                                                                                 'http://dbpedia.org/property/candidate',
+                                                                                                 'http://www.w3.org/2000/01/rdf-schema#comment',
+                                                                                                 'http://dbpedia.org/ontology/abstract',
+                                                                                                 'http://purl.org/linguistics/gold/hypernym',
+                                                                                                 'http://dbpedia.org/ontology/wikiPageID',
+                                                                                                 'http://dbpedia.org/ontology/wikiPageWikiLink',
+                                                                                                 'http://purl.org/voc/vrank#hasRank',
+                                                                                                 'http://dbpedia.org/property/votes',
+                                                                                                 'http://xmlns.com/foaf/0.1/isPrimaryTopicOf',
+                                                                                                 'http://www.w3.org/ns/prov#wasDerivedFrom',
+                                                                                                 'http://dbpedia.org/ontology/wikiPageRevisionID',
+                                                                                                 'http://www.w3.org/2000/01/rdf-schema#label',
+                                                                                                 'http://www.w3.org/2002/07/owl#sameAs'],
+                                                                                                ['http://xmlns.com/foaf/0.1/primaryTopic',
+                                                                                                 'http://dbpedia.org/property/blank1InfoSec',
+                                                                                                 'http://dbpedia.org/ontology/wikiPageWikiLink',
+                                                                                                 'http://dbpedia.org/ontology/wikiPageRedirects',
+                                                                                                 'http://dbpedia.org/property/leadersSeat',
+                                                                                                 'http://dbpedia.org/ontology/region',
+                                                                                                 'http://dbpedia.org/property/constituencyMp']],
+                                                                                      u'rel2': [[{('http://dbpedia.org/property/percentage', 0): [[(u'/',
+                                                                                                                                                    0.0502597950398922),
+                                                                                                                                                   (u'_',
+                                                                                                                                                    0.0502597950398922)],
+                                                                                                                                                  [((('http://dbpedia.org/property/percentage',
+                                                                                                                                                      0),
+                                                                                                                                                     True),
+                                                                                                                                                    1.0)]]},
+                                                                                                 {('http://dbpedia.org/property/party', 0): [[(u':',
+                                                                                                                                               0),
+                                                                                                                                              (u'h',
+                                                                                                                                               0),
+                                                                                                                                              (u'p',
+                                                                                                                                               0),
+                                                                                                                                              (u't',
+                                                                                                                                               0)],
+                                                                                                                                             [((('http://dbpedia.org/property/party',
+                                                                                                                                                 0),
+                                                                                                                                                True),
+                                                                                                                                               0.8798670172691345)]]}],
+                                                                                                [{('http://dbpedia.org/property/constituencyMp', 0): [[('http://dbpedia.org/property/deathDate',
+                                                                                                                                                        0),
+                                                                                                                                                       ('http://xmlns.com/foaf/0.1/gender',
+                                                                                                                                                        0)],
+                                                                                                                                                      [('http://dbpedia.org/ontology/secondLeader',
+                                                                                                                                                        0),
+                                                                                                                                                       ('http://xmlns.com/foaf/0.1/primaryTopic',
+                                                                                                                                                        0),
+                                                                                                                                                       ('http://dbpedia.org/ontology/wikiPageRedirects',
+                                                                                                                                                        0),
+                                                                                                                                                       ('http://dbpedia.org/ontology/wikiPageWikiLink',
+                                                                                                                                                        0),
+                                                                                                                                                       ('http://dbpedia.org/ontology/wikiPageDisambiguates',
+                                                                                                                                                        0)]]},
+                                                                                                 {('http://xmlns.com/foaf/0.1/primaryTopic', 0): [[],
+                                                                                                                                                  []]},
+                                                                                                 {('http://dbpedia.org/ontology/wikiPageRedirects', 0): [[('http://dbpedia.org/ontology/wikiPageWikiLink',
+                                                                                                                                                           0),
+                                                                                                                                                          ('http://dbpedia.org/ontology/wikiPageID',
+                                                                                                                                                           0)],
+                                                                                                                                                         [('http://dbpedia.org/ontology/region',
+                                                                                                                                                           0),
+                                                                                                                                                          ('http://dbpedia.org/ontology/wikiPageWikiLink',
+                                                                                                                                                           0),
+                                                                                                                                                          ('http://xmlns.com/foaf/0.1/primaryTopic',
+                                                                                                                                                           0)]]},
+                                                                                                 {('http://dbpedia.org/ontology/wikiPageWikiLink', 0): [[('http://purl.org/linguistics/gold/hypernym',
+                                                                                                                                                          0),
+                                                                                                                                                         ('http://dbpedia.org/property/website',
+                                                                                                                                                          0)],
+                                                                                                                                                        [('http://dbpedia.org/ontology/garrison',
+                                                                                                                                                          0),
+                                                                                                                                                         ('http://dbpedia.org/property/text',
+                                                                                                                                                          0),
+                                                                                                                                                         ('http://dbpedia.org/property/city',
+                                                                                                                                                          0),
+                                                                                                                                                         ('http://dbpedia.org/ontology/governor',
+                                                                                                                                                          0),
+                                                                                                                                                         ('http://dbpedia.org/ontology/type',
+                                                                                                                                                          0)]]},
+                                                                                                 {('http://dbpedia.org/property/leadersSeat', 0): [[],
+                                                                                                                                                   []]}]]}},
+ u'verbalized_question': u'What is the <party> of the <office holders> whose <constituency> is <Mumbai North (Lok Sabha constituency)>?'}
+    """
+    data_unhinged = """
     {u'_id': u'dad51bf9d0294cac99d176aba17c0241',
  u'constraints': {},
  u'corrected_question': u'Name some leaders of the parent organisation of the Gestapo?',
@@ -459,7 +558,7 @@ if __name__ == "__main__":
                                                                                                                         0)]]}]]}},
  u'verbalized_question': u'What is the <leader> of the <government agency> which is the <parent organisation> of <Gestapo> ?'}
     """
-
+    data = data.replace("'", '"')
     q, tp, fp = parse(ujson.loads(data))
     pprint(q)
     pprint(tp)

@@ -236,13 +236,15 @@ def create_dataset(debug=False):
     json_data = open(file_directory).read()
     data = json.loads(json_data)
     counter = 0
-    skip = 0
+    skip = 38
     for node in data:
         '''
             For now focusing on just simple question
         '''
         print counter
         counter = counter + 1
+        if counter == 40:
+            continue
         if skip > 0:
             skip = skip -1
             continue

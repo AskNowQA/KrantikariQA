@@ -230,7 +230,7 @@ fo = open('interm_output.txt',"w")
 
 debug = True
 controller = []
-def create_dataset(debug=False):
+def create_dataset(debug=False,time_limit=False):
     final_data = []
     file_directory = "resources/data_set.json"
     json_data = open(file_directory).read()
@@ -248,192 +248,196 @@ def create_dataset(debug=False):
         if skip > 0:
             skip = skip -1
             continue
-        if node[u"sparql_template_id"] in [1,301,401,101] and not PASSED :
-            '''
-                {
-                    u'_id': u'9a7523469c8c45b58ec65ed56af6e306',
-                    u'corrected_question': u'What are the schools whose city is Reading, Berkshire?',
-                    u'sparql_query': u' SELECT DISTINCT ?uri WHERE {?uri <http://dbpedia.org/ontology/city> <http://dbpedia.org/resource/Reading,_Berkshire> } ',
-                    u'sparql_template_id': 1,
-                    u'verbalized_question': u'What are the <schools> whose <city> is <Reading, Berkshire>?'
-                }
+        try:
+            if node[u"sparql_template_id"] in [1,301,401,101] and not PASSED :
+                '''
+                    {
+                        u'_id': u'9a7523469c8c45b58ec65ed56af6e306',
+                        u'corrected_question': u'What are the schools whose city is Reading, Berkshire?',
+                        u'sparql_query': u' SELECT DISTINCT ?uri WHERE {?uri <http://dbpedia.org/ontology/city> <http://dbpedia.org/resource/Reading,_Berkshire> } ',
+                        u'sparql_template_id': 1,
+                        u'verbalized_question': u'What are the <schools> whose <city> is <Reading, Berkshire>?'
+                    }
 
-            '''
-            data_node = node
-            triples = get_triples(node[u'sparql_query'])
-            data_node[u'entity'] = []
-            data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
-            data_node[u'training'] = {}
-            data_node[u'training'][data_node[u'entity'][0]] = {}
-            data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
-            data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
-            data_node[u'constraints'] = {}
-            if node[u"sparql_template_id"] == 301 or node[u"sparql_template_id"] == 401:
-                data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
-            else:
+                '''
+                data_node = node
+                triples = get_triples(node[u'sparql_query'])
+                data_node[u'entity'] = []
+                data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+                data_node[u'training'] = {}
+                data_node[u'training'][data_node[u'entity'][0]] = {}
+                data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
+                data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
                 data_node[u'constraints'] = {}
+                if node[u"sparql_template_id"] == 301 or node[u"sparql_template_id"] == 401:
+                    data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
+                else:
+                    data_node[u'constraints'] = {}
 
-            if node[u"sparql_template_id"] in [401,101]:
-                data_node[u'constraints'] = {'count' : True}
-            fo.write(str(data_node))
-            fo.write("\n")
-            final_data.append(data_node)
-            if debug:
-                if data_node['sparql_template_id'] not in controller:
-                    pprint(data_node)
-                    controller.append(data_node['sparql_template_id'])
-        elif node[u"sparql_template_id"] in [2,302,402,102] and not PASSED:
-            '''
-                {	u'_id': u'8216e5b6033a407191548689994aa32e',
-                    u'corrected_question': u'Name the municipality of Roberto Clemente Bridge ?',
-                    u'sparql_query': u' SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Roberto_Clemente_Bridge> <http://dbpedia.org/ontology/municipality> ?uri } ',
-                    u'sparql_template_id': 2,
-                    u'verbalized_question': u'What is the <municipality> of Roberto Clemente Bridge ?'
-                }
-            '''
-            #TODO: Verify the 302 template
-            data_node = node
-            triples = get_triples(node[u'sparql_query'])
-            data_node[u'entity'] = []
-            data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
-            data_node[u'training'] = {}
-            data_node[u'training'][data_node[u'entity'][0]] = {}
-            data_node[u'training'][data_node[u'entity'][0]][u'rel1'] =  [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
-            data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
-            data_node[u'constraints'] = {}
-            if node[u"sparql_template_id"] == 302 or node[u"sparql_template_id"] == 402:
-                data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
-            else:
+                if node[u"sparql_template_id"] in [401,101]:
+                    data_node[u'constraints'] = {'count' : True}
+                fo.write(str(data_node))
+                fo.write("\n")
+                final_data.append(data_node)
+                if debug:
+                    if data_node['sparql_template_id'] not in controller:
+                        pprint(data_node)
+                        controller.append(data_node['sparql_template_id'])
+            elif node[u"sparql_template_id"] in [2,302,402,102] and not PASSED:
+                '''
+                    {	u'_id': u'8216e5b6033a407191548689994aa32e',
+                        u'corrected_question': u'Name the municipality of Roberto Clemente Bridge ?',
+                        u'sparql_query': u' SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Roberto_Clemente_Bridge> <http://dbpedia.org/ontology/municipality> ?uri } ',
+                        u'sparql_template_id': 2,
+                        u'verbalized_question': u'What is the <municipality> of Roberto Clemente Bridge ?'
+                    }
+                '''
+                #TODO: Verify the 302 template
+                data_node = node
+                triples = get_triples(node[u'sparql_query'])
+                data_node[u'entity'] = []
+                data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
+                data_node[u'training'] = {}
+                data_node[u'training'][data_node[u'entity'][0]] = {}
+                data_node[u'training'][data_node[u'entity'][0]][u'rel1'] =  [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
+                data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
                 data_node[u'constraints'] = {}
-            if node[u"sparql_template_id"] in [402,102]:
-                data_node[u'constraints'] = {'count' : True}
-            final_data.append(data_node)
-            fo.write(str(data_node))
-            fo.write("\n")
-            if debug:
-                if data_node['sparql_template_id'] not in controller:
-                    pprint(data_node)
-                    controller.append(data_node['sparql_template_id'])
-                    # raw_input()
-        elif node[u"sparql_template_id"]  in [3,303,309,9,403,409,103,109] :
-            '''
-                {    u'_id': u'dad51bf9d0294cac99d176aba17c0241',
-                     u'corrected_question': u'Name some leaders of the parent organisation of the Gestapo?',
-                     u'sparql_query': u'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Gestapo> <http://dbpedia.org/ontology/parentOrganisation> ?x . ?x <http://dbpedia.org/ontology/leader> ?uri  . }',
-                     u'sparql_template_id': 3,
-                     u'verbalized_question': u'What is the <leader> of the <government agency> which is the <parent organisation> of <Gestapo> ?'}
-            '''
-            # pprint(node)
-            data_node = node
-            triples = get_triples(node[u'sparql_query'])
-            data_node[u'entity'] = []
-            data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
-            rel2 = triples[1].split(" ")[1][1:-1]
-            rel1 = triples[0].split(" ")[1][1:-1]
-            data_node[u'path'] = ["+" + rel1, "+" + rel2]
-            data_node[u'training'] = {}
-            data_node[u'training'][data_node[u'entity'][0]] = {}
-            data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
-            data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0],[(rel1,True),(rel2,True)])
-            if node[u"sparql_template_id"] in [303,309,403,409]:
-                data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
-            else:
-                data_node[u'constraints'] = {}
-            if node[u"sparql_template_id"] in [403,409,103,109]:
-                data_node[u'constraints'] = {'count' : True}
-            fo.write(str(data_node))
-            fo.write("\n")
-            final_data.append(data_node)
-            if debug:
-                if data_node['sparql_template_id'] not in controller:
-                    pprint(data_node)
-                    controller.append(data_node['sparql_template_id'])
-                    # raw_input()
+                if node[u"sparql_template_id"] == 302 or node[u"sparql_template_id"] == 402:
+                    data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
+                else:
+                    data_node[u'constraints'] = {}
+                if node[u"sparql_template_id"] in [402,102]:
+                    data_node[u'constraints'] = {'count' : True}
+                final_data.append(data_node)
+                fo.write(str(data_node))
+                fo.write("\n")
+                if debug:
+                    if data_node['sparql_template_id'] not in controller:
+                        pprint(data_node)
+                        controller.append(data_node['sparql_template_id'])
+                        # raw_input()
+            elif node[u"sparql_template_id"]  in [3,303,309,9,403,409,103,109] :
+                '''
+                    {    u'_id': u'dad51bf9d0294cac99d176aba17c0241',
+                         u'corrected_question': u'Name some leaders of the parent organisation of the Gestapo?',
+                         u'sparql_query': u'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Gestapo> <http://dbpedia.org/ontology/parentOrganisation> ?x . ?x <http://dbpedia.org/ontology/leader> ?uri  . }',
+                         u'sparql_template_id': 3,
+                         u'verbalized_question': u'What is the <leader> of the <government agency> which is the <parent organisation> of <Gestapo> ?'}
+                '''
+                # pprint(node)
+                data_node = node
+                triples = get_triples(node[u'sparql_query'])
+                data_node[u'entity'] = []
+                data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
+                rel2 = triples[1].split(" ")[1][1:-1]
+                rel1 = triples[0].split(" ")[1][1:-1]
+                data_node[u'path'] = ["+" + rel1, "+" + rel2]
+                data_node[u'training'] = {}
+                data_node[u'training'][data_node[u'entity'][0]] = {}
+                data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
+                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0],[(rel1,True),(rel2,True)])
+                if node[u"sparql_template_id"] in [303,309,403,409]:
+                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
+                else:
+                    data_node[u'constraints'] = {}
+                if node[u"sparql_template_id"] in [403,409,103,109]:
+                    data_node[u'constraints'] = {'count' : True}
+                fo.write(str(data_node))
+                fo.write("\n")
+                final_data.append(data_node)
+                if debug:
+                    if data_node['sparql_template_id'] not in controller:
+                        pprint(data_node)
+                        controller.append(data_node['sparql_template_id'])
+                        # raw_input()
 
-        elif node[u"sparql_template_id"] in [5,305,405,105,111] and not PASSED:
-            '''
-                >Verify this !!
-                {
-                    u'_id': u'00a3465694634edc903510572f23b487',
-                    u'corrected_question': u'Which party has come in power in Mumbai North?',
-                    u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/constituency> <http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)> . ?x <http://dbpedia.org/ontology/party> ?uri  . }',
-                    u'sparql_template_id': 5,
-                    u'verbalized_question': u'What is the <party> of the <office holders> whose <constituency> is <Mumbai North (Lok Sabha constituency)>?'
-                }
-            '''
-            # pprint(node)
-            data_node = node
-            triples = get_triples(node[u'sparql_query'])
-            rel1 = triples[0].split(" ")[1][1:-1]
-            rel2 = triples[1].split(" ")[1][1:-1]
-            data_node[u'entity'] = []
-            data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
-            data_node[u'path'] = ["-" + rel1, "+" + rel2]
-            data_node[u'training'] = {}
-            data_node[u'training'][data_node[u'entity'][0]] = {}
-            data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
-                                                                        list(dbp.get_properties(data_node[u'entity'][0],label=False))]
-            data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0], [(rel1, False), (rel2, True)])
-            if node[u"sparql_template_id"] in [305,405] :
-                data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
-            else:
-                data_node[u'constraints'] = {}
-            if node[u"sparql_template_id"] in [105,405,111]:
-                data_node[u'constraints'] = {'count' : True}
-            fo.write(str(data_node))
-            fo.write("\n")
-            if debug:
-                if data_node['sparql_template_id'] not in controller:
-                    pprint(data_node)
-                    controller.append(data_node['sparql_template_id'])
-            # raw_input()
-            final_data.append(data_node)
+            elif node[u"sparql_template_id"] in [5,305,405,105,111] and not PASSED:
+                '''
+                    >Verify this !!
+                    {
+                        u'_id': u'00a3465694634edc903510572f23b487',
+                        u'corrected_question': u'Which party has come in power in Mumbai North?',
+                        u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/constituency> <http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)> . ?x <http://dbpedia.org/ontology/party> ?uri  . }',
+                        u'sparql_template_id': 5,
+                        u'verbalized_question': u'What is the <party> of the <office holders> whose <constituency> is <Mumbai North (Lok Sabha constituency)>?'
+                    }
+                '''
+                # pprint(node)
+                data_node = node
+                triples = get_triples(node[u'sparql_query'])
+                rel1 = triples[0].split(" ")[1][1:-1]
+                rel2 = triples[1].split(" ")[1][1:-1]
+                data_node[u'entity'] = []
+                data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+                data_node[u'path'] = ["-" + rel1, "+" + rel2]
+                data_node[u'training'] = {}
+                data_node[u'training'][data_node[u'entity'][0]] = {}
+                data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
+                                                                            list(dbp.get_properties(data_node[u'entity'][0],label=False))]
+                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0], [(rel1, False), (rel2, True)])
+                if node[u"sparql_template_id"] in [305,405] :
+                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
+                else:
+                    data_node[u'constraints'] = {}
+                if node[u"sparql_template_id"] in [105,405,111]:
+                    data_node[u'constraints'] = {'count' : True}
+                fo.write(str(data_node))
+                fo.write("\n")
+                if debug:
+                    if data_node['sparql_template_id'] not in controller:
+                        pprint(data_node)
+                        controller.append(data_node['sparql_template_id'])
+                # raw_input()
+                final_data.append(data_node)
 
-        elif node[u'sparql_template_id']  == [6, 306, 406, 106] and not PASSED:
-            '''
-                {
-                    u'_id': u'd3695db03a5e45ae8906a2527508e7c5',
-                    u'corrected_question': u'Who have done their PhDs under a National Medal of Science winner?',
-                    u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/prizes> <http://dbpedia.org/resource/National_Medal_of_Science> . ?uri <http://dbpedia.org/property/doctoralAdvisor> ?x  . }',
-                    u'sparql_template_id': 6,
-                    u'verbalized_question': u"What are the <scientists> whose <advisor>'s <prizes> is <National Medal of Science>?"
-                }
-            '''
-            # pprint(node)
-            data_node = node
-            triples = get_triples(node[u'sparql_query'])
-            rel1 = triples[0].split(" ")[1][1:-1]
-            rel2 = triples[1].split(" ")[1][1:-1]
-            data_node[u'entity'] = []
-            data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
-            data_node[u'path'] = ["-" + rel1, "-" + rel2]
-            data_node[u'training'] = {}
-            data_node[u'training'][data_node[u'entity'][0]] = {}
-            data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
-                                                                        list(dbp.get_properties(data_node[u'entity'][0],label=False))]
-            data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
-                data_node[u'entity'][0], [(rel1, False), (rel2, False)])
-            if node[u"sparql_template_id"] in [306,406]:
-                data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
-            else:
-                data_node[u'constraints'] = {}
-            if node[u"sparql_template_id"] in [406,106]:
-                data_node[u'constraints'] = {'count' : True}
-            # pprint(data_node)
-            # raw_input()
-            fo.write(str(data_node))
-            fo.write("\n")
-            final_data.append(data_node)
-            if debug:
-                if data_node['sparql_template_id'] not in controller:
-                    pprint(data_node)
-                    controller.append(data_node['sparql_template_id'])
+            elif node[u'sparql_template_id']  == [6, 306, 406, 106] and not PASSED:
+                '''
+                    {
+                        u'_id': u'd3695db03a5e45ae8906a2527508e7c5',
+                        u'corrected_question': u'Who have done their PhDs under a National Medal of Science winner?',
+                        u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/prizes> <http://dbpedia.org/resource/National_Medal_of_Science> . ?uri <http://dbpedia.org/property/doctoralAdvisor> ?x  . }',
+                        u'sparql_template_id': 6,
+                        u'verbalized_question': u"What are the <scientists> whose <advisor>'s <prizes> is <National Medal of Science>?"
+                    }
+                '''
+                # pprint(node)
+                data_node = node
+                triples = get_triples(node[u'sparql_query'])
+                rel1 = triples[0].split(" ")[1][1:-1]
+                rel2 = triples[1].split(" ")[1][1:-1]
+                data_node[u'entity'] = []
+                data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+                data_node[u'path'] = ["-" + rel1, "-" + rel2]
+                data_node[u'training'] = {}
+                data_node[u'training'][data_node[u'entity'][0]] = {}
+                data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
+                                                                            list(dbp.get_properties(data_node[u'entity'][0],label=False))]
+                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
+                    data_node[u'entity'][0], [(rel1, False), (rel2, False)])
+                if node[u"sparql_template_id"] in [306,406]:
+                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
+                else:
+                    data_node[u'constraints'] = {}
+                if node[u"sparql_template_id"] in [406,106]:
+                    data_node[u'constraints'] = {'count' : True}
+                # pprint(data_node)
+                # raw_input()
+                fo.write(str(data_node))
+                fo.write("\n")
+                final_data.append(data_node)
+                if debug:
+                    if data_node['sparql_template_id'] not in controller:
+                        pprint(data_node)
+                        controller.append(data_node['sparql_template_id'])
 
-        # print final_data[-1]
-        if len(final_data) > WRITE_INTERVAL:
-            with open(FILE_LOCATION+"/" + str(counter)+".json", 'w') as fp:
-                json.dump(final_data, fp)
-            final_data = []
+            # print final_data[-1]
+            if len(final_data) > WRITE_INTERVAL:
+                with open(FILE_LOCATION+"/" + str(counter)+".json", 'w') as fp:
+                    json.dump(final_data, fp)
+                final_data = []
+        except:
+            print traceback.print_exc()
+            continue
 def test(_entity, _relation):
     out, incoming = dbp.get_properties(_entity, _relation, label=False)
     rel = (_relation, True)

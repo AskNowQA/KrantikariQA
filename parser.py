@@ -205,36 +205,46 @@ def parse(_raw):
         new_fp = entity_sf + ['-'] + tokenize(dbp.get_label(negpath))
         false_paths.append(new_fp)
 
+
     # Collect 2nd hop ones
-    for poshop1 in _raw[u'training'][entity][u'rel2'][0]:
-        new_fp = entity_sf + ['+']
+    try:
 
-        hop1 = poshop1.keys()[0]
-        hop1sf = dbp.get_label(hop1.replace(",", ""))
-        new_fp += tokenize(hop1sf)
+        # Access first element inside rel0 (for paths in direction + )
+        for poshop1 in _raw[u'training'][entity][u'rel2'][0]:
+            new_fp = entity_sf + ['+']
 
-        for poshop2 in poshop1[hop1][0]:
-            temp_fp = new_fp[:] + ['+'] + tokenize(dbp.get_label(poshop2))
-            false_paths.append(temp_fp)
+            hop1 = poshop1.keys()[0]
+            hop1sf = dbp.get_label(hop1.replace(",", ""))
+            new_fp += tokenize(hop1sf)
 
-        for neghop2 in poshop1[hop1][1]:
-            temp_fp = new_fp[:] + ['-'] + tokenize(dbp.get_label(neghop2))
-            false_paths.append(temp_fp)
+            for poshop2 in poshop1[hop1][0]:
+                temp_fp = new_fp[:] + ['+'] + tokenize(dbp.get_label(poshop2))
+                false_paths.append(temp_fp)
 
-    for neghop1 in _raw[u'training'][entity][u'rel2'][1]:
-        new_fp = entity_sf + ['-']
+            for neghop2 in poshop1[hop1][1]:
+                temp_fp = new_fp[:] + ['-'] + tokenize(dbp.get_label(neghop2))
+                false_paths.append(temp_fp)
 
-        hop1 = neghop1.keys()[0]
-        hop1sf = dbp.get_label(hop1.replace(",", ""))
-        new_fp += tokenize(hop1sf)
+        # Access second element inside rel0 (for paths in direction - )
+        for neghop1 in _raw[u'training'][entity][u'rel2'][1]:
+            new_fp = entity_sf + ['-']
 
-        for poshop2 in neghop1[hop1][0]:
-            temp_fp = new_fp[:] + ['+'] + tokenize(dbp.get_label(poshop2))
-            false_paths.append(temp_fp)
+            hop1 = neghop1.keys()[0]
+            hop1sf = dbp.get_label(hop1.replace(",", ""))
+            new_fp += tokenize(hop1sf)
 
-        for neghop2 in neghop1[hop1][1]:
-            temp_fp = new_fp[:] + ['-'] + tokenize(dbp.get_label(neghop2))
-            false_paths.append(temp_fp)
+            for poshop2 in neghop1[hop1][0]:
+                temp_fp = new_fp[:] + ['+'] + tokenize(dbp.get_label(poshop2))
+                false_paths.append(temp_fp)
+
+            for neghop2 in neghop1[hop1][1]:
+                temp_fp = new_fp[:] + ['-'] + tokenize(dbp.get_label(neghop2))
+                false_paths.append(temp_fp)
+
+    except KeyError:
+
+        # In case there isn't no rel2 in the subgraph, just go with 1 hop paths.
+        pass
 
     # From all these paths, randomly choose some.
     false_paths = np.random.choice(false_paths, MAX_FALSE_PATHS)
@@ -252,11 +262,11 @@ def parse(_raw):
     return v_question, v_true_path, v_false_paths
 
 
-def run(_readfiledir='resources/data.json', _writefilename='resources/parsed_data.json', _debug = DEBUG):
+def run(_readfiledir='data', _writefilename='resources/parsed_data.json', _debug=DEBUG):
     """
     Get the show on the road.
 
-    :param _readfilename:   the filename (directory info included) to read the JSONs that need parsing
+    :param _readfiledir:   the filename (directory info included) to read the JSONs that need parsing
     :param _writefilename:  the file to which the parsed (embedded+padded) data is to be written to
     :param _debug:          the boolean param can be overwritten if wanted.
     :return: statuscode(?)
@@ -298,7 +308,13 @@ def run(_readfiledir='resources/data.json', _writefilename='resources/parsed_dat
 
 
 
-if __name__ == "__main__":
+def test():
+    """
+        A function to test different things in the script. Will be called from main.
+
+    :return: noting
+    """
+
     """
         Embedding Tests:
             1. Load an embedding
@@ -357,3 +373,7 @@ if __name__ == "__main__":
     pprint(q)
     pprint(tp)
     pprint(fp)
+
+
+if __name__ == "__main__":
+    run()

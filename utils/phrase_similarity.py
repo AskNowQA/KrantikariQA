@@ -7,7 +7,8 @@
 import gensim
 import numpy as np
 # /home/gaurav/Downloads/models/word2vec
-model = gensim.models.KeyedVectors.load_word2vec_format('/home/gaurav/Downloads/models/word2vec/GoogleNews-vectors-negative300.bin', binary=True)
+model = gensim.models.KeyedVectors.load_word2vec_format('resources/GoogleNews-vectors-negative300.bin', binary=True)
+# model = gensim.models.KeyedVectors.load_word2vec_format('/home/gaurav/Downloads/models/word2vec/GoogleNews-vectors-negative300.bin', binary=True)
 
 def ConvertVectorSetToVecAverageBased(vectorSet, ignore = []):
 		if len(ignore) == 0:

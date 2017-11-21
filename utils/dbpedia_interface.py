@@ -1,14 +1,14 @@
 """
-    In case of a goofup, kill - Priyansh (pc.priyansh@gmail.com)
-    This file is used to quench all the LOD desires of the main scripts. So, mostly a class with several DBPedia functions.
+	In case of a goofup, kill - Priyansh (pc.priyansh@gmail.com)
+	This file is used to quench all the LOD desires of the main scripts. So, mostly a class with several DBPedia functions.
 
-    FAQ:
-    Q: Why is every sparql request under a "with" block?
-    A: With ensures that the object is thrown away when the request is done.
-        Since we choose a different endpoint at every call, it's a good idea to throw it away after use. I'm just being finicky probably, but it wouldn't hurt
+	FAQ:
+	Q: Why is every sparql request under a "with" block?
+	A: With ensures that the object is thrown away when the request is done.
+		Since we choose a different endpoint at every call, it's a good idea to throw it away after use. I'm just being finicky probably, but it wouldn't hurt
 
-    Q: What's with the warnings?
-    A: Because I can, bitch.
+	Q: What's with the warnings?
+	A: Because I can, bitch.
 """
 from SPARQLWrapper import SPARQLWrapper, JSON
 from operator import itemgetter
@@ -61,7 +61,7 @@ GET_OBJECT = '''SELECT DISTINCT ?entity WHERE {	%(target_resource)s %(property)s
 
 class DBPedia:
 
-    def __init__(self,_method='round-robin',_verbose=False,_db_name = 0,caching = True):
+	def __init__(self,_method='round-robin',_verbose=False,_db_name = 0,caching = True):
 
 		#Explanation: selection_method is used to select from the DBPEDIA_ENDPOINTS, hoping that we're not blocked too soon
 		if _method in ['round-robin','random','select-one']:
@@ -87,7 +87,7 @@ class DBPedia:
 
 	#initilizing the redis server.
 
-    def select_sparql_endpoint(self):
+	def select_sparql_endpoint(self):
 		"""
 			This function is to be called whenever we're making a call to DBPedia. Based on the selection mechanism selected at __init__,
 			this function tells which endpoint to use at every point.
@@ -95,11 +95,10 @@ class DBPedia:
 		if self.selection_method == 'round-robin':
 			index = DBPEDIA_ENDPOINTS.index(self.sparql_endpoint)
 			return DBPEDIA_ENDPOINTS[index+1] if index >= len(DBPEDIA_ENDPOINTS) else DBPEDIA_ENDPOINTS[0]
-
 		if self.selection_method == 'select-one':
 			return self.sparql_endpoint
 
-    def shoot_custom_query(self, _custom_query):
+	def shoot_custom_query(self, _custom_query):
 		"""
 			Shoot any custom query and get the SPARQL results as a dictionary.
 		"""
@@ -118,8 +117,7 @@ class DBPedia:
 				self.r.set(_custom_query,json.dumps(caching_answer))
 			return caching_answer
 
-
-    def get_properties_on_resource(self, _resource_uri):
+	def get_properties_on_resource(self, _resource_uri):
 		"""
 			Fetch properties that point to this resource. 
 			Eg. 
@@ -130,7 +128,7 @@ class DBPedia:
 			_resource_uri = nlutils.convert_shorthand_to_uri(_resource_uri)
 		response = self.shoot_custom_query(GET_PROPERTIES_ON_RESOURCE % {'target_resource':_resource_uri})
 
-    def get_properties_of_resource(self,_resource_uri,_with_connected_resource = False,right = True):
+	def get_properties_of_resource(self,_resource_uri,_with_connected_resource = False,right = True):
 		"""
 			This function can fetch the properties connected to this '_resource', in the format - _resource -> R -> O
 			The boolean flag can be used if we want to return the (R,O) tuples instead of just R
@@ -172,7 +170,7 @@ class DBPedia:
 
 		return property_list
 
-    def get_entities_of_class(self, _class_uri):
+	def get_entities_of_class(self, _class_uri):
 		"""
 			This function can fetch the properties connected to the class passed as a function parameter _class_uri.
 
@@ -196,7 +194,7 @@ class DBPedia:
 
 		return entity_list
 
-    def get_type_of_resource(self, _resource_uri, _filter_dbpedia = False):
+	def get_type_of_resource(self, _resource_uri, _filter_dbpedia = False):
 		"""
 			Function fetches the type of a given entity
 			and can optionally filter out the ones of DBPedia only
@@ -219,7 +217,7 @@ class DBPedia:
 
 		return type_list
 
-    def get_answer(self, _sparql_query):
+	def get_answer(self, _sparql_query):
 		"""
 			Function used to shoot a query and get the answers back. Easy peasy.
 
@@ -245,7 +243,7 @@ class DBPedia:
 			values[variables[index]] = value
 		return values
 
-    def get_label(self, _resource_uri):
+	def get_label(self, _resource_uri):
 		"""
 			Function used to fetch the english label for a given resource.
 			Not thoroughly tested tho.
@@ -305,7 +303,7 @@ class DBPedia:
 		except:
 			return nlutils.get_label_via_parsing(_resource_uri)
 
-    def get_most_specific_class(self, _resource_uri):
+	def get_most_specific_class(self, _resource_uri):
 		"""
 			Query to find the most specific DBPedia Ontology class given a URI.
 			Limitation: works only with resources.
@@ -346,7 +344,7 @@ class DBPedia:
 			# If there is no results from the filter type , return it as owl Thing
 			return "http://www.w3.org/2002/07/owl#Thing"
 
-    def is_common_parent(self,_resource_uri_1 , _resource_uri_2):
+	def is_common_parent(self,_resource_uri_1 , _resource_uri_2):
 		specific_class_uri_1 = "<" + self.get_most_specific_class(_resource_uri_1) + ">"
 		specific_class_uri_2 = "<" + self.get_most_specific_class(_resource_uri_2) + ">"
 		try:
@@ -373,7 +371,7 @@ class DBPedia:
 		else:
 			return False
 
-    def get_parent(self,_resource_uri):
+	def get_parent(self,_resource_uri):
 		specific_class_uri_1 = "<" + self.get_most_specific_class(_resource_uri) + ">"
 		try:
 			response_uri_1 = self.shoot_custom_query(GET_SUPERCLASS % {'target_class': specific_class_uri_1})
@@ -394,11 +392,11 @@ class DBPedia:
 			else:
 				return "http://www.w3.org/2002/07/owl#Thing"
 
-    def is_Url(self,url):
+	def is_Url(self,url):
 		response = self.shoot_custom_query(CHECK_URL % {'target_resource':url})
 		return response["boolean"]
 
-    def get_properties(self, _uri, _right=True, _left=True,label = True):
+	def get_properties(self, _uri, _right=True, _left=True,label = True):
 		if _right:
 			right_properties = list(set(self.get_properties_of_resource(_resource_uri = _uri)))
 			if label:
@@ -414,7 +412,7 @@ class DBPedia:
 		else:
 			return left_properties
 
-    def get_entity(self,_resource_uri,_relation,outgoing = True):
+	def get_entity(self,_resource_uri,_relation,outgoing = True):
 		_resource_uri = "<" + _resource_uri + ">"
 		_relation = "<" + _relation[0] + ">"
 		if outgoing:
@@ -441,14 +439,14 @@ if __name__ == '__main__':
 	# pprint(dbp.get_type_of_resource('http://dbpedia.org/resource/M._J._P._Rohilkhand_University', _filter_dbpedia = True))
 	# print "\n\nIndia"
 	# pprint(dbp.get_type_of_resource('http://dbpedia.org/resource/India', _filter_dbpedia = True))
-    #
+	#
 	# q = 'SELECT DISTINCT ?uri, ?a WHERE { ?uri <http://dbpedia.org/ontology/birthPlace> <http://dbpedia.org/resource/Mengo,_Uganda> . ?uri <http://dbpedia.org/ontology/birthPlace> ?a }'
 	# pprint(dbp.get_answer(q))
-    #
-    #
+	#
+	#
 	uri = 'http://dbpedia.org/resource/Donald_Trump'
 	# print dbp.get_most_specific_class(uri)
-    #
+	#
 	# q = 'http://dbpedia.org/ontology/birthPlace'
 	# pprint(dbp.get_label(q))
 	# q = 'http://dbpedia.org/resource/Mumbai'

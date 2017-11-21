@@ -151,9 +151,13 @@ def tokenize(_input, _ignore_brackets = False):
         if matcher:
             substring = matcher.group()
 
-            cleaner_input = cleaner_input[:cleaner_input.index(substring)] + cleaner_input[_input.index(substring) + len(substring):]
+            cleaner_input = cleaner_input[:cleaner_input.index(substring)] + cleaner_input[cleaner_input.index(substring) + len(substring):]
 
     return cleaner_input.strip().split()
+
+
+def compute_true_labels(_question, _truepath, _falsepaths):
+    return 1
 
 
 def parse(_raw):
@@ -253,16 +257,19 @@ def parse(_raw):
     v_true_path = vectorize(true_path)
     v_false_paths = [ vectorize(x) for x in false_paths ]
 
+    # Corresponding to all these, compute the true labels
+    v_y_true = compute_true_labels(question, true_path, false_paths)
+
     if DEBUG:
         print true_path
         print "now fps"
         print false_paths
 
     # Throw it out.
-    return v_question, v_true_path, v_false_paths
+    return v_question, v_true_path, v_false_paths, v_y_true
 
 
-def run(_readfiledir='data', _writefilename='resources/parsed_data.json', _debug=DEBUG):
+def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_data.json'):
     """
     Get the show on the road.
 
@@ -271,15 +278,9 @@ def run(_readfiledir='data', _writefilename='resources/parsed_data.json', _debug
     :param _debug:          the boolean param can be overwritten if wanted.
     :return: statuscode(?)
     """
-    global DEBUG
-
-    # Override the DEBUG boolean
-    DEBUG = _debug
 
     # Create vars to keep ze data @TODO: think of datatype here
-    questions = []
-    truepaths = []
-    falsepaths = []
+    data_embedded = []
 
     # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
     prepare("GLOVE")
@@ -292,19 +293,19 @@ def run(_readfiledir='data', _writefilename='resources/parsed_data.json', _debug
         for question in data:
 
             # Collect the repsonse
-            v_q, v_tp, v_fps = parse(question)
+            v_q, v_tp, v_fps, v_y = parse(question)
 
-        # Append the response
-        questions.append(v_q)
-        truepaths.append(v_tp)
-        falsepaths.append(v_fps)
+            # Collect data for each question
+            data_embedded.append([v_q, v_tp, v_fps, v_y])
 
-        # Convert them to numpy arrays
-        questions = np.asarray(questions)
-        truepaths = np.asarray(truepaths)
-        falsepaths = np.asarray(falsepaths)
+    """
+        ||TEMP||
 
-        print falsepaths.shape
+        Pickle this data.
+        Play around with it.
+    """
+    f = open('resources/tmp.pickle', 'w+')
+    pickle.dump(data_embedded, f)
 
 
 
@@ -369,10 +370,11 @@ def test():
     """
     testdata = json.load(open(os.path.join('data', os.listdir('data')[0])))[-2]
     # data = data.replace("'", '"')
-    q, tp, fp = parse(testdata)
+    q, tp, fp, y = parse(testdata)
     pprint(q)
     pprint(tp)
     pprint(fp)
+    pprint(y)
 
 
 if __name__ == "__main__":

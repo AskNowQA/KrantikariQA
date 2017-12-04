@@ -157,7 +157,18 @@ def tokenize(_input, _ignore_brackets = False):
 
 
 def compute_true_labels(_question, _truepath, _falsepaths):
-    return 1
+    """
+        Function to compute the training labels corresponding to the paths given in training data.
+
+        Logic: (for now (now is 4th Dec, 2017))
+            return a static array of [ 1, 0, 0, ... 20 times ]
+
+    :param _question: np array ( x, 300)
+    :param _truepath: np array ( x, 300)
+    :param _falsepaths: list of np arrays (20, x_i, 300)
+    :return: np array, len(_falsepaths) + 1
+    """
+    return np.asarray([1]+[0 for x in range(20)])
 
 
 def parse(_raw):
@@ -260,10 +271,10 @@ def parse(_raw):
     # Corresponding to all these, compute the true labels
     v_y_true = compute_true_labels(question, true_path, false_paths)
 
-    if DEBUG:
-        print true_path
-        print "now fps"
-        print false_paths
+    # if DEBUG:
+    #     print true_path
+    #     print "now fps"
+    #     print false_paths
 
     # Throw it out.
     return v_question, v_true_path, v_false_paths, v_y_true
@@ -285,6 +296,14 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
     # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
     prepare("GLOVE")
 
+
+    """
+        Phase I - Embedding
+
+        Read JSONs from every file.
+        Parse every JSON (vectorized question, true and false paths)
+        Collect the vectorized things in a variable.
+    """
     # Read JSON files.
     for filename in os.listdir(_readfiledir):
         data = json.load(open(os.path.join(_readfiledir, filename)))
@@ -299,11 +318,23 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
             data_embedded.append([v_q, v_tp, v_fps, v_y])
 
     """
-        ||TEMP||
+        Phase II - Prepare X, Y
 
-        Pickle this data.
-        Play around with it.
+        Find the max question length; max path length.
+        Pad everything.
+        Collect the data into X, Y matrices.
+        Shuffle them somehow.
     """
+    max_ques_length = np.max( [ datum[0].shape[0] for datum in data_embedded])
+    max_path_length = np.max( [ datum[1].shape[0] for datum in data_embedded])     # Only positive paths are calculated
+
+    # Find max path length, including false paths
+    for datum in data_embedded:
+        max_path_length = max(
+                                np.max([fp.shape[0] for fp in datum[2]]),           # Find the largest false path
+                                max_path_length                                     # amongst the 20 for this question.
+                             )
+
     f = open('resources/tmp.pickle', 'w+')
     pickle.dump(data_embedded, f)
 

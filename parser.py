@@ -297,19 +297,19 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
     prepare("GLOVE")
 
 
-    """
+    '''
         Phase I - Embedding
 
         Read JSONs from every file.
         Parse every JSON (vectorized question, true and false paths)
         Collect the vectorized things in a variable.
-    """
+    '''
     # Read JSON files.
     for filename in os.listdir(_readfiledir):
         data = json.load(open(os.path.join(_readfiledir, filename)))
 
         # Each file has multiple datapoints (questions).
-        for question in data:
+        for question in data[:2]:
 
             # Collect the repsonse
             v_q, v_tp, v_fps, v_y = parse(question)
@@ -317,16 +317,22 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
             # Collect data for each question
             data_embedded.append([v_q, v_tp, v_fps, v_y])
 
-    """
+    # Find the embedding dimension (typically 300)
+    embedding_dim = v_q.shape[1]
+
+    '''
         Phase II - Prepare X, Y
 
         Find the max question length; max path length.
         Pad everything.
         Collect the data into X, Y matrices.
         Shuffle them somehow.
-    """
+
+        Note: as of now, all the Y are of a constant size i.e. 21. If the situation changes, pad Y's accordingly. @TODO.
+    '''
     max_ques_length = np.max( [ datum[0].shape[0] for datum in data_embedded])
-    max_path_length = np.max( [ datum[1].shape[0] for datum in data_embedded])     # Only positive paths are calculated
+    max_path_length = np.max( [ datum[1].shape[0] for datum in data_embedded])     # Only pos paths are calculated here.
+    max_false_paths = np.max( [ len(datum[2]) for datum in data_embedded])
 
     # Find max path length, including false paths
     for datum in data_embedded:
@@ -335,9 +341,38 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
                                 max_path_length                                     # amongst the 20 for this question.
                              )
 
+    # Pad time
+    for i in range(len(data_embedded)):
+
+        datum = data_embedded[i]
+
+        # Pad Questions
+        padded_question = np.zeros(max_ques_length, embedding_dim)                  # Create an zeros mat with max dims
+        padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]          # Pad the zeros mat with actual mat
+        datum[0] = padded_question
+
+        # Pad true path
+        padded_tp = np.zeros(max_path_length, embedding_dim)
+        padded_tp[:datum[1].shape[0], :datum[1].shape[1]] = datum[1]
+        datum[1] = padded_tp
+
+        # Pad false path
+        false_paths = np.zeros(max_false_paths, max_path_length, embedding_dim)
+        for i in len(datum[2]):
+            false_path = datum[2][i]
+            padded_fp = np.zeros(max_path_length, embedding_dim)
+            padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
+
+            false_paths[i,:,:] = padded_fp
+
+        datum[2] = false_paths
+
+        data_embedded[i] = datum
+
+
+
     f = open('resources/tmp.pickle', 'w+')
     pickle.dump(data_embedded, f)
-
 
 
 def test():

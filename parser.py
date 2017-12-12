@@ -319,6 +319,14 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
 
     # Find the embedding dimension (typically 300)
     embedding_dim = v_q.shape[1]
+    if DEBUG:
+        print """
+            Phase I - Embedding DONE
+
+        Read JSONs from every file.
+        Parse every JSON (vectorized question, true and false paths)
+        Collect the vectorized things in a variable.
+        """
 
     '''
         Phase II - Prepare X, Y
@@ -327,8 +335,6 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         Pad everything.
         Collect the data into X, Y matrices.
         Shuffle them somehow.
-
-        Note: as of now, all the Y are of a constant size i.e. 21. If the situation changes, pad Y's accordingly. @TODO.
     '''
     max_ques_length = np.max( [ datum[0].shape[0] for datum in data_embedded])
     max_path_length = np.max( [ datum[1].shape[0] for datum in data_embedded])     # Only pos paths are calculated here.
@@ -358,21 +364,29 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
 
         # Pad false path
         false_paths = np.zeros(max_false_paths, max_path_length, embedding_dim)
-        for i in len(datum[2]):
-            false_path = datum[2][i]
+        for j in range(len(datum[2])):
+            false_path = datum[2][j]
             padded_fp = np.zeros(max_path_length, embedding_dim)
             padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
 
-            false_paths[i,:,:] = padded_fp
+            false_paths[j, :, :] = padded_fp
 
         datum[2] = false_paths
 
         data_embedded[i] = datum
 
-
-
-    f = open('resources/tmp.pickle', 'w+')
+    f = open('resources/data_embedded.pickle', 'w+')
     pickle.dump(data_embedded, f)
+    f.close()
+
+    print """
+            Phase II - Prepare X, Y DONE
+
+        Find the max question length; max path length.
+        Pad everything.
+        Collect the data into X, Y matrices.
+        Shuffle them somehow.
+    """
 
 
 def test():

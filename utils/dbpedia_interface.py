@@ -25,8 +25,8 @@ import natural_language_utilities as nlutils
 import labels_mulitple_form
 
 #GLOBAL MACROS
-# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/','http://live.dbpedia.org/sparql/']
-DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
+DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/','http://live.dbpedia.org/sparql/']
+# DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
 MAX_WAIT_TIME = 1.0
 
 #SPARQL Templates
@@ -77,12 +77,12 @@ class DBPedia:
 		else:
 			self.r = False	
 		try:
-			self.labels = pickle.load(open('resources/labels.pickle'))
+			self.labels = pickle.load(open('../resources/labels.pickle'))
 		except:
 			print "Label Cache not found. Creating a new one"
 			traceback.print_exc()
 			labels_mulitple_form.merge_multiple_forms()			#This should populate the dictionary with multiple form info and already pickle it
-			self.labels = pickle.load(open('resources/labels.pickle'))
+			self.labels = pickle.load(open('../resources/labels.pickle'))
 		self.fresh_labels = 0
 
 	#initilizing the redis server.

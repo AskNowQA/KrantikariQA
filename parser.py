@@ -366,19 +366,24 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         Collect the data into X, Y matrices.
         Shuffle them somehow.
     '''
-    max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
-    max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
-    max_false_paths = np.max([len(datum[2]) for datum in data_embedded])
+    # max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
+    # max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
+    # max_false_paths = np.max([len(datum[2]) for datum in data_embedded])
+    # # Find max path length, including false paths
+    # for datum in data_embedded:
+    #     max_path_length = max(
+    #         np.max([fp.shape[0] for fp in datum[2]]),  # Find the largest false path
+    #         max_path_length  # amongst the 20 for this question.
+    #     )
 
-    # Find max path length, including false paths
-    for datum in data_embedded:
-        max_path_length = max(
-            np.max([fp.shape[0] for fp in datum[2]]),  # Find the largest false path
-            max_path_length  # amongst the 20 for this question.
-        )
+    max_ques_length = 24
+    max_path_length = 27
+    max_false_paths = 20
+
+    data_embedded_new = []
 
     # Pad time
-    for i in range(len(data_embedded)):
+    for i in range(len(data_embedded[:100])):
 
         datum = data_embedded[i]
 
@@ -403,10 +408,10 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
 
         datum[2] = false_paths
 
-        data_embedded[i] = datum
+        data_embedded_new += [datum]
 
     f = open('resources/data_embedded.pickle', 'w+')
-    pickle.dump(data_embedded, f)
+    pickle.dump(data_embedded_new, f)
     f.close()
 
     print("""

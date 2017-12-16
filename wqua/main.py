@@ -270,7 +270,7 @@ def run(_readfiledir='../data/preprocesseddatasample/', _writefilename='resource
                     correct_counter = correct_counter + 1
             processed_counter = processed_counter + 1
             print correct_counter,processed_counter
-            raw_input()
+            # raw_input()
 
 if __name__ == "__main__":
     run()

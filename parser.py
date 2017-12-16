@@ -29,12 +29,14 @@ EMBEDDING = "GLOVE"  # OR WORD2VEC
 EMBEDDING_DIM = 300
 MAX_FALSE_PATHS = 20
 embedding_glove, embedding_word2vec = {}, {}  # Declaring the two things we're gonna use
-distributions = {1: [ 1, 1, 1, 2], 2: [1, 2, 2, 2]}     # p = 3/4 distributions.
+distributions = {1: [1, 1, 1, 2], 2: [1, 2, 2, 2]}  # p = 3/4 distributions.
 
 
 # Better warning formatting. Ignore
 def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
+
+
 warnings.formatwarning = better_warning
 if DEBUG: warnings.warn(" DEBUG macro is enabled. Expect cluttered console!")
 
@@ -42,7 +44,7 @@ if DEBUG: warnings.warn(" DEBUG macro is enabled. Expect cluttered console!")
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
 
 
-def prepare(_embedding = EMBEDDING):
+def prepare(_embedding=EMBEDDING):
     """
         **Call this function prior to doing absolutely anything else.**
 
@@ -77,14 +79,14 @@ def prepare(_embedding = EMBEDDING):
 
             if DEBUG: print "GloVe successfully parsed and stored. This won't happen again."
 
-    elif EMBEDDING == _embedding:
+    elif EMBEDDING == _embedding:  # @TODO: check what's up with this here.
         if DEBUG: print "Using Glove."
 
         embedding_word2vec = models.KeyedVectors.load_word2vec_format(
             os.path.join(WORD2VEC_DIR, 'GoogleNews-vectors-negative300.bin'), binary=True)
 
 
-def vectorize(_tokens, _report_unks = False):
+def vectorize(_tokens, _report_unks=False):
     """
         Function to embed a sentence and return it as a list of vectors.
         WARNING: Give it already split. I ain't splitting it for ye.
@@ -110,13 +112,15 @@ def vectorize(_tokens, _report_unks = False):
         token = token.lower()
 
         if token == "+":
-            token_embedding = np.repeat(1,300)
+            token_embedding = np.repeat(1, 300)
         elif token == "-":
             token_embedding = np.repeat(-1, 300)
         else:
             try:
-                if EMBEDDING == "GLOVE": token_embedding = embedding_glove[token]
-                elif EMBEDDING == 'WORD2VEC': token_embedding = embedding_word2vec[token]
+                if EMBEDDING == "GLOVE":
+                    token_embedding = embedding_glove[token]
+                elif EMBEDDING == 'WORD2VEC':
+                    token_embedding = embedding_word2vec[token]
 
             except KeyError:
                 if _report_unks: unks.append(token)
@@ -129,7 +133,7 @@ def vectorize(_tokens, _report_unks = False):
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
 
 
-def tokenize(_input, _ignore_brackets = False):
+def tokenize(_input, _ignore_brackets=False):
     """
         Tokenize a question.
         Changes:
@@ -151,7 +155,9 @@ def tokenize(_input, _ignore_brackets = False):
         if matcher:
             substring = matcher.group()
 
-            cleaner_input = cleaner_input[:cleaner_input.index(substring)] + cleaner_input[cleaner_input.index(substring) + len(substring):]
+            cleaner_input = cleaner_input[:cleaner_input.index(substring)] + cleaner_input[
+                                                                             cleaner_input.index(substring) + len(
+                                                                                 substring):]
 
     return cleaner_input.strip().split()
 
@@ -168,7 +174,7 @@ def compute_true_labels(_question, _truepath, _falsepaths):
     :param _falsepaths: list of np arrays (20, x_i, 300)
     :return: np array, len(_falsepaths) + 1
     """
-    return np.asarray([1]+[0 for x in range(20)])
+    return np.asarray([1] + [0 for x in range(20)])
 
 
 def parse(_raw):
@@ -198,7 +204,7 @@ def parse(_raw):
 
     # Make the correct path
     entity = _raw[u'entity'][0]
-    entity_sf = tokenize(dbp.get_label(entity), _ignore_brackets=True)   # @TODO: When dealing with many ent, fix this.
+    entity_sf = tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: When dealing with many ent, fix this.
     path_sf = []
     for x in _raw[u'path']:
         path_sf.append(x[0])
@@ -219,7 +225,6 @@ def parse(_raw):
     for negpath in _raw[u'training'][entity][u'rel1'][1]:
         new_fp = entity_sf + ['-'] + tokenize(dbp.get_label(negpath))
         false_paths.append(new_fp)
-
 
     # Collect 2nd hop ones
     try:
@@ -266,7 +271,7 @@ def parse(_raw):
 
     # Vectorize paths
     v_true_path = vectorize(true_path)
-    v_false_paths = [ vectorize(x) for x in false_paths ]
+    v_false_paths = [vectorize(x) for x in false_paths]
 
     # Corresponding to all these, compute the true labels
     v_y_true = compute_true_labels(question, true_path, false_paths)
@@ -290,43 +295,68 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
     :return: statuscode(?)
     """
 
-    # Create vars to keep ze data @TODO: think of datatype here
-    data_embedded = []
+    try:
 
-    # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
-    prepare("GLOVE")
+        # If the phase one is already done and then the code quit (errors/s'thing else), resume for efficiency's sake.
+        data_embedded = pickle.load(open('resources/data_embedded_phase_i.pickle'))
+        embedding_dim = data_embedded[0][0].shape[1]
 
+        if DEBUG:
+            print("Phase I State save found and loaded. Program will now end much faster.")
 
-    '''
-        Phase I - Embedding
+    except:
 
-        Read JSONs from every file.
-        Parse every JSON (vectorized question, true and false paths)
-        Collect the vectorized things in a variable.
-    '''
-    # Read JSON files.
-    for filename in os.listdir(_readfiledir):
-        data = json.load(open(os.path.join(_readfiledir, filename)))
+        # If here, we didn't resume the thing mid way but start afresh
+        if DEBUG:
+            warnings.warn("Phase I state save not found on disk. Go brew your coffee now.")
 
-        # Each file has multiple datapoints (questions).
-        for question in data[:2]:
+        # Create vars to keep ze data @TODO: think of datatype here
+        data_embedded = []
 
-            # Collect the repsonse
-            v_q, v_tp, v_fps, v_y = parse(question)
+        # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
+        prepare("GLOVE")
 
-            # Collect data for each question
-            data_embedded.append([v_q, v_tp, v_fps, v_y])
+        '''
+            Phase I - Embedding
 
-    # Find the embedding dimension (typically 300)
-    embedding_dim = v_q.shape[1]
-    if DEBUG:
-        print """
-            Phase I - Embedding DONE
+            Read JSONs from every file.
+            Parse every JSON (vectorized question, true and false paths)
+            Collect the vectorized things in a variable.
+        '''
+        # Read JSON files.
+        for filename in os.listdir(_readfiledir):
+            data = json.load(open(os.path.join(_readfiledir, filename)))
 
-        Read JSONs from every file.
-        Parse every JSON (vectorized question, true and false paths)
-        Collect the vectorized things in a variable.
-        """
+            # Each file has multiple datapoints (questions).
+            for question in data:
+
+                # Collect the repsonse
+                v_q, v_tp, v_fps, v_y = parse(question)
+
+                if DEBUG:
+                    if np.max([fp.shape[0] for fp in v_fps]) >= 23:
+                        warnings.warn("Phase I: Encountered huge question. Filename: %(fn)s. ID: %(id)s" % {
+                            'fn': filename,
+                            'id': question['_id']
+                        })
+
+                # Collect data for each question
+                data_embedded.append([v_q, v_tp, v_fps, v_y])
+
+        # Find the embedding dimension (typically 300)
+        embedding_dim = v_q.shape[1]
+        if DEBUG:
+            print("""
+                Phase I - Embedding DONE
+
+            Read JSONs from every file.
+            Parse every JSON (vectorized question, true and false paths)
+            Collect the vectorized things in a variable.
+            """)
+
+        f = open('resources/data_embedded_phase_i.pickle', 'w+')
+        pickle.dump(data_embedded, f)
+        f.close()
 
     '''
         Phase II - Prepare X, Y
@@ -336,16 +366,16 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         Collect the data into X, Y matrices.
         Shuffle them somehow.
     '''
-    max_ques_length = np.max( [ datum[0].shape[0] for datum in data_embedded])
-    max_path_length = np.max( [ datum[1].shape[0] for datum in data_embedded])     # Only pos paths are calculated here.
-    max_false_paths = np.max( [ len(datum[2]) for datum in data_embedded])
+    max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
+    max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
+    max_false_paths = np.max([len(datum[2]) for datum in data_embedded])
 
     # Find max path length, including false paths
     for datum in data_embedded:
         max_path_length = max(
-                                np.max([fp.shape[0] for fp in datum[2]]),           # Find the largest false path
-                                max_path_length                                     # amongst the 20 for this question.
-                             )
+            np.max([fp.shape[0] for fp in datum[2]]),  # Find the largest false path
+            max_path_length  # amongst the 20 for this question.
+        )
 
     # Pad time
     for i in range(len(data_embedded)):
@@ -353,20 +383,20 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         datum = data_embedded[i]
 
         # Pad Questions
-        padded_question = np.zeros(max_ques_length, embedding_dim)                  # Create an zeros mat with max dims
-        padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]          # Pad the zeros mat with actual mat
+        padded_question = np.zeros((max_ques_length, embedding_dim))  # Create an zeros mat with max dims
+        padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]  # Pad the zeros mat with actual mat
         datum[0] = padded_question
 
         # Pad true path
-        padded_tp = np.zeros(max_path_length, embedding_dim)
+        padded_tp = np.zeros((max_path_length, embedding_dim))
         padded_tp[:datum[1].shape[0], :datum[1].shape[1]] = datum[1]
         datum[1] = padded_tp
 
         # Pad false path
-        false_paths = np.zeros(max_false_paths, max_path_length, embedding_dim)
+        false_paths = np.zeros((max_false_paths, max_path_length, embedding_dim))
         for j in range(len(datum[2])):
             false_path = datum[2][j]
-            padded_fp = np.zeros(max_path_length, embedding_dim)
+            padded_fp = np.zeros((max_path_length, embedding_dim))
             padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
 
             false_paths[j, :, :] = padded_fp
@@ -379,14 +409,14 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
     pickle.dump(data_embedded, f)
     f.close()
 
-    print """
+    print("""
             Phase II - Prepare X, Y DONE
 
         Find the max question length; max path length.
         Pad everything.
         Collect the data into X, Y matrices.
         Shuffle them somehow.
-    """
+    """)
 
 
 def test():
@@ -443,7 +473,6 @@ def test():
     if "4" in options:
         # @TODO: implement this.
         pass
-
 
     """
         Parsing tests.

@@ -1,42 +1,50 @@
-import keras
-from keras.layers import Input, LSTM, Dense
+# Shared Feature Extraction Layer
+from keras.utils import plot_model
 from keras.models import Model
+from keras.layers import Input
+from keras.layers import Dense
+from keras.layers.recurrent import LSTM
+from keras.layers.merge import concatenate
+
+import cPickle as pickle
+import numpy as np
 
 
-# Declaring input tensors
-x_ques = Input(shape=(20, 300))
-x_path = Input(shape=(20, 300))
-# neg_path = Input(shape=(20, 300))
 
-'''
-    Encoder
-'''
-# Create two different encoders
-path_encoder = LSTM(64)
-ques_encoder = LSTM(64)
+#data loading from the secondary memory
+FILE_PATH = 'data/training/100'
+paths = pickle.load(open(FILE_PATH + '/P'))
+questions = pickle.load(open(FILE_PATH + '/Q'))
+true_paths = pickle.load(open(FILE_PATH + '/Y'))
 
-# Encode the question
-encoded_question = ques_encoder(x_ques)
 
-# Encode the pos and neg path using the same path encoder
-encoded_path = path_encoder(x_path)
-# encoded_neg_path = path_encoder(neg_path)
+x_path_train = np.asarray(paths[:int(len(paths)*.80)]).astype('float32')
+y_train = np.asarray(true_paths[:int(len(true_paths)*.80)]).astype('float32')
+x_path_test = np.asarray(paths[int(len(paths)*.80):]).astype('float32')
+y_test = np.asarray(true_paths[int(len(true_paths)*.80):]).astype('float32')
+q_path_train = np.asarray(questions[:int(len(questions)*.80)]).astype('float32')
+q_path_test = np.asarray(questions[int(len(questions)*.80):]).astype('float32')
+print(x_path_train.shape[0], 'train samples')
+
+
+path_input_shape = x_path_train.shape[1:]
+question_input_shape = q_path_train.shape[1:]
+
+
+# Encode the pos and neg path using the same path encoder and also the question
+x_ques = Input(shape=path_input_shape)
+ques_encoder = LSTM(64)(x_ques)
+x_path = Input(shape=question_input_shape)
+path_encoder = LSTM(64)(x_path)
 
 # Concatenate question with the two paths
-merged_path_ques = keras.layers.concatenate([encoded_question, encoded_path], axis=-1)
-# merged_negpath_ques = keras.layers.concatenate([encoded_question, encoded_pos_path], axis=-1)
+merge = concatenate([ques_encoder, path_encoder])
 
-'''
-    Classifier
-'''
-# Declare a dense layer
-classifier = Dense(1, activation='sigmoid')
+output = Dense(1, activation='sigmoid')(merge)
+model = Model(inputs=[x_ques,x_path], outputs=output)
+print(model.summary())
+model.compile(optimizer='rmsprop',
+              loss='binary_crossentropy',
+              metrics=['accuracy'])
 
-# Use it on the pos and neg examples
-y = classifier(merged_path_ques)
-# y_neg = classifier(merged_negpath_ques)
-
-model = Model(inputs=[x_ques, x_path], outputs=y)
-model.compile(optimizer=["sgd"],
-              loss="binary_crossentropy",
-              metrics=["precision", "recall", "accuracy"])
+model.fit([x_path_train,q_path_train],y_train,batch_size=1,epochs=100)

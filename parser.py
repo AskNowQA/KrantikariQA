@@ -366,6 +366,7 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         Find the max question length; max path length.
         Pad everything.
     '''
+
     max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
     max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
     max_false_paths = np.max([len(datum[2]) for datum in data_embedded])
@@ -377,6 +378,7 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
             np.max([fp.shape[0] for fp in datum[2]]),  # Find the largest false path
             max_path_length  # amongst the 20 for this question.
         )
+
 
     # Pad time
     for i in range(len(data_embedded)):

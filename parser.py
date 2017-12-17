@@ -12,6 +12,7 @@ import os
 import re
 import json
 import pickle
+import random
 import warnings
 import traceback
 import numpy as np
@@ -310,12 +311,6 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         if DEBUG:
             warnings.warn("Phase I state save not found on disk. Go brew your coffee now.")
 
-        # Create vars to keep ze data @TODO: think of datatype here
-        data_embedded = []
-
-        # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
-        prepare("GLOVE")
-
         '''
             Phase I - Embedding
 
@@ -323,6 +318,13 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
             Parse every JSON (vectorized question, true and false paths)
             Collect the vectorized things in a variable.
         '''
+
+        # Create vars to keep ze data @TODO: think of datatype here
+        data_embedded = []
+
+        # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
+        prepare("GLOVE")
+
         # Read JSON files.
         for filename in os.listdir(_readfiledir):
             data = json.load(open(os.path.join(_readfiledir, filename)))
@@ -359,16 +361,15 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         f.close()
 
     '''
-        Phase II - Prepare X, Y
+        Phase II - Padding
 
         Find the max question length; max path length.
         Pad everything.
-        Collect the data into X, Y matrices.
-        Shuffle them somehow.
     '''
     max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
     max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
     max_false_paths = np.max([len(datum[2]) for datum in data_embedded])
+    total_paths = np.sum([len(datum[2]) for datum in data_embedded]) + len(data_embedded)   # Find total paths
 
     # Find max path length, including false paths
     for datum in data_embedded:
@@ -417,6 +418,47 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         Collect the data into X, Y matrices.
         Shuffle them somehow.
     """)
+
+    '''
+        Phase III - Make a matrix out of you
+
+        Shuffle the data
+        Collect the data into Q, P and Y matrices.
+    '''
+
+    # Shuffle the data
+    random.shuffle(data_embedded)
+
+    # Make Q, P and Y matrices
+    Q = np.zeros(( total_paths, max_ques_length, embedding_dim))
+    P = np.zeros(( total_paths, max_path_length, embedding_dim))
+    Y = np.zeros(( total_paths,))
+
+    if DEBUG:
+        print "Q: ", Q.shape, "P: ", P.shape, "Y: ", Y.shape
+
+    for i in range(len(data_embedded)):
+        datum = data_embedded[i]
+
+        # For i*21 to (i+1)*21, add same v_q
+        Q[i * (max_false_paths+1): (i+1) * (max_false_paths+1)] = np.repeat(         # For 0-21/21-42.. in a zeros mat
+                                                    a=datum[0][np.newaxis, :, :],   # transform v_q to have new axis
+                                                    repeats=max_false_paths+1,      # and repeat it on ze axis 21 times
+                                                    axis=0)                         # and voila!
+
+        # Add v_tp to P
+        P[i * (max_false_paths+1)] = datum[1]
+
+        # Add v_fps to P now.
+        P[(i * (max_false_paths+1)) + 1: (i * (max_false_paths+1)) + 1 + max_false_paths] = datum[2]
+
+        # Add v_y to Y
+        Y[i * (max_false_paths+1): (i+1) * (max_false_paths+1)] = datum[3]
+
+    # Print these things to file.
+    np.save(open('./data/training/small_runs/Q.npz', 'w+'), Q)
+    np.save(open('./data/training/small_runs/P.npz', 'w+'), P)
+    np.save(open('./data/training/small_runs/Y.npz', 'w+'), Y)
 
 
 def test():

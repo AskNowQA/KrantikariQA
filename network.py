@@ -24,7 +24,7 @@ def smart_save_model(model):
     """
 
     # Find the current model dirs in the data dir.
-    _, dirs, _ = os.listdir(DATA_DIR).next()
+    _, dirs, _ = os.walk(DATA_DIR).next()
 
     # Get the model description
     desc = model.to_json()
@@ -49,23 +49,28 @@ def smart_save_model(model):
             model.save(os.path.join(l_dir, 'model.h5'))
             json.dump(desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
 
-
+"""
+    Data Time!
+"""
 # Pull the data up from disk
-paths = np.load(open(DATA_DIR + '/P.npz'))
-questions = np.load(open(DATA_DIR + '/Q.npz'))
-true_paths = np.load(open(DATA_DIR + '/Y.npz'))
+x_p = np.load(open(DATA_DIR + '/P.npz'))
+x_q = np.load(open(DATA_DIR + '/Q.npz'))
+y = np.load(open(DATA_DIR + '/Y.npz'))
 
 # Divide the data into diff blocks
-x_path_train = np.asarray(paths[:int(len(paths)*.80)]).astype('float32')
-y_train = np.asarray(true_paths[:int(len(true_paths)*.80)]).astype('float32')
-x_path_test = np.asarray(paths[int(len(paths)*.80):]).astype('float32')
-y_test = np.asarray(true_paths[int(len(true_paths)*.80):]).astype('float32')
-q_path_train = np.asarray(questions[:int(len(questions)*.80)]).astype('float32')
-q_path_test = np.asarray(questions[int(len(questions)*.80):]).astype('float32')
+x_path_train = np.asarray(x_p[:int(len(x_p) * .80)]).astype('float32')
+y_train = np.asarray(y[:int(len(y) * .80)]).astype('float32')
+x_path_test = np.asarray(x_p[int(len(x_p) * .80):]).astype('float32')
+y_test = np.asarray(y[int(len(y) * .80):]).astype('float32')
+q_path_train = np.asarray(x_q[:int(len(x_q) * .80)]).astype('float32')
+q_path_test = np.asarray(x_q[int(len(x_q) * .80):]).astype('float32')
 
 path_input_shape = x_path_train.shape[1:]
 question_input_shape = q_path_train.shape[1:]
 
+"""
+    Model Time!
+"""
 # Encode the pos and neg path using the same path encoder and also the question
 x_ques = Input(shape=path_input_shape)
 ques_encoder = LSTM(64)(x_ques)
@@ -77,14 +82,19 @@ merge = concatenate([ques_encoder, path_encoder])
 
 output = Dense(1, activation='sigmoid')(merge)
 
+"""
+    Run Time!
+"""
 # Model time!
 model = Model(inputs=[x_ques,x_path], outputs=output)
+
 print(model.summary())
+
 model.compile(optimizer='rmsprop',
               loss='binary_crossentropy',
               metrics=['accuracy'])
 
 model.fit([x_path_train, q_path_train], y_train, batch_size=1, epochs=EPOCHS)
 
-# smart_save_model(model)
+smart_save_model(model)
 

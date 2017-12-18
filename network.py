@@ -1,29 +1,67 @@
 # Shared Feature Extraction Layer
-from keras.utils import plot_model
+import os
+import json
+import numpy as np
 from keras.models import Model
 from keras.layers import Input
 from keras.layers import Dense
 from keras.layers.recurrent import LSTM
 from keras.layers.merge import concatenate
 
-import cPickle as pickle
-import numpy as np
+
+# Some Macros
+DATA_DIR = './data/training/multi_path_mini'
+EPOCHS = 50
+
+
+def smart_save_model(model):
+    """
+        Function to properly save the model to disk.
+            If the model config is the same as one already on disk, overwrite it.
+            Else make a new folder and write things there
+
+    :return: None
+    """
+
+    # Find the current model dirs in the data dir.
+    _, dirs, _ = os.listdir(DATA_DIR).next()
+
+    # Get the model description
+    desc = model.to_json()
+
+    # Find the latest folder in here
+    l_dir = os.path.join(DATA_DIR, dirs[-1])    # @TODO: Replace this with alphanum sort
+
+    # Check if the latest dir has the same model as current
+    if __name__ == '__main__':
+        try:
+            if json.load(os.path.join(l_dir, 'model.json')) == desc:
+                # Same desc. Just save stuff here
+                model.save(os.path.join(l_dir, 'model.h5'))
+
+            else:
+                # Diff model. Make new folder and do stuff. @TODO this
+                pass
+
+        except IOError:
+
+            # Apparently there's nothing here. Let's set camp.
+            model.save(os.path.join(l_dir, 'model.h5'))
+            json.dump(desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
+
 
 # Pull the data up from disk
-FILE_PATH = 'data/training/small_runs'
-paths = np.load(open(FILE_PATH + '/P.npz'))
-questions = np.load(open(FILE_PATH + '/Q.npz'))
-true_paths = np.load(open(FILE_PATH + '/Y.npz'))
+paths = np.load(open(DATA_DIR + '/P.npz'))
+questions = np.load(open(DATA_DIR + '/Q.npz'))
+true_paths = np.load(open(DATA_DIR + '/Y.npz'))
 
-
+# Divide the data into diff blocks
 x_path_train = np.asarray(paths[:int(len(paths)*.80)]).astype('float32')
 y_train = np.asarray(true_paths[:int(len(true_paths)*.80)]).astype('float32')
 x_path_test = np.asarray(paths[int(len(paths)*.80):]).astype('float32')
 y_test = np.asarray(true_paths[int(len(true_paths)*.80):]).astype('float32')
 q_path_train = np.asarray(questions[:int(len(questions)*.80)]).astype('float32')
 q_path_test = np.asarray(questions[int(len(questions)*.80):]).astype('float32')
-print(x_path_train.shape[0], 'train samples')
-
 
 path_input_shape = x_path_train.shape[1:]
 question_input_shape = q_path_train.shape[1:]
@@ -46,4 +84,7 @@ model.compile(optimizer='rmsprop',
               loss='binary_crossentropy',
               metrics=['accuracy'])
 
-model.fit([x_path_train, q_path_train], y_train, batch_size=1, epochs=100)
+model.fit([x_path_train, q_path_train], y_train, batch_size=1, epochs=EPOCHS)
+
+# smart_save_model(model)
+

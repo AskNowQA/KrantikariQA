@@ -379,7 +379,6 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
             max_path_length  # amongst the 20 for this question.
         )
 
-
     # Pad time
     for i in range(len(data_embedded)):
 
@@ -454,9 +453,9 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         Y[i] = datum[3][indices]
 
     # Print these things to file.
-    np.save(open('./data/training/multi_path_mini/Q.npz', 'w+'), Q)
-    np.save(open('./data/training/multi_path_mini/P.npz', 'w+'), P)
-    np.save(open('./data/training/multi_path_mini/Y.npz', 'w+'), Y)
+    np.save(open('./data/training/full/Q.npz', 'w+'), Q)
+    np.save(open('./data/training/full/P.npz', 'w+'), P)
+    np.save(open('./data/training/full/Y.npz', 'w+'), Y)
 
 
 def test():

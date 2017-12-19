@@ -13,14 +13,16 @@ from keras import optimizers, metrics
 
 
 # Some Macros
+DEBUG = True
 DATA_DIR = './data/training/multi_path_mini'
-EPOCHS = 60
+EPOCHS = 10
+LOSS = 'categorical_crossentropy'
+OPTIMIZER = 'adam'
+
 
 '''
     F1 measure functions
 '''
-
-
 def recall(y_true, y_pred):
     """Recall metric.
     Only computes a batch-wise average of recall.
@@ -98,31 +100,48 @@ def smart_save_model(model):
     :return: None
     """
 
-    # Find the current model dirs in the data dir.
-    _, dirs, _ = os.walk(DATA_DIR).next()
-
     # Get the model description
     desc = model.to_json()
 
+    # Find the current model dirs in the data dir.
+    _, dirs, _ = os.walk(DATA_DIR).next()
+
+    # If no folder found in there, create a new one.
+    if len(dirs) == 0:
+        os.mkdir(os.path.join(DATA_DIR, "model_00"))
+        dirs = ["model_00"]
+
     # Find the latest folder in here
-    l_dir = os.path.join(DATA_DIR, dirs[-1])    # @TODO: Replace this with alphanum sort
+    dir_nums = sorted([ x[-2:] for x in dirs])
+    l_dir = os.path.join(DATA_DIR, "model_" + dir_nums[-1])
 
     # Check if the latest dir has the same model as current
-    if __name__ == '__main__':
-        try:
-            if json.load(os.path.join(l_dir, 'model.json')) == desc:
-                # Same desc. Just save stuff here
-                model.save(os.path.join(l_dir, 'model.h5'))
-
-            else:
-                # Diff model. Make new folder and do stuff. @TODO this
-                pass
-
-        except IOError:
-
-            # Apparently there's nothing here. Let's set camp.
+    try:
+        if json.load(open(os.path.join(l_dir, 'model.json'))) == desc:
+            # Same desc. Just save stuff here
+            if DEBUG:
+                print "network.py:smart_save_model: Saving model in %s" % l_dir
             model.save(os.path.join(l_dir, 'model.h5'))
-            json.dump(desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
+
+        else:
+            # Diff model. Make new folder and do stuff. @TODO this
+            new_num = int(dir_nums[-1]) + 1
+            if new_num < 10:
+                new_num = str('0') + str(new_num)
+            else:
+                new_num = str(new_num)
+
+            l_dir = os.path.join(DATA_DIR, "model_" + new_num)
+            os.mkdir(l_dir)
+            raise IOError
+
+    except IOError:
+
+        # Apparently there's nothing here. Let's set camp.
+        if DEBUG:
+            print "network.py:smart_save_model: Saving model in %s" % l_dir
+        model.save(os.path.join(l_dir, 'model.h5'))
+        json.dump(desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
 
 """
     Data Time!
@@ -193,27 +212,22 @@ model = Model(inputs=inputs, outputs=output)
 
 print(model.summary())
 
-model.compile(optimizer='adam',
-              loss='categorical_crossentropy',
+model.compile(optimizer=OPTIMIZER,
+              loss=LOSS,
               metrics=[fmeasure, 'accuracy'])
 
 # Prepare training data
-# x_path_train = np.swapaxes(x_path_train, 0, 1)
+training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
+model.fit(training_input, y_train, batch_size=1, epochs=EPOCHS)
 
-# Breaking the 21 different paths
-# x_path_train = [ x_path_train[i] for i in range(x_path_train.shape[0])]
-# x_path_train.append(q_path_train)
+smart_save_model(model)
 
-# training_input = [q_path_train] + [x for x in x_path_train]
+# Prepare test data
+testing_input = [q_path_test] + [x_path_test[:, i, :, :] for i in range(x_path_test.shape[1])]
+results = model.evaluate(testing_input, y_test)
+print "Evaluation Complete"
+print "Loss     = ", results[0]
+print "F1 Score = ", results[1]
+print "Accuracy = ", results[2]
 
-# model.fit(training_input, y_train, batch_size=1, epochs=EPOCHS)
-#
-# # smart_save_model(model)
-#
-# # Prepare test data
-# x_path_test = np.swapaxes(x_path_test, 0, 1)
-# testing_input = [q_path_test] + [x for x in x_path_test]            # x_p_test = 21, 89, 23, 300
-#
-# model.evaluate(testing_input, y_test)
-#
-#
+

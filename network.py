@@ -7,8 +7,10 @@ from keras.models import Model
 from keras.layers import Input
 from keras.layers import Dense
 from keras.layers import Dropout
+from keras.layers import Activation
 from keras.layers.recurrent import LSTM
 from keras.layers.merge import concatenate
+from keras.activations import softmax
 from keras import optimizers, metrics
 
 
@@ -195,14 +197,17 @@ dropout = Dropout(0.5)
 dropout_outputs = [dropout(x) for x in dense_1_outputs]
 
 # Merge these sons of bitches into one tensor of 64 x 21
-merged_tensor = concatenate(dropout_outputs)
+# merged_tensor = concatenate(dropout_outputs)
 
 # Final Dense (Output layer)soft
-output = Dense(x_path_train.shape[1], activation='softmax')(merged_tensor)
+output_sigmoid = Dense(1, activation='sigmoid')
+outputs = [output_sigmoid(x) for x in dropout_outputs]
 
+merged_output = concatenate(outputs)
+output = Activation('softmax')(merged_output)
 
 """
-    Run Time!
+    Run Time
 """
 # Prepare input tensors
 inputs = [x_ques] + x_paths

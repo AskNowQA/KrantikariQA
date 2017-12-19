@@ -17,7 +17,7 @@ from keras import optimizers, metrics
 # Some Macros
 DEBUG = True
 DATA_DIR = './data/training/multi_path_mini'
-EPOCHS = 10
+EPOCHS = 50
 LOSS = 'categorical_crossentropy'
 OPTIMIZER = 'adam'
 

@@ -6,6 +6,7 @@ import keras.backend as K
 from keras.models import Model
 from keras.layers import Input
 from keras.layers import Dense
+from keras.layers import Dropout
 from keras.layers.recurrent import LSTM
 from keras.layers.merge import concatenate
 from keras import optimizers, metrics
@@ -13,11 +14,13 @@ from keras import optimizers, metrics
 
 # Some Macros
 DATA_DIR = './data/training/multi_path_mini'
-EPOCHS = 50
+EPOCHS = 60
 
 '''
-	F1 measure
+    F1 measure functions
 '''
+
+
 def recall(y_true, y_pred):
     """Recall metric.
     Only computes a batch-wise average of recall.
@@ -28,6 +31,7 @@ def recall(y_true, y_pred):
     possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
     recall = true_positives / (possible_positives + K.epsilon())
     return recall
+
 
 def fbeta_score(y_true, y_pred, beta=1):
     """Computes the F score.
@@ -57,6 +61,7 @@ def fbeta_score(y_true, y_pred, beta=1):
     fbeta_score = (1 + bb) * (p * r) / (bb * p + r + K.epsilon())
     return fbeta_score
 
+
 def precision(y_true, y_pred):
     """Precision metric.
     Only computes a batch-wise average of precision.
@@ -68,18 +73,20 @@ def precision(y_true, y_pred):
     precision = true_positives / (predicted_positives + K.epsilon())
     return true_positives
 
+
 def true_positives(y_true, y_pred):
-	return K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    return K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+
 
 def predicted_positives(y_true, y_pred):
-	return K.sum(K.round(K.clip(y_pred, 0, 1)))
+    return K.sum(K.round(K.clip(y_pred, 0, 1)))
+
 
 def fmeasure(y_true, y_pred):
     """Computes the f-measure, the harmonic mean of precision and recall.
     Here it is only computed as a batch-wise average, not globally.
     """
     return fbeta_score(y_true, y_pred, beta=1)
-
 
 
 def smart_save_model(model):
@@ -125,6 +132,12 @@ x_p = np.load(open(DATA_DIR + '/P.npz'))
 x_q = np.load(open(DATA_DIR + '/Q.npz'))
 y = np.load(open(DATA_DIR + '/Y.npz'))
 
+# Shuffle these matrices together @TODO this!
+indices = np.random.permutation(x_p.shape[0])
+x_p = x_p[indices]
+x_q = x_q[indices]
+y = y[indices]
+
 # Divide the data into diff blocks
 x_path_train = np.asarray(x_p[:int(len(x_p) * .80)]).astype('float32')
 y_train = np.asarray(y[:int(len(y) * .80)]).astype('float32')
@@ -133,36 +146,74 @@ y_test = np.asarray(y[int(len(y) * .80):]).astype('float32')
 q_path_train = np.asarray(x_q[:int(len(x_q) * .80)]).astype('float32')
 q_path_test = np.asarray(x_q[int(len(x_q) * .80):]).astype('float32')
 
-path_input_shape = x_path_train.shape[1:]
 question_input_shape = q_path_train.shape[1:]
+path_input_shape = x_path_train.shape[2:]
+
 
 """
     Model Time!
 """
-# Encode the pos and neg path using the same path encoder and also the question
-x_ques = Input(shape=path_input_shape)
-ques_encoder = LSTM(64)(x_ques)
-x_path = Input(shape=question_input_shape)
-path_encoder = LSTM(64)(x_path)
+# Define input to the models
+x_ques = Input(shape=question_input_shape)
+x_paths = [ Input(shape=path_input_shape) for x in range(x_path_train.shape[1])]
 
-# Concatenate question with the two paths
-merge = concatenate([ques_encoder, path_encoder])
+# Encode the question
+ques_encoded = LSTM(64)(x_ques)
 
-output = Dense(1, activation='sigmoid')(merge)
+# Encode 21 paths
+path_encoder = LSTM(64)
+path_encoded = [path_encoder(x) for x in x_paths]
+
+# For every path, concatenate question with the path
+merges = [concatenate([ques_encoded, x]) for x in path_encoded]
+
+# First Dense layers over these 128,_ tensors
+dense_1 = Dense(64, activation='relu')
+dense_1_outputs = [dense_1(x) for x in merges]
+
+# Dropout time
+dropout = Dropout(0.5)
+dropout_outputs = [dropout(x) for x in dense_1_outputs]
+
+# Merge these sons of bitches into one tensor of 64 x 21
+merged_tensor = concatenate(dropout_outputs)
+
+# Final Dense (Output layer)soft
+output = Dense(x_path_train.shape[1], activation='softmax')(merged_tensor)
+
 
 """
     Run Time!
 """
+# Prepare input tensors
+inputs = [x_ques] + x_paths
+
 # Model time!
-model = Model(inputs=[x_ques,x_path], outputs=output)
+model = Model(inputs=inputs, outputs=output)
 
 print(model.summary())
 
-model.compile(optimizer='rmsprop',
-              loss='binary_crossentropy',
-              metrics=['accuracy'])
+model.compile(optimizer='adam',
+              loss='categorical_crossentropy',
+              metrics=[fmeasure, 'accuracy'])
 
-model.fit([x_path_train, q_path_train], y_train, batch_size=1, epochs=EPOCHS)
+# Prepare training data
+# x_path_train = np.swapaxes(x_path_train, 0, 1)
 
-smart_save_model(model)
+# Breaking the 21 different paths
+# x_path_train = [ x_path_train[i] for i in range(x_path_train.shape[0])]
+# x_path_train.append(q_path_train)
 
+# training_input = [q_path_train] + [x for x in x_path_train]
+
+# model.fit(training_input, y_train, batch_size=1, epochs=EPOCHS)
+#
+# # smart_save_model(model)
+#
+# # Prepare test data
+# x_path_test = np.swapaxes(x_path_test, 0, 1)
+# testing_input = [q_path_test] + [x for x in x_path_test]            # x_p_test = 21, 89, 23, 300
+#
+# model.evaluate(testing_input, y_test)
+#
+#

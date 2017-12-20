@@ -16,10 +16,12 @@ from keras import optimizers, metrics
 
 # Some Macros
 DEBUG = True
-DATA_DIR = './data/training/multi_path_mini'
-EPOCHS = 10
+DATA_DIR = './data/training/full'
+EPOCHS = 200
+BATCH_SIZE = 200 # Around 11 splits for full training dataset
+LEARNING_RATE = 0.002
 LOSS = 'categorical_crossentropy'
-OPTIMIZER = 'adam'
+OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 
 '''
@@ -163,6 +165,7 @@ x_q = np.load(open(DATA_DIR + '/Q.npz'))
 y = np.load(open(DATA_DIR + '/Y.npz'))
 
 # Shuffle these matrices together @TODO this!
+np.random.seed(0) # Random train/test splits stay the same between runs
 indices = np.random.permutation(x_p.shape[0])
 x_p = x_p[indices]
 x_q = x_q[indices]
@@ -217,7 +220,7 @@ model.compile(optimizer=OPTIMIZER,
 
 # Prepare training data
 training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
-model.fit(training_input, y_train, batch_size=1, epochs=EPOCHS)
+model.fit(training_input, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS)
 
 smart_save_model(model)
 

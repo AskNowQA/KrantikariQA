@@ -7,7 +7,7 @@ from keras.models import Model
 from keras.layers import Input
 from keras.layers import Dense
 from keras.layers import Dropout
-from keras.layers import Activation, RepeatVector
+from keras.layers import Activation, RepeatVector, Reshape
 from keras.layers.recurrent import LSTM
 from keras.layers.merge import concatenate, dot
 from keras.activations import softmax
@@ -16,9 +16,9 @@ from keras import optimizers, metrics
 
 # Some Macros
 DEBUG = True
-DATA_DIR = './data/training/full'
-EPOCHS = 200
-BATCH_SIZE = 200 # Around 11 splits for full training dataset
+DATA_DIR = './data/training/multi_path_mini'
+EPOCHS = 2
+BATCH_SIZE = 20 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.002
 LOSS = 'categorical_crossentropy'
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
@@ -156,9 +156,9 @@ def custom_loss(y_true, y_pred):
     # y_pos = K.repeat(y_pred, 20)
     # K.eval(y_pos)
     # K.eval(y_neg)
-    y_pos = y_pred[0]
-    y_neg= y_pred[1]
-    return K.mean(K.maximum(1. - y_pos +  y_neg, 0.) , axis=-1)
+    y_pos = y_pred[:,:20]
+    y_neg= y_pred[:,20:]
+    return K.mean(K.maximum(1.0 - y_pos +  y_neg, 0.) , axis=-1)
 
 """
     Data Time!
@@ -214,21 +214,23 @@ pos = merges[0]
 repeat_pos = RepeatVector(20)(pos)
 neg = merges[1:]
 concat_neg = concatenate(neg)
+reshaped_concat_neg = Reshape((20,))(concat_neg)
+reshaped_repeat_pos = Reshape((20,))(repeat_pos)
+concatenated_output = concatenate([reshaped_repeat_pos,reshaped_concat_neg])
 # Prepare input tensors
 inputs = [x_ques] + x_paths
 
 # Model time!
-model = Model(inputs=inputs, outputs=[repeat_pos,concat_neg])
+model = Model(inputs=inputs, outputs=concatenated_output)
 
 print(model.summary())
 
 model.compile(optimizer=OPTIMIZER,
-              loss=custom_loss,
-              metrics=['accuracy'])
+              loss=custom_loss)
 
 # Prepare training data
 training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
-model.fit(training_input, [y_train,y_train], batch_size=1, epochs=EPOCHS)
+model.fit(training_input, np.concatenate((y_train[:,:20],y_train[:,:20]),axis=1), batch_size=BATCH_SIZE, epochs=EPOCHS)
 
 
 smart_save_model(model)
@@ -236,7 +238,7 @@ smart_save_model(model)
 # Prepare test data
 testing_input = [q_path_test] + [x_path_test[:, i, :, :] for i in range(x_path_test.shape[1])]
 results = model.evaluate(testing_input, y_test)
-print "Evaluation Complete"
-print "Loss     = ", results[0]
-print "F1 Score = ", results[1]
-print "Accuracy = ", results[2]
+# print "Evaluation Complete"
+# print "Loss     = ", results[0]
+# print "F1 Score = ", results[1]
+# print "Accuracy = ", results[2]

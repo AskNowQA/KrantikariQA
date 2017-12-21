@@ -7,7 +7,7 @@ from keras.models import Model
 from keras.layers import Input
 from keras.layers import Dense
 from keras.layers import Dropout
-from keras.layers import Activation
+from keras.layers import Activation, RepeatVector
 from keras.layers.recurrent import LSTM
 from keras.layers.merge import concatenate, dot
 from keras.activations import softmax
@@ -150,9 +150,13 @@ def custom_loss(y_true, y_pred):
     '''
         max margin loss
     '''
+    # y_neg = K.concatenate(y_pred[1:])
+    # y_pos = K.repeat(y_pred, 20)
+    # K.eval(y_pos)
+    # K.eval(y_neg)
     y_pos = y_pred[0]
-    y_neg = y_pred[1:]
-    return K.mean(K.maximum(1. - y_pos +  y_neg, 0.), axis=-1)
+    y_neg= y_pred[1]
+    return K.mean(K.maximum(1. - y_pos +  y_neg, 0.) , axis=-1)
 
 """
     Data Time!
@@ -195,7 +199,7 @@ path_encoder = LSTM(64)
 path_encoded = [path_encoder(x) for x in x_paths]
 
 # For every path, concatenate question with the path
-merges = [dot([ques_encoded, x]) for x in path_encoded]
+merges = [dot([ques_encoded, x],axes=-1) for x in path_encoded]
 # pos = merges[0]
 # neg = merges[1:]
 
@@ -203,21 +207,25 @@ merges = [dot([ques_encoded, x]) for x in path_encoded]
 """
     Run Time
 """
+pos = merges[0]
+repeat_pos = RepeatVector(20)(pos)
+neg = merges[1:]
+concat_neg = concatenate(neg)
 # Prepare input tensors
 inputs = [x_ques] + x_paths
 
 # Model time!
-model = Model(inputs=inputs, outputs=merges)
+model = Model(inputs=inputs, outputs=[repeat_pos,concat_neg])
 
 print(model.summary())
 
 model.compile(optimizer=OPTIMIZER,
               loss=custom_loss,
-              metrics=[fmeasure, 'accuracy'])
+              metrics=['accuracy'])
 
 # Prepare training data
 training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
-model.fit(training_input, y_train, batch_size=1, epochs=EPOCHS)
+model.fit(training_input, [y_train,y_train], batch_size=1, epochs=EPOCHS)
 
 smart_save_model(model)
 

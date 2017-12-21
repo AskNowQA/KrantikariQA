@@ -286,7 +286,7 @@ def parse(_raw):
     return v_question, v_true_path, v_false_paths, v_y_true
 
 
-def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_data.json'):
+def run(_readfiledir='data/preprocesseddatasample/', _writefilename='resources/parsed_data.json'):
     """
     Get the show on the road.
 
@@ -379,6 +379,7 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
             max_path_length  # amongst the 20 for this question.
         )
 
+
     # Pad time
     for i in range(len(data_embedded)):
 
@@ -441,7 +442,7 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         Q[i] = datum[0]
 
         # Shuffle Y[i] and P[i] together.
-        indices = np.random.permutation(max_false_paths + 1)
+        indices = np.arange(max_false_paths + 1)
 
         # Make a m_fp x m_pl x emb_dim matrix for all the paths, true or false.
         temp_paths = np.zeros((max_false_paths + 1, max_path_length, embedding_dim))
@@ -453,9 +454,9 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         Y[i] = datum[3][indices]
 
     # Print these things to file.
-    np.save(open('./data/training/full/Q.npz', 'w+'), Q)
-    np.save(open('./data/training/full/P.npz', 'w+'), P)
-    np.save(open('./data/training/full/Y.npz', 'w+'), Y)
+    np.save(open('./data/training/multi_path_mini/Q.npz', 'w+'), Q)
+    np.save(open('./data/training/multi_path_mini/P.npz', 'w+'), P)
+    np.save(open('./data/training/multi_path_mini/Y.npz', 'w+'), Y)
 
 
 def test():

@@ -9,19 +9,17 @@ from keras.layers import Dense
 from keras.layers import Dropout
 from keras.layers import Activation
 from keras.layers.recurrent import LSTM
-from keras.layers.merge import concatenate
+from keras.layers.merge import concatenate, dot
 from keras.activations import softmax
 from keras import optimizers, metrics
 
 
 # Some Macros
 DEBUG = True
-DATA_DIR = './data/training/full'
-EPOCHS = 200
-BATCH_SIZE = 200 # Around 11 splits for full training dataset
-LEARNING_RATE = 0.002
+DATA_DIR = './data/training/multi_path_mini'
+EPOCHS = 10
 LOSS = 'categorical_crossentropy'
-OPTIMIZER = optimizers.Adam(LEARNING_RATE)
+OPTIMIZER = 'adam'
 
 
 '''
@@ -147,6 +145,15 @@ def smart_save_model(model):
         model.save(os.path.join(l_dir, 'model.h5'))
         json.dump(desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
 
+
+def custom_loss(y_true, y_pred):
+    '''
+        max margin loss
+    '''
+    y_pos = y_pred[0]
+    y_neg = y_pred[1:]
+    return K.mean(K.maximum(1. - y_pos +  y_neg, 0.), axis=-1)
+
 """
     Data Time!
 """
@@ -156,7 +163,6 @@ x_q = np.load(open(DATA_DIR + '/Q.npz'))
 y = np.load(open(DATA_DIR + '/Y.npz'))
 
 # Shuffle these matrices together @TODO this!
-np.random.seed(0) # Random train/test splits stay the same between runs
 indices = np.random.permutation(x_p.shape[0])
 x_p = x_p[indices]
 x_q = x_q[indices]
@@ -189,25 +195,10 @@ path_encoder = LSTM(64)
 path_encoded = [path_encoder(x) for x in x_paths]
 
 # For every path, concatenate question with the path
-merges = [concatenate([ques_encoded, x]) for x in path_encoded]
+merges = [dot([ques_encoded, x]) for x in path_encoded]
+# pos = merges[0]
+# neg = merges[1:]
 
-# First Dense layers over these 128,_ tensors
-dense_1 = Dense(64, activation='relu')
-dense_1_outputs = [dense_1(x) for x in merges]
-
-# Dropout time
-dropout = Dropout(0.5)
-dropout_outputs = [dropout(x) for x in dense_1_outputs]
-
-# Merge these sons of bitches into one tensor of 64 x 21
-# merged_tensor = concatenate(dropout_outputs)
-
-# Final Dense (Output layer)soft
-output_sigmoid = Dense(1, activation='sigmoid')
-outputs = [output_sigmoid(x) for x in dropout_outputs]
-
-merged_output = concatenate(outputs)
-output = Activation('softmax')(merged_output)
 
 """
     Run Time
@@ -216,17 +207,17 @@ output = Activation('softmax')(merged_output)
 inputs = [x_ques] + x_paths
 
 # Model time!
-model = Model(inputs=inputs, outputs=output)
+model = Model(inputs=inputs, outputs=merges)
 
 print(model.summary())
 
 model.compile(optimizer=OPTIMIZER,
-              loss=LOSS,
+              loss=custom_loss,
               metrics=[fmeasure, 'accuracy'])
 
 # Prepare training data
 training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
-model.fit(training_input, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS)
+model.fit(training_input, y_train, batch_size=1, epochs=EPOCHS)
 
 smart_save_model(model)
 
@@ -237,5 +228,3 @@ print "Evaluation Complete"
 print "Loss     = ", results[0]
 print "F1 Score = ", results[1]
 print "Accuracy = ", results[2]
-
-

@@ -16,7 +16,7 @@ import random
 import warnings
 import traceback
 import numpy as np
-
+from progressbar import ProgressBar
 from pprint import pprint
 from gensim import models
 
@@ -435,7 +435,14 @@ def run(_readfiledir='data/preprocesseddatasample/', _writefilename='resources/p
     if DEBUG:
         print "Q: ", Q.shape, "P: ", P.shape, "Y: ", Y.shape
 
-    for i in range(len(data_embedded)):
+    # Create an interable to loop
+    iterable = range(len(data_embedded))
+
+    if DEBUG:
+        prog_bar = ProgressBar()
+        iterable = prog_bar(iterable)
+
+    for i in iterable:
         datum = data_embedded[i]
 
         # Add an entry of question to Q

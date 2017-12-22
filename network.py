@@ -16,9 +16,9 @@ from keras import optimizers, metrics
 
 # Some Macros
 DEBUG = True
-DATA_DIR = './data/training/multi_path_mini'
-EPOCHS = 2
-BATCH_SIZE = 20 # Around 11 splits for full training dataset
+DATA_DIR = './data/training/full'
+EPOCHS = 100
+BATCH_SIZE = 200 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.002
 LOSS = 'categorical_crossentropy'
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)

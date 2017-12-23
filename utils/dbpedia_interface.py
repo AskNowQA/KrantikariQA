@@ -9,6 +9,9 @@
 
 	Q: What's with the warnings?
 	A: Because I can, bitch.
+
+	Q: Ew this looks ugly.
+	A: I just discovered PEP8, go easy on me senpai.
 """
 from SPARQLWrapper import SPARQLWrapper, JSON
 from operator import itemgetter

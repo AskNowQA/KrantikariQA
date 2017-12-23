@@ -1,53 +1,62 @@
-'''
-    The assumption is that the constraint is either on
-    uri or x . The constraints can be count or type.
-'''
-#TODO: Check for the outgoing and incoming conventions wrt True and False
+"""
 
-import traceback
-import json
-from pprint import pprint
+    Author:     saist1993
+    Desc:       Used to pre-process training data. Uses LC-QuAD data as the input and creates parser.py friendly JSONs.
+
+
+    The assumption is that the constraint is either on uri or x . The constraints can be count or type.
+
+    @TODO: Check for the outgoing and incoming conventions wrt True and False
+"""
+
 import os
+import json
+import traceback
+from pprint import pprint
 
 # Custom files
 import utils.dbpedia_interface as db_interface
 import utils.phrase_similarity as sim
-import utils.natural_language_utilities as nlutils
 
-
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
-
-relations_stop_word = []
 
 '''
     MACROS
 '''
-
-K_HOP_1 = 5 #selects the number of relations in the first hop in the right direction
-K_HOP_2 = 5 #selects the number of relations in second hop in the right direction
-K_HOP_1_u = 2 #selects the number of relations in second hop in the wrong direction
-K_HOP_2_u = 2 #selects the number of relations in second hop in the wrong direction
+K_HOP_1 = 5                                 # Selects the number of relations in the first hop in the right direction
+K_HOP_2 = 5                                 # Selects the number of relations in second hop in the right direction
+K_HOP_1_u = 2                               # Selects the number of relations in second hop in the wrong direction
+K_HOP_2_u = 2                               # Selects the number of relations in second hop in the wrong direction
 PASSED = False
-WRITE_INTERVAL = 10 ##interval for perodic write in a file
-FILE_LOCATION = 'pre_processes_files' #place to store the files
-'''
-Global variables
-'''
-skip = 0
+WRITE_INTERVAL = 10                         # Interval for periodic write in a file
+OUTPUT_DIR = 'data/preprocesseddata_new'    # Place to store the files
 
+
+'''
+    Global variables
+'''
+# Summon a dbpedia interface
+dbp = db_interface.DBPedia(_verbose=True, caching=False)
+
+skip = 0
+relations_stop_word = []
+final_answer_dataset = []                   # Used in create_simple_dataset()
+
+
+# Ensure that a folder already exists in OUTPUT_DIR
 try:
-    os.makedirs(FILE_LOCATION)
-except:
-    print "folder already exists"
+    os.makedirs(OUTPUT_DIR)
+except OSError:
+    print("Folder already exists")
+
 
 def get_rank_rel(_relationsip_list, rel,_score=False):
-    '''
+    """
         The objective is to rank the relationship using some trivial similarity measure wrt rel
         [[list of outgoing rels],[list of incoming rels]] (rel,True)  'http://dbpedia.org/ontology/childOrganisation'
         Need to verify the function
-    '''
-    # get_label http://dbpedia.org/ontology/childOrganisation -> child organization
-    #Transforming the list of items into a list of tuple
+    """
+
+    # Transforming the list of items into a list of tuple
     score = []
     new_rel_list = []
     outgoing_temp = []
@@ -75,10 +84,12 @@ def get_rank_rel(_relationsip_list, rel,_score=False):
         return new_rel_list
     # return _relationsip_list
 
+
 def get_set_list(_list):
     for i in xrange(0,len(_list)):
         _list[i] =list(set(_list[i]))
     return _list
+
 
 def get_top_k(rel_list,_relation,hop=1):
     # Once the similarity been computed and ranked accordingly, take top k based on some metric.
@@ -120,6 +131,7 @@ def get_triples(_sparql_query):
     triples = [x.strip() for x in triples]
     return triples
 
+
 def get_relationship_hop(_entity, _relation):
     '''
         The objective is to find the outgoing and incoming relationships from the entity at _hop distance.
@@ -153,14 +165,14 @@ def get_relationship_hop(_entity, _relation):
     return [outgoing_relationships,incoming_relationships]
 
 
-def updated_get_relationship_hop(_entity, _relation):
+def updated_get_relationship_hop(_entity, _relations):
     '''
 
         This function gives all the relations after the _relationship chain. The
         difference in this and the get_relationship_hop is that it gives all the relationships from _relations[:-1],
     '''
     entities = [_entity]    #entites are getting pushed here
-    for rel in _relation:
+    for rel in _relations:
         outgoing = rel[1]
         if outgoing:
             ''' get the objects '''
@@ -188,6 +200,7 @@ def updated_get_relationship_hop(_entity, _relation):
     outgoing_relationships = list(set(outgoing_relationships))
     incoming_relationships = list(set(incoming_relationships))
     return [outgoing_relationships,incoming_relationships]
+
 
 def get_stochastic_relationship_hop(_entity, _relation):
     '''
@@ -224,12 +237,11 @@ def get_stochastic_relationship_hop(_entity, _relation):
     return [outgoing_relationships,incoming_relationships]
 
 
-
-
-fo = open('interm_output.txt',"w")
-
+fo = open('interm_output.txt', 'w+')
 debug = True
 controller = []
+
+
 def create_dataset(debug=False,time_limit=False):
     final_data = []
     file_directory = "resources/data_set.json"
@@ -242,11 +254,11 @@ def create_dataset(debug=False,time_limit=False):
             For now focusing on just simple question
         '''
         print counter
-        counter = counter + 1
+        counter += 1
         if counter == 40:
             continue
         if skip > 0:
-            skip = skip -1
+            skip -= 1
             continue
         try:
             if node[u"sparql_template_id"] in [1,301,401,101] and not PASSED :
@@ -432,12 +444,14 @@ def create_dataset(debug=False,time_limit=False):
 
             # print final_data[-1]
             if len(final_data) > WRITE_INTERVAL:
-                with open(FILE_LOCATION+"/" + str(counter)+".json", 'w') as fp:
+                with open(OUTPUT_DIR+ "/" + str(counter)+ ".json", 'w') as fp:
                     json.dump(final_data, fp)
                 final_data = []
         except:
             print traceback.print_exc()
             continue
+
+
 def test(_entity, _relation):
     out, incoming = dbp.get_properties(_entity, _relation, label=False)
     rel = (_relation, True)
@@ -446,9 +460,7 @@ def test(_entity, _relation):
     pprint(rel_list)
 
 
-# test('http://dbpedia.org/resource/Broadmeadows,_Victoria','http://dbpedia.org/property/assembly' )
 
-final_answer_dataset = []
 def create_simple_dataset():
 
     file_directory = "resources/data_set.json"
@@ -512,8 +524,9 @@ def create_simple_dataset():
                     u'verbalized_question': u'What is the <municipality> of Roberto Clemente Bridge ?'
                 }
             '''
-            counter = counter + 1
+            counter += 1
             print counter
+
             #TODO: Verify the 302 template
             answer_data_node = {}
             data_node = node

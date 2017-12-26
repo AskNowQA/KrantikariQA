@@ -33,14 +33,14 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding = 'word2vec'):
         try:
             # print phrase
             vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower() if embedding == 'word2vec'
-                else glove_embeddings[phrase.lower()])
+                else glove_embeddings[phrase.lower()]))
         except:
             # print traceback.print_exc()
             continue
     for phrase in phrase_2:
         try:
             vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower() if embedding == 'word2vec'
-                else glove_embeddings[phrase.lower()])
+                else glove_embeddings[phrase.lower()]))
         except:
             continue
     if len(vw_phrase_1) == 0 or len(vw_phrase_2) == 0:

@@ -26,7 +26,7 @@ K_HOP_1 = 5                                 # Selects the number of relations in
 K_HOP_2 = 5                                 # Selects the number of relations in second hop in the right direction
 K_HOP_1_u = 2                               # Selects the number of relations in second hop in the wrong direction
 K_HOP_2_u = 2                               # Selects the number of relations in second hop in the wrong direction
-PASSED = True
+PASSED = False
 WRITE_INTERVAL = 10                         # Interval for periodic write in a file
 OUTPUT_DIR = 'data/preprocesseddata_new'    # Place to store the files
 
@@ -593,8 +593,8 @@ def create_dataset(debug=True,time_limit=False):
 
 
 def test(_entity, _relation):
-    out, incoming = dbp.get_properties(_entity, _relation, label=)
-    rel = (_relation, True)False
+    out, incoming = dbp.get_properties(_entity, _relation, label=False)
+    rel = (_relation, True)
     rel_list = get_rank_rel([out, incoming], rel,score=True)
     # rel_list = get_set_list(get_top_k(get_rank_rel([out,incoming],rel),rel))
     pprint(rel_list)
@@ -696,7 +696,7 @@ def create_simple_dataset():
 #TODO: Store as json : final answer dataset
 
 print "datasest call"
-create_dataset(debug = True)
+create_dataset(debug = False)
 
 with open('train_data.json', 'w') as fp:
     json.dump(final_data, fp)

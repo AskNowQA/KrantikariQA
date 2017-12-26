@@ -92,19 +92,11 @@ def vectorize(_tokens, _report_unks=False):
         Function to embed a sentence and return it as a list of vectors.
         WARNING: Give it already split. I ain't splitting it for ye.
 
-        :param _input: The sentence you want embedded. (Assumed pre-tokenized input)
+        :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
         :param _report_unks: Whether or not return the out of vocab words
         :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
     """
 
-    # # Cleaned sentence
-    # cleaned_input = _input.replace("?", "").replace(",", "").strip()
-    #
-    # # Split the sentence into word tokens
-    # # @TODO: Use a proper tokenizer.
-    # tokens = cleaned_input.split()
-
-    # Logic for Glove
     op = []
     unks = []
     for token in _tokens:

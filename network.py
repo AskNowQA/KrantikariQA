@@ -2,7 +2,7 @@
 import os
 import json
 import numpy as np
-import keras.backend as K
+import keras.backend.tensorflow_backend as K
 from keras.models import Model
 from keras.layers import Input
 from keras.layers import Dense
@@ -13,6 +13,7 @@ from keras.layers.merge import concatenate, dot
 from keras.activations import softmax
 from keras import optimizers, metrics
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 # Some Macros
 DEBUG = True
@@ -186,60 +187,65 @@ q_path_test = np.asarray(x_q[int(len(x_q) * .80):]).astype('float32')
 question_input_shape = q_path_train.shape[1:]
 path_input_shape = x_path_train.shape[2:]
 
+with K.tf.device('/gpu:0'):
+    K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+    """
+        Model Time!
+    """
+    # Define input to the models
+    x_ques = Input(shape=question_input_shape)
+    x_paths = [ Input(shape=path_input_shape) for x in range(x_path_train.shape[1])]
 
-"""
-    Model Time!
-"""
-# Define input to the models
-x_ques = Input(shape=question_input_shape)
-x_paths = [ Input(shape=path_input_shape) for x in range(x_path_train.shape[1])]
+    # Encode the questions
+    ques_encoded = LSTM(128)(x_ques)
 
-# Encode the question
-ques_encoded = LSTM(64)(x_ques)
+    # Encode 21 paths
+    path_encoder = LSTM(128)
+    path_encoded = [path_encoder(x) for x in x_paths]
 
-# Encode 21 paths
-path_encoder = LSTM(64)
-path_encoded = [path_encoder(x) for x in x_paths]
+    # forwardMatrix = Dense(64, activation='tanh')
+    # dropout = Dropout(0.5)
+    # forwardVector = Dense(1, activation='tanh')
 
-# For every path, concatenate question with the path
-merges = [dot([ques_encoded, x],axes=-1) for x in path_encoded]
-# pos = merges[0]
-# neg = merges[1:]
-
-
-"""
-    Run Time
-"""
-pos = merges[0]
-repeat_pos = RepeatVector(20)(pos)
-neg = merges[1:]
-concat_neg = concatenate(neg)
-reshaped_concat_neg = Reshape((20,))(concat_neg)
-reshaped_repeat_pos = Reshape((20,))(repeat_pos)
-concatenated_output = concatenate([reshaped_repeat_pos,reshaped_concat_neg])
-# Prepare input tensors
-inputs = [x_ques] + x_paths
-
-# Model time!
-model = Model(inputs=inputs, outputs=concatenated_output)
-
-print(model.summary())
-
-model.compile(optimizer=OPTIMIZER,
-              loss=custom_loss)
-
-# Prepare training data
-training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
-model.fit(training_input, np.concatenate((y_train[:,:20],y_train[:,:20]),axis=1), batch_size=BATCH_SIZE, epochs=EPOCHS)
+    # For every path, concatenate question with the path
+    merges = [dot([ques_encoded, x], axes=-1) for x in path_encoded]
+    # pos = merges[0]
+    # neg = merges[1:]
 
 
-smart_save_model(model)
+    """
+        Run Time
+    """
+    pos = merges[0]
+    repeat_pos = RepeatVector(20)(pos)
+    neg = merges[1:]
+    concat_neg = concatenate(neg)
+    reshaped_concat_neg = Reshape((20,))(concat_neg)
+    reshaped_repeat_pos = Reshape((20,))(repeat_pos)
+    concatenated_output = concatenate([reshaped_repeat_pos,reshaped_concat_neg])
+    # Prepare input tensors
+    inputs = [x_ques] + x_paths
 
-# Prepare test data
-testing_input = [q_path_test] + [x_path_test[:, i, :, :] for i in range(x_path_test.shape[1])]
-output = model.predict(testing_input)
-precision = float(len(np.where(np.argmax(output[:,19:], axis=1)==0)[0]))/len(output)
-print "Precision (hits@1) = ", precision
+    # Model time!
+    model = Model(inputs=inputs, outputs=concatenated_output)
+
+    print(model.summary())
+
+    model.compile(optimizer=OPTIMIZER,
+                  loss=custom_loss)
+
+    # Prepare training data
+    training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
+    model.fit(training_input, np.concatenate((y_train[:,:20],y_train[:,:20]),axis=1), batch_size=BATCH_SIZE, epochs=EPOCHS)
+
+
+    smart_save_model(model)
+
+    # Prepare test data
+    testing_input = [q_path_test] + [x_path_test[:, i, :, :] for i in range(x_path_test.shape[1])]
+    output = model.predict(testing_input)
+    precision = float(len(np.where(np.argmax(output[:,19:], axis=1)==0)[0]))/len(output)
+    print "Precision (hits@1) = ", precision
 
 # print "Evaluation Complete"
 # print "Loss     = ", results[0]

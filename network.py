@@ -237,7 +237,10 @@ smart_save_model(model)
 
 # Prepare test data
 testing_input = [q_path_test] + [x_path_test[:, i, :, :] for i in range(x_path_test.shape[1])]
-results = model.evaluate(testing_input, y_test)
+output = model.predict(testing_input)
+precision = float(len(np.where(np.argmax(output[:,19:], axis=1)==0)[0]))/len(output)
+print "Precision (hits@1) = ", precision
+
 # print "Evaluation Complete"
 # print "Loss     = ", results[0]
 # print "F1 Score = ", results[1]

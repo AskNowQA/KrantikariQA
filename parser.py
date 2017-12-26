@@ -439,7 +439,7 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='data/training/pai
     # Print these things to file.
     np.save(open(os.path.join(_writefilename, 'Q.npz'), 'w+'), Q)
     np.save(open(os.path.join(_writefilename, 'tP.npz'), 'w+'), tP)
-    np.save(open(os.path.join(_writefilename, 'fp.npz'), 'w+'), fp)
+    np.save(open(os.path.join(_writefilename, 'fp.npz'), 'w+'), fP)
 
     print("""
             Phase II - Padding and Final Matrices

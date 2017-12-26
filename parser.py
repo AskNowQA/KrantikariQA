@@ -16,10 +16,12 @@ import warnings
 import traceback
 import numpy as np
 from progressbar import ProgressBar
+
 from pprint import pprint
 from gensim import models
 
 from utils import dbpedia_interface as db_interface
+from utils import natural_language_utilities as nlutils
 
 # Some Macros and Declarations
 DEBUG = True
@@ -29,7 +31,6 @@ EMBEDDING = "GLOVE"  # OR WORD2VEC
 EMBEDDING_DIM = 300
 MAX_FALSE_PATHS = 20
 embedding_glove, embedding_word2vec = {}, {}  # Declaring the two things we're gonna use
-distributions = {1: [1, 1, 1, 2], 2: [1, 2, 2, 2]}  # p = 3/4 distributions.
 
 
 # Better warning formatting. Ignore
@@ -68,7 +69,12 @@ def prepare(_embedding=EMBEDDING):
 
             embedding_glove = {}
             f = open(os.path.join(GLOVE_DIR, 'glove.42B.300d.txt'))
-            for line in f:
+            iterable = f
+            if DEBUG:
+                prog_bar = ProgressBar()
+                iterable = prog_bar(iterable)
+
+            for line in iterable:
                 values = line.split()
                 word = values[0]
                 coefs = np.asarray(values[1:], dtype='float32')
@@ -97,14 +103,6 @@ def vectorize(_tokens, _report_unks=False):
         :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
     """
 
-    # # Cleaned sentence
-    # cleaned_input = _input.replace("?", "").replace(",", "").strip()
-    #
-    # # Split the sentence into word tokens
-    # # @TODO: Use a proper tokenizer.
-    # tokens = cleaned_input.split()
-
-    # Logic for Glove
     op = []
     unks = []
     for token in _tokens:
@@ -132,35 +130,6 @@ def vectorize(_tokens, _report_unks=False):
     # if DEBUG: print _tokens, "\n",
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
-
-
-def tokenize(_input, _ignore_brackets=False):
-    """
-        Tokenize a question.
-        Changes:
-            - removes question marks
-            - removes commas
-            - removes trailing spaces
-            - can remove text inside one-level brackets.
-
-        @TODO: Improve tokenization
-        :param _input: str, _ignore_brackets: bool
-        :return: list of tokens
-    """
-    cleaner_input = _input.replace("?", "").replace(",", "").strip()
-    if _ignore_brackets:
-        # If there's some text b/w brackets, remove it. @TODO: NESTED parenthesis not covered.
-        pattern = r'\([^\)]*\)'
-        matcher = re.search(pattern, cleaner_input, 0)
-
-        if matcher:
-            substring = matcher.group()
-
-            cleaner_input = cleaner_input[:cleaner_input.index(substring)] + cleaner_input[
-                                                                             cleaner_input.index(substring) + len(
-                                                                                 substring):]
-
-    return cleaner_input.strip().split()
 
 
 def compute_true_labels(_question, _truepath, _falsepaths):
@@ -198,14 +167,14 @@ def parse(_raw):
     question = _raw[u'corrected_question']
 
     # Tokenize the question
-    question = tokenize(question)
+    question = nlutils.tokenize(question)
 
     # Now, embed the question.
     v_question = vectorize(question, False)
 
     # Make the correct path
     entity = _raw[u'entity'][0]
-    entity_sf = tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: When dealing with many ent, fix this.
+    entity_sf = nlutils.tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: When dealing with many ent, fix this.
     path_sf = []
     for x in _raw[u'path']:
         path_sf.append(x[0])
@@ -220,11 +189,11 @@ def parse(_raw):
 
     # Collect 1st hop ones.
     for pospath in _raw[u'training'][entity][u'rel1'][0]:
-        new_fp = entity_sf + ['+'] + tokenize(dbp.get_label(pospath))
+        new_fp = entity_sf + ['+'] + nlutils.tokenize(dbp.get_label(pospath))
         false_paths.append(new_fp)
 
     for negpath in _raw[u'training'][entity][u'rel1'][1]:
-        new_fp = entity_sf + ['-'] + tokenize(dbp.get_label(negpath))
+        new_fp = entity_sf + ['-'] + nlutils.tokenize(dbp.get_label(negpath))
         false_paths.append(new_fp)
 
     # Collect 2nd hop ones
@@ -236,14 +205,14 @@ def parse(_raw):
 
             hop1 = poshop1.keys()[0]
             hop1sf = dbp.get_label(hop1.replace(",", ""))
-            new_fp += tokenize(hop1sf)
+            new_fp += nlutils.tokenize(hop1sf)
 
             for poshop2 in poshop1[hop1][0]:
-                temp_fp = new_fp[:] + ['+'] + tokenize(dbp.get_label(poshop2))
+                temp_fp = new_fp[:] + ['+'] + nlutils.tokenize(dbp.get_label(poshop2))
                 false_paths.append(temp_fp)
 
             for neghop2 in poshop1[hop1][1]:
-                temp_fp = new_fp[:] + ['-'] + tokenize(dbp.get_label(neghop2))
+                temp_fp = new_fp[:] + ['-'] + nlutils.tokenize(dbp.get_label(neghop2))
                 false_paths.append(temp_fp)
 
         # Access second element inside rel0 (for paths in direction - )
@@ -252,14 +221,14 @@ def parse(_raw):
 
             hop1 = neghop1.keys()[0]
             hop1sf = dbp.get_label(hop1.replace(",", ""))
-            new_fp += tokenize(hop1sf)
+            new_fp += nlutils.tokenize(hop1sf)
 
             for poshop2 in neghop1[hop1][0]:
-                temp_fp = new_fp[:] + ['+'] + tokenize(dbp.get_label(poshop2))
+                temp_fp = new_fp[:] + ['+'] + nlutils.tokenize(dbp.get_label(poshop2))
                 false_paths.append(temp_fp)
 
             for neghop2 in neghop1[hop1][1]:
-                temp_fp = new_fp[:] + ['-'] + tokenize(dbp.get_label(neghop2))
+                temp_fp = new_fp[:] + ['-'] + nlutils.tokenize(dbp.get_label(neghop2))
                 false_paths.append(temp_fp)
 
     except KeyError:
@@ -452,8 +421,6 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='data/training/pai
     """)
 
 
-
-
 def test():
     """
         A function to test different things in the script. Will be called from main.
@@ -482,7 +449,7 @@ def test():
         ]
 
         for sentence in sents:
-            embedding = vectorize(tokenize(sentence))
+            embedding = vectorize(nlutils.tokenize(sentence))
             pprint(embedding)
             raw_input(sentence)
 

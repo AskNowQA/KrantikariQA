@@ -237,12 +237,53 @@ def get_stochastic_relationship_hop(_entity, _relation):
     return [outgoing_relationships,incoming_relationships]
 
 
+def get_rdf_type_candidates(sparql,rdf_type=True,constraint = '',count=False):
+    '''
+        Takes in a SPARQL and then updates the sparql to return rdf type. If rdf_type is flase than it assumes there exists no rdf:type.
+        The varaible type needs to be named ?uri and the intermediate varaible needs to be termed x
+    :param _entity: takes in a sparql and ch
+    :return: classes list
+    '''
+    URI_Type = ' ?uri <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?type .'
+    X_Type = ' ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?type .'
+    original_string = 'SELECT DISTINCT ?uri WHERE'
+    new_string = 'SELECT DISTINCT ?type WHERE'
+    if count:
+        sparql = sparql.replace('COUNT(?uri)', '?uri')
+    if rdf_type:
+        '''
+            replace rdf_type sentence with nothing
+            ?uri <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>
+        '''
+        new_URI_Type = '?uri <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>' + " " + "<" + constraint + ">"
+        new_X_Type = '?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>' + " " + "<" + constraint + ">"
+        sparql = sparql.replace(new_URI_Type, '')
+        sparql = sparql.replace(new_X_Type,'')
+    temp_sparql = sparql.replace(original_string, new_string)
+    index = temp_sparql.find('}')
+    temp_sparql_uri = temp_sparql[:index] + URI_Type + temp_sparql[index:]
+    type_uri = dbp.get_answer(temp_sparql_uri)
+    type_uri = type_uri[u'type']
+    type_x = []
+    if '?x' in sparql:
+        temp_sparql_x = temp_sparql[:index] + X_Type + temp_sparql[index:]
+        type_x = dbp.get_answer(temp_sparql_x)[0]
+        type_x = type_x[u'type']
+        type_x = [x for x in type_x if
+                                  x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
+    type_uri = [x for x in type_uri if
+              x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
+    return type_uri,type_x
+# print get_rdf_type_candidates(sparql=sparql,rdf_type=True,constraint = constraint)
+
+
+
 fo = open('interm_output.txt', 'w+')
 debug = True
 controller = []
 
 
-def create_dataset(debug=False,time_limit=False):
+def create_dataset(debug=True,time_limit=False):
     final_data = []
     file_directory = "resources/data_set.json"
     json_data = open(file_directory).read()
@@ -261,7 +302,7 @@ def create_dataset(debug=False,time_limit=False):
             skip -= 1
             continue
         try:
-            if node[u"sparql_template_id"] in [1,301,401,101] and not PASSED :
+            if node[u"sparql_template_id"] in [1,301,401,101]: # :
                 '''
                     {
                         u'_id': u'9a7523469c8c45b58ec65ed56af6e306',
@@ -282,12 +323,31 @@ def create_dataset(debug=False,time_limit=False):
                 data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
                 data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] == 301 or node[u"sparql_template_id"] == 401:
-                    data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
+                    data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[2][1:-1]}
+                    if node[u"sparql_template_id"] == 301:
+                        value = get_rdf_type_candidates(node[u'sparql_query'],rdf_type=True,constraint=triples[1].split(" ")[2][1:-1],count=False)
+                        data_node[u'training']['x'] = value[1]
+                        data_node[u'training']['uri'] = value[0]
                 else:
-                    data_node[u'constraints'] = {}
+                    if node[u"sparql_template_id"] == 1:
+                        data_node[u'constraints'] = {}
+                        value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                        constraint='', count=False)
+                        data_node[u'training']['x'] = value[1]
+                        data_node[u'training']['uri'] = value[0]
 
                 if node[u"sparql_template_id"] in [401,101]:
                     data_node[u'constraints'] = {'count' : True}
+                    if node[u"sparql_template_id"] == 401:
+                        value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                        constraint=triples[1].split(" ")[2][1:-1], count=True)
+                        data_node[u'training']['x'] = value[1]
+                        data_node[u'training']['uri'] = value[0]
+                    if node[u"sparql_template_id"] == 101:
+                        value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                        constraint='', count=True)
+                        data_node[u'training']['x'] = value[1]
+                        data_node[u'training']['uri'] = value[0]
                 fo.write(str(data_node))
                 fo.write("\n")
                 final_data.append(data_node)
@@ -315,11 +375,31 @@ def create_dataset(debug=False,time_limit=False):
                 data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
                 data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] == 302 or node[u"sparql_template_id"] == 402:
-                    data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
+                    data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[2][1:-1]}
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [402,102]:
                     data_node[u'constraints'] = {'count' : True}
+                if node[u"sparql_template_id"] == 2:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 102:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 302:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[1].split(" ")[2][1:-1], count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 402:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[1].split(" ")[2][1:-1], count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
                 final_data.append(data_node)
                 fo.write(str(data_node))
                 fo.write("\n")
@@ -349,11 +429,31 @@ def create_dataset(debug=False,time_limit=False):
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0],[(rel1,True),(rel2,True)])
                 if node[u"sparql_template_id"] in [303,309,403,409]:
-                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
+                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
+                    if node[u'sparql_template_id'] in [303,309]:
+                        value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                        constraint=triples[1].split(" ")[2][1:-1], count=False)
+                        data_node[u'training']['x'] = value[1]
+                        data_node[u'training']['uri'] = value[0]
+                    if node[u'sparql_template_id'] in [403,409]:
+                        value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                        constraint=triples[1].split(" ")[2][1:-1], count=True)
+                        data_node[u'training']['x'] = value[1]
+                        data_node[u'training']['uri'] = value[0]
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [403,409,103,109]:
                     data_node[u'constraints'] = {'count' : True}
+                    if node[u'sparql_template_id'] in [103,109]:
+                        value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                        constraint='', count=True)
+                        data_node[u'training']['x'] = value[1]
+                        data_node[u'training']['uri'] = value[0]
+                if node[u'sparql_template_id'] in [3, 9]:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
                 fo.write(str(data_node))
                 fo.write("\n")
                 final_data.append(data_node)
@@ -388,18 +488,38 @@ def create_dataset(debug=False,time_limit=False):
                                                                             list(dbp.get_properties(data_node[u'entity'][0],label=False))]
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0], [(rel1, False), (rel2, True)])
                 if node[u"sparql_template_id"] in [305,405] :
-                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
+                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [105,405,111]:
                     data_node[u'constraints'] = {'count' : True}
+                if node[u"sparql_template_id"] == 5:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 105:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 305:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[1].split(" ")[2][1:-1], count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 405:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[1].split(" ")[2][1:-1], count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
                 fo.write(str(data_node))
                 fo.write("\n")
                 if debug:
                     if data_node['sparql_template_id'] not in controller:
                         pprint(data_node)
                         controller.append(data_node['sparql_template_id'])
-                # raw_input()
+                raw_input()
                 final_data.append(data_node)
 
             elif node[u'sparql_template_id']  == [6, 306, 406, 106] and not PASSED:
@@ -427,13 +547,33 @@ def create_dataset(debug=False,time_limit=False):
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
                     data_node[u'entity'][0], [(rel1, False), (rel2, False)])
                 if node[u"sparql_template_id"] in [306,406]:
-                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[1][1:-1]}
+                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [406,106]:
                     data_node[u'constraints'] = {'count' : True}
                 # pprint(data_node)
                 # raw_input()
+                if node[u"sparql_template_id"] == 6:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 106:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 306:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[1].split(" ")[2][1:-1], count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 406:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[1].split(" ")[2][1:-1], count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
                 fo.write(str(data_node))
                 fo.write("\n")
                 final_data.append(data_node)

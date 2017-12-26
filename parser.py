@@ -16,6 +16,7 @@ import random
 import warnings
 import traceback
 import numpy as np
+from progressbar import ProgressBar
 
 from pprint import pprint
 from gensim import models
@@ -68,7 +69,12 @@ def prepare(_embedding=EMBEDDING):
 
             embedding_glove = {}
             f = open(os.path.join(GLOVE_DIR, 'glove.42B.300d.txt'))
-            for line in f:
+            iterable = f
+            if DEBUG:
+                prog_bar = ProgressBar()
+                iterable = prog_bar(iterable)
+
+            for line in iterable:
                 values = line.split()
                 word = values[0]
                 coefs = np.asarray(values[1:], dtype='float32')

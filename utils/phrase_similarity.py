@@ -1,30 +1,101 @@
-'''
+"""
     calculates the simialrity between two phrases using word2vec
 
-'''
-#TODO: Check how well is this performing
+    @TODO: Check how well is this performing
+"""
 
+import os
 import gensim
+import pickle
+import warnings
 import numpy as np
-# /home/gaurav/Downloads/models/word2vec
-word2vec_embeddings = gensim.models.KeyedVectors.load_word2vec_format('resources/GoogleNews-vectors-negative300.bin', binary=True)
-# model = gensim.models.KeyedVectors.load_word2vec_format('/home/gaurav/Downloads/models/word2vec/GoogleNews-vectors-negative300.bin', binary=True)
-glove_embeddings = {}
-with open('resources/glove.42B.300d.txt') as f:
-    for line in f:
-        values = line.split()
-        word = values[0]
-        coefs = np.asarray(values[1:], dtype='float32')
-        glove_embeddings[word] = coefs
+from progressbar import ProgressBar
 
-def ConvertVectorSetToVecAverageBased(vectorSet, ignore = []):
-		if len(ignore) == 0:
-			return np.mean(vectorSet, axis = 0)
-		else:
-			return np.dot(np.transpose(vectorSet),ignore)/sum(ignore)
+
+word2vec_embeddings = None
+glove_embeddings = None
+DEFAULT_EMBEDDING = 'word2vec'
+DEBUG = True
+glove_location = \
+    {
+        'dir': "./resources",
+        'raw': "glove.6B.300d.txt",
+        'parsed': "glove_parsed_small.pickle"
+    }
+
+
+# Better warning formatting. Ignore.
+def better_warning(message, category, filename, lineno, file=None, line=None):
+    return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
+
+
+def __check_prepared__(_embedding):
+    if not _embedding in ['word2vec', 'glove']:
+        _embedding = DEFAULT_EMBEDDING
+
+    if _embedding == 'word2vec':
+        # Check if word2vec is loaded in RAM
+        if word2vec_embeddings is None:
+            __prepare__(_word2vec=True, _glove=False)
+
+    if _embedding == 'glove':
+        if glove_embeddings is None:
+            __prepare__(_word2vec=False, _glove=True)
+
+
+def __prepare__(_word2vec=True, _glove=False):
+    """
+        **Call this function prior to doing absolutely anything else.**
+
+        :param None
+        :return: None
+    """
+    global word2vec_embeddings, glove_embeddings
+
+    if DEBUG: print("phrase_similarity: Loading Word Vectors to Memory.")
+
+    if _word2vec:
+        gensim.models.KeyedVectors.load_word2vec_format('resources/GoogleNews-vectors-negative300.bin', binary=True)
+
+    if _glove:
+        try:
+            glove_embeddings = pickle.load(open(os.path.join(glove_location['dir'], glove_location['parsed'])))
+        except IOError:
+            # Glove is not parsed and stored. Do it.
+            if DEBUG: warnings.warn(" GloVe is not parsed and stored. This will take some time.")
+    
+            glove_embeddings = {}
+            f = open(os.path.join(glove_location['dir'], glove_location['raw']))
+            iterable = f
+
+            if DEBUG:
+                prog_bar = ProgressBar()
+                iterable = prog_bar(iterable)
+
+            for line in iterable:
+                values = line.split()
+                word = values[0]
+                coefs = np.asarray(values[1:], dtype='float32')
+                glove_embeddings[word] = coefs
+            f.close()
+    
+            # Now convert this to a numpy object
+            pickle.dump(glove_embeddings, open(os.path.join(glove_location['dir'], glove_location['parsed']), 'w+'))
+    
+            if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")
+
+
+def stupid_gaurav_function(_vector_set, ignore=[]):
+    if len(ignore) == 0:
+        return np.mean(_vector_set, axis = 0)
+    else:
+        return np.dot(np.transpose(_vector_set), ignore) / sum(ignore)
 
 
 def phrase_similarity(_phrase_1, _phrase_2, embedding = 'word2vec'):
+
+    __check_prepared__(embedding)
+
     phrase_1 = _phrase_1.split(" ")
     phrase_2 = _phrase_2.split(" ")
     vw_phrase_1 = []
@@ -45,9 +116,9 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding = 'word2vec'):
             continue
     if len(vw_phrase_1) == 0 or len(vw_phrase_2) == 0:
         return 0
-    v_phrase_1 = ConvertVectorSetToVecAverageBased(vw_phrase_1)
-    v_phrase_2 = ConvertVectorSetToVecAverageBased(vw_phrase_2)
+    v_phrase_1 = stupid_gaurav_function(vw_phrase_1)
+    v_phrase_2 = stupid_gaurav_function(vw_phrase_2)
     cosine_similarity = np.dot(v_phrase_1, v_phrase_2) / (np.linalg.norm(v_phrase_1) * np.linalg.norm(v_phrase_2))
     return float(cosine_similarity)
 
-print type(float(phrase_similarity("military branchere","child organization")))
+print(type(float(phrase_similarity("military branchere","child organization"))))

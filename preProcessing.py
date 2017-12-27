@@ -529,7 +529,7 @@ def create_dataset(debug=True,time_limit=False):
                     if data_node['sparql_template_id'] not in controller:
                         pprint(data_node)
                         controller.append(data_node['sparql_template_id'])
-                raw_input()
+                # raw_input()
                 final_data.append(data_node)
 
             elif node[u'sparql_template_id']  == [6, 306, 406, 106] and not PASSED:

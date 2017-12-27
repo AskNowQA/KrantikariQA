@@ -68,10 +68,6 @@ def __prepare__(_word2vec=True, _glove=False):
             f = open(os.path.join(glove_location['dir'], glove_location['raw']))
             iterable = f
 
-            if DEBUG:
-                prog_bar = ProgressBar()
-                iterable = prog_bar(iterable)
-
             for line in iterable:
                 values = line.split()
                 word = values[0]

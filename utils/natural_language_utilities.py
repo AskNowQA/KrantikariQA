@@ -148,6 +148,10 @@ def convert(_string):
 
 def get_label_via_parsing(_uri, lower=False):
 
+    # Sanity strip: remove all '<' and '>' from here
+    _uri = _uri.replace('<', '')
+    _uri = _uri.replace('>', '')
+
     parsed = urlparse(_uri)
     path = os.path.split(parsed.path)
     unformated_label = path[-1]

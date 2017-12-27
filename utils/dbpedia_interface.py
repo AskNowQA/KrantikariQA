@@ -263,10 +263,13 @@ class DBPedia:
 
 			Always returns one value
 		"""
+
         # print _resource_uri, "**"
         if not nlutils.has_url(_resource_uri):
-            # warnings.warn("The passed resource %s is not a proper URI but probably a shorthand. This is strongly discouraged." % _resource_uri)
             _resource_uri = nlutils.convert_shorthand_to_uri(_resource_uri)
+
+        # Remove leading and trailing angle brackets
+        _resource_uri = _resource_uri.replace('<', '').replace('>', '')
 
         # Preparing the Query
         _resource_uri = '<' + _resource_uri + '>'

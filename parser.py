@@ -173,7 +173,7 @@ def parse(_raw):
 
     # Make the correct path
     entity = _raw[u'entity'][0]
-    entity_sf = nlutils.tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: When dealing with many ent, fix this.
+    entity_sf = nlutils.tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: multi-entity alert
     path_sf = []
     for x in _raw[u'path']:
         path_sf.append(x[0])
@@ -244,7 +244,7 @@ def parse(_raw):
         !!NOTE!! Parser does not care which variable has the type constraint.
 
         Decisions:
-            - For true path, everytime you find rdf type constraint, add to t
+            - For true path, everytime you find rdf type constraint, add to true paths
             - Add the original true path to false paths
                         @TODO @nilesh-c shall I remove s'thing from false paths, then?
 
@@ -254,7 +254,7 @@ def parse(_raw):
                     - randomly choose whether or not to add false class (p = 0.3)
                 - @TODO: @nilesh-c: shall we add true_path + incorrect_classes in false paths too?
     """
-    if _raw[u'constraints'].keys():
+    if '?uri' in _raw[u'constraints'].keys() or '?x' in _raw[u'constraints'].keys():
         # Question has type constraints
 
         if '?uri' in _raw[u'constraints'].keys():
@@ -265,34 +265,34 @@ def parse(_raw):
             # Have a type constraint on the intermediary variable.
             true_class = _raw[u'constraints'][u'?x']
 
-        false_paths += [true_path]  # Add the path (without type constraint) in false paths.
+        false_paths = [true_path] + false_paths.tolist()  # Add the path (without type constraint) in false paths.
         true_path += ['/']
         true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=True)
 
-    else:
-        # Question doesn't have type constraints.
+    if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
 
-        if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
+        # Find all false classes
+        f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
 
-            # Find all false classes
-            f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
+        # Remove correct ones.
 
-            # Get surface form, tokenize.
-            f_classes = [ nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
+        # Get surface form, tokenize.
+        f_classes = [nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
 
-            for i in range(len(false_paths)):
+        for i in range(len(false_paths)):
 
-                # Stochastically decide if we want type restrictions there
-                if random.random() < pADDTYPE:
+            # Stochastically decide if we want type restrictions there
+            if random.random() < pADDTYPE:
 
-                    # If here, choose a random class, add to path
-                    path = false_paths[i]
-                    path += ['/']
-                    path += random.choice(f_classes)
+                # If here, choose a random class, add to path
+                path = false_paths[i]
+                path += ['/']
+                path += random.choice(f_classes)
 
-                    # Append path back to list
-                    false_paths[i] = path
+                # Append path back to list
+                false_paths[i] = path
 
+    print "poop"
     # Vectorize paths
     v_true_path = vectorize(true_path)
     v_false_paths = [vectorize(x) for x in false_paths]
@@ -309,7 +309,7 @@ def parse(_raw):
     return v_question, v_true_path, v_false_paths, v_y_true
 
 
-def run(_readfiledir='data/preprocesseddata/', _writefilename='data/training/pairwise/'):
+def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/training/pairwise/'):
     """
     Get the show on the road.
 
@@ -442,7 +442,6 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='data/training/pai
         datum = data_embedded[i]
         num_false_paths = len(datum[2])
 
-
         # Pad Question
         padded_question = np.zeros((max_ques_length, embedding_dim))  # Create an zeros mat with max dims
         padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]  # Pad the zeros mat with actual mat
@@ -549,7 +548,7 @@ def test():
         Parsing tests.
     """
     # Load any JSON
-    testdata = json.load(open('data/preprocesseddata/535.json'))[4]
+    testdata = json.load(open('data/preprocesseddata_new_v2/1294.json'))[4]
     op = parse(testdata)
     print op
 
@@ -564,6 +563,6 @@ def test():
 
 
 if __name__ == "__main__":
-    run()
+    test()
 
 

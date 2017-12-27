@@ -2,22 +2,23 @@
 import os
 import json
 import numpy as np
-import keras.backend as K
+import keras.backend.tensorflow_backend as K
 from keras.models import Model
 from keras.layers import Input
 from keras.layers import Dense
 from keras.layers import Dropout
-from keras.layers import Activation
+from keras.layers import Activation, RepeatVector, Reshape
 from keras.layers.recurrent import LSTM
-from keras.layers.merge import concatenate
+from keras.layers.merge import concatenate, dot
 from keras.activations import softmax
 from keras import optimizers, metrics
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 # Some Macros
 DEBUG = True
 DATA_DIR = './data/training/full'
-EPOCHS = 200
+EPOCHS = 100
 BATCH_SIZE = 200 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.002
 LOSS = 'categorical_crossentropy'
@@ -147,6 +148,19 @@ def smart_save_model(model):
         model.save(os.path.join(l_dir, 'model.h5'))
         json.dump(desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
 
+
+def custom_loss(y_true, y_pred):
+    '''
+        max margin loss
+    '''
+    # y_neg = K.concatenate(y_pred[1:])
+    # y_pos = K.repeat(y_pred, 20)
+    # K.eval(y_pos)
+    # K.eval(y_neg)
+    y_pos = y_pred[:,:20]
+    y_neg= y_pred[:,20:]
+    return K.mean(K.maximum(1.0 - y_pos +  y_neg, 0.) , axis=-1)
+
 """
     Data Time!
 """
@@ -173,69 +187,67 @@ q_path_test = np.asarray(x_q[int(len(x_q) * .80):]).astype('float32')
 question_input_shape = q_path_train.shape[1:]
 path_input_shape = x_path_train.shape[2:]
 
+with K.tf.device('/gpu:0'):
+    K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+    """
+        Model Time!
+    """
+    # Define input to the models
+    x_ques = Input(shape=question_input_shape)
+    x_paths = [ Input(shape=path_input_shape) for x in range(x_path_train.shape[1])]
 
-"""
-    Model Time!
-"""
-# Define input to the models
-x_ques = Input(shape=question_input_shape)
-x_paths = [ Input(shape=path_input_shape) for x in range(x_path_train.shape[1])]
+    # Encode the questions
+    ques_encoded = LSTM(128)(x_ques)
 
-# Encode the question
-ques_encoded = LSTM(64)(x_ques)
+    # Encode 21 paths
+    path_encoder = LSTM(128)
+    path_encoded = [path_encoder(x) for x in x_paths]
 
-# Encode 21 paths
-path_encoder = LSTM(64)
-path_encoded = [path_encoder(x) for x in x_paths]
+    # forwardMatrix = Dense(64, activation='tanh')
+    # dropout = Dropout(0.5)
+    # forwardVector = Dense(1, activation='tanh')
 
-# For every path, concatenate question with the path
-merges = [concatenate([ques_encoded, x]) for x in path_encoded]
-
-# First Dense layers over these 128,_ tensors
-dense_1 = Dense(64, activation='relu')
-dense_1_outputs = [dense_1(x) for x in merges]
-
-# Dropout time
-dropout = Dropout(0.5)
-dropout_outputs = [dropout(x) for x in dense_1_outputs]
-
-# Merge these sons of bitches into one tensor of 64 x 21
-# merged_tensor = concatenate(dropout_outputs)
-
-# Final Dense (Output layer)soft
-output_sigmoid = Dense(1, activation='sigmoid')
-outputs = [output_sigmoid(x) for x in dropout_outputs]
-
-merged_output = concatenate(outputs)
-output = Activation('softmax')(merged_output)
-
-"""
-    Run Time
-"""
-# Prepare input tensors
-inputs = [x_ques] + x_paths
-
-# Model time!
-model = Model(inputs=inputs, outputs=output)
-
-print(model.summary())
-
-model.compile(optimizer=OPTIMIZER,
-              loss=LOSS,
-              metrics=[fmeasure, 'accuracy'])
-
-# Prepare training data
-training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
-model.fit(training_input, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS)
-
-smart_save_model(model)
-
-# Prepare test data
-testing_input = [q_path_test] + [x_path_test[:, i, :, :] for i in range(x_path_test.shape[1])]
-results = model.evaluate(testing_input, y_test)
-print "Evaluation Complete"
-print "Loss     = ", results[0]
-print "F1 Score = ", results[1]
-print "Accuracy = ", results[2]
+    # For every path, concatenate question with the path
+    merges = [dot([ques_encoded, x], axes=-1) for x in path_encoded]
+    # pos = merges[0]
+    # neg = merges[1:]
 
 
+    """
+        Run Time
+    """
+    pos = merges[0]
+    repeat_pos = RepeatVector(20)(pos)
+    neg = merges[1:]
+    concat_neg = concatenate(neg)
+    reshaped_concat_neg = Reshape((20,))(concat_neg)
+    reshaped_repeat_pos = Reshape((20,))(repeat_pos)
+    concatenated_output = concatenate([reshaped_repeat_pos,reshaped_concat_neg])
+    # Prepare input tensors
+    inputs = [x_ques] + x_paths
+
+    # Model time!
+    model = Model(inputs=inputs, outputs=concatenated_output)
+
+    print(model.summary())
+
+    model.compile(optimizer=OPTIMIZER,
+                  loss=custom_loss)
+
+    # Prepare training data
+    training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
+    model.fit(training_input, np.concatenate((y_train[:,:20],y_train[:,:20]),axis=1), batch_size=BATCH_SIZE, epochs=EPOCHS)
+
+
+    smart_save_model(model)
+
+    # Prepare test data
+    testing_input = [q_path_test] + [x_path_test[:, i, :, :] for i in range(x_path_test.shape[1])]
+    output = model.predict(testing_input)
+    precision = float(len(np.where(np.argmax(output[:,19:], axis=1)==0)[0]))/len(output)
+    print "Precision (hits@1) = ", precision
+
+# print "Evaluation Complete"
+# print "Loss     = ", results[0]
+# print "F1 Score = ", results[1]
+# print "Accuracy = ", results[2]

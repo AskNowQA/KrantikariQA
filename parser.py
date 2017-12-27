@@ -34,6 +34,8 @@ MAX_FALSE_PATHS = 20
 embedding_glove, embedding_word2vec = {}, {}  # Declaring the two things we're gonna use
 pADDTYPE = 0.35
 
+# Set a seed for deterministic randomness
+random.seed(42)
 
 # Better warning formatting. Ignore
 def better_warning(message, category, filename, lineno, file=None, line=None):
@@ -41,7 +43,8 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 
 warnings.formatwarning = better_warning
-if DEBUG: warnings.warn(" DEBUG macro is enabled. Expect cluttered console!")
+if DEBUG:
+    warnings.warn(" DEBUG macro is enabled. Expect cluttered console!")
 
 # Initialize DBpedia
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
@@ -306,13 +309,14 @@ def parse(_raw):
     return v_question, v_true_path, v_false_paths, v_y_true
 
 
-def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_data.json'):
+def run(_readfiledir='data/preprocesseddata/', _writefilename='data/training/pairwise/'):
     """
     Get the show on the road.
 
     :param _readfiledir:   the filename (directory info included) to read the JSONs that need parsing
     :param _writefilename:  the file to which the parsed (embedded+padded) data is to be written to
-    :return: statuscode(?)
+
+    :return: zilch
     """
 
     try:
@@ -344,9 +348,23 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
         prepare("GLOVE")
 
+        # Pull all filenames from datafolder
+        iterable = os.listdir(_readfiledir)
+
+        # Shuffle Shuffle
+        random.shuffle(iterable)
+
+        if DEBUG:
+            prog_bar = ProgressBar()
+            iterable = prog_bar(iterable)
+            print("parser: phase I: Started reading JSONs from disk.")
+
         # Read JSON files.
-        for filename in os.listdir(_readfiledir):
+        for filename in iterable:
             data = json.load(open(os.path.join(_readfiledir, filename)))
+
+            # Shuffle data too
+            random.shuffle(data)
 
             # Each file has multiple datapoints (questions).
             for question in data:
@@ -380,101 +398,96 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
         f.close()
 
     '''
-        Phase II - Padding
+        Phase II - Padding and Final Matrices
 
-        Find the max question length; max path length.
+        Find the max question length; max path length, total paths etc
+        Put the data in the following manner:
+            v_q | v_tp _ v_fp1 | [0 1]
+            v_q | v_tp _ v_fp1 | [0 1]
         Pad everything.
     '''
 
+    # Some info needed for padding
     max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
     max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
-    max_false_paths = np.max([len(datum[2]) for datum in data_embedded])
-    # total_paths = np.sum([len(datum[2]) for datum in data_embedded]) + len(data_embedded)   # Find total paths
+    total_false_paths = np.sum([len(datum[2]) for datum in data_embedded])    # Find total false paths paths
 
     # Find max path length, including false paths
     for datum in data_embedded:
         max_path_length = max(
-            np.max([fp.shape[0] for fp in datum[2]]),  # Find the largest false path
-            max_path_length  # amongst the 20 for this question.
+            np.max([fp.shape[0] for fp in datum[2]]),   # Find the largest false path
+            max_path_length                             # amongst the 20 for this question.
         )
 
-    # Pad time
-    for i in range(len(data_embedded)):
+    # Matrices which will store the data.
+    Q = np.zeros((total_false_paths, max_ques_length, embedding_dim))
+    tP = np.zeros((total_false_paths, max_path_length, embedding_dim))
+    fP = np.zeros((total_false_paths, max_path_length, embedding_dim))
+
+    paths_so_far = 0
+
+    if DEBUG:
+        print("Q: ", Q.shape, "tP: ", tP.shape, "fP: ", fP.shape)
+
+    # Create an interable to loop
+    iterable = range(len(data_embedded))
+
+    if DEBUG:
+        prog_bar = ProgressBar()
+        iterable = prog_bar(iterable)
+
+    # Fun Time
+    for i in iterable:
 
         datum = data_embedded[i]
+        num_false_paths = len(datum[2])
 
-        # Pad Questions
+
+        # Pad Question
         padded_question = np.zeros((max_ques_length, embedding_dim))  # Create an zeros mat with max dims
         padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]  # Pad the zeros mat with actual mat
-        datum[0] = padded_question
+
+        # Store Question
+        Q[i * num_false_paths: (i + 1) * num_false_paths] = np.repeat(      # For 0-20/20-40.. in a zeros mat
+            a=padded_question[np.newaxis, :, :],                            # transform v_q to have new axis
+            repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
+            axis=0)                                                         # and voila!
 
         # Pad true path
         padded_tp = np.zeros((max_path_length, embedding_dim))
         padded_tp[:datum[1].shape[0], :datum[1].shape[1]] = datum[1]
-        datum[1] = padded_tp
+
+        # Store true path
+        tP[i * num_false_paths: (i + 1) * num_false_paths] = np.repeat(     # For 0-20/20-40.. in a zeros mat
+            a=padded_tp[np.newaxis, :, :],                                  # transform v_tp to have new axis
+            repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
+            axis=0)                                                         # and voila!
 
         # Pad false path
-        false_paths = np.zeros((max_false_paths, max_path_length, embedding_dim))
         for j in range(len(datum[2])):
             false_path = datum[2][j]
             padded_fp = np.zeros((max_path_length, embedding_dim))
             padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
 
-            false_paths[j, :, :] = padded_fp
+            # Store false paths
+            fP[paths_so_far + j] = padded_fp
 
-        datum[2] = false_paths
-
-        data_embedded[i] = datum
-
-    f = open('resources/data_embedded.pickle', 'w+')
-    pickle.dump(data_embedded, f)
-    f.close()
-
-    print("""
-            Phase II - Prepare X, Y DONE
-
-        Find the max question length; max path length.
-        Pad everything.
-        Collect the data into X, Y matrices.
-    """)
-
-    '''
-        Phase III - Make a matrix out of you
-
-        Shuffle the data
-        Collect the data into Q, P and Y matrices.
-    '''
-
-    # Make Q, P and Y matrices
-    Q = np.zeros(( len(data_embedded), max_ques_length, embedding_dim))
-    P = np.zeros(( len(data_embedded), max_false_paths + 1, max_path_length, embedding_dim))
-    Y = np.zeros(( len(data_embedded), max_false_paths + 1))
-
-    if DEBUG:
-        print "Q: ", Q.shape, "P: ", P.shape, "Y: ", Y.shape
-
-    for i in range(len(data_embedded)):
-        datum = data_embedded[i]
-
-        # Add an entry of question to Q
-        Q[i] = datum[0]
-
-        # Shuffle Y[i] and P[i] together.
-        indices = np.random.permutation(max_false_paths + 1)
-
-        # Make a m_fp x m_pl x emb_dim matrix for all the paths, true or false.
-        temp_paths = np.zeros((max_false_paths + 1, max_path_length, embedding_dim))
-        temp_paths[0] = datum[1]
-        temp_paths[1:] = datum[2]
-
-        # Add shuffled paths and labels to P and Y
-        P[i] = temp_paths[indices]
-        Y[i] = datum[3][indices]
+        paths_so_far += num_false_paths
 
     # Print these things to file.
-    np.save(open('./data/training/full/Q.npz', 'w+'), Q)
-    np.save(open('./data/training/full/P.npz', 'w+'), P)
-    np.save(open('./data/training/full/Y.npz', 'w+'), Y)
+    np.save(open(os.path.join(_writefilename, 'Q.npz'), 'w+'), Q)
+    np.save(open(os.path.join(_writefilename, 'tP.npz'), 'w+'), tP)
+    np.save(open(os.path.join(_writefilename, 'fp.npz'), 'w+'), fP)
+
+    print("""
+            Phase II - Padding and Final Matrices
+
+        Find the max question length; max path length, total paths etc
+        Put the data in the following manner:
+            v_q | v_tp _ v_fp1 | [0 1]
+            v_q | v_tp _ v_fp1 | [0 1]
+        Pad everything.
+    """)
 
 
 def test():
@@ -539,6 +552,8 @@ def test():
     testdata = json.load(open('data/preprocesseddata/535.json'))[4]
     op = parse(testdata)
     print op
+
+
     # testdata = json.load(open(os.path.join('data', os.listdir('data')[0])))[-2]
     # # data = data.replace("'", '"')
     # q, tp, fp, y = parse(testdata)

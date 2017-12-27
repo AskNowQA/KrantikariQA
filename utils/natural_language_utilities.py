@@ -159,7 +159,7 @@ def get_label_via_parsing(_uri, lower=False):
 
 
 def remove_stopwords(_tokens):
-    return [x for x in _tokens if x.strip().lower() in stopwords]
+    return [x for x in _tokens if x.strip().lower() not in stopwords]
 
 if __name__ == "__main__":
     uris = ["http://dbpedia.org/ontology/Airport", "http://dbpedia.org/property/garrison",

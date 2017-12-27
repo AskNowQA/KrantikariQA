@@ -16,7 +16,7 @@ from pprint import pprint
 
 # Custom files
 import utils.dbpedia_interface as db_interface
-import utils.phrase_similarity as sim
+import utils.embeddings_interface as sim
 
 
 '''

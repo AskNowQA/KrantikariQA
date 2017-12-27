@@ -167,7 +167,7 @@ def prepare():
         if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")
 
 
-def convert_core_chain_to_sparql(_core_chain):
+def convert_core_chain_to_sparql(_core_chain):  # @TODO
     pass
 
 
@@ -176,13 +176,15 @@ def similar_predicates(_question, _predicates, _k=5):
         Function used to tokenize the question and compare the tokens with the predicates.
         Then their top k are selected.
 
+        @TODO: Verify this chain of thought.
+
     :param _question: a string of question
     :param _predicates: a list of strings (surface forms/uri? @TODO: Verify)
     :param _k: int :- select top k from sorted list
     :return: a list of strings (subset of predicates)
     """
     # Tokenize question
-    qt = nlutils.tokenize(_question, _remove_stopwords=True)
+    qt = nlutils.tokenize(_question, _remove_stopwords=False)
 
     # Vectorize question
     v_qt = vectorize(qt)
@@ -194,9 +196,11 @@ def similar_predicates(_question, _predicates, _k=5):
     similarity_mat = np.dot(v_pt, np.transpose(v_qt))
 
     # Find the best scoring values for every path
-    argmaxes = np.argsort(np.max(similarity_mat, axis=1))
+    # Sort ( best match score for each predicate) in descending order, and choose top k
+    argmaxes = np.argsort(np.max(similarity_mat, axis=1))[::-1][:_k]
 
-    # Use this to choose from _predicates and return @TODO.
+    # Use this to choose from _predicates and return
+    return [_predicates[i] for i in argmaxes]
 
 
 def runtime(_question, _entities, _return_core_chains = False, _return_answers = False):
@@ -226,5 +230,14 @@ def runtime(_question, _entities, _return_core_chains = False, _return_answers =
         pass
 
 
+if __name__ == "__main__":
 
+    prepare()
 
+    """
+        TEST1 : Accuracy of similar_predicates
+    """
+    q = 'Who is the president of United States'
+    p = ['abstract', 'motto', 'population total', 'official language', 'legislature', 'lower house', 'president', 'leader', 'prime minister']
+
+    print(similar_predicates(q, p, 5))

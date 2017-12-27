@@ -7,20 +7,21 @@ from keras.models import Model
 from keras.layers import Input
 from keras.layers import Dense
 from keras.layers import Dropout
-from keras.layers import Activation, RepeatVector, Reshape
+from keras.layers import Activation, RepeatVector, Reshape, Bidirectional
 from keras.layers.recurrent import LSTM
-from keras.layers.merge import concatenate, dot
+from keras.layers.merge import concatenate, dot, subtract, maximum
 from keras.activations import softmax
 from keras import optimizers, metrics
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+gpu = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
 # Some Macros
 DEBUG = True
-DATA_DIR = './data/training/full'
-EPOCHS = 100
-BATCH_SIZE = 200 # Around 11 splits for full training dataset
-LEARNING_RATE = 0.002
+DATA_DIR = './data/training/pairwise'
+EPOCHS = 200
+BATCH_SIZE = 2000 # Around 11 splits for full training dataset
+LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
@@ -148,103 +149,113 @@ def smart_save_model(model):
         model.save(os.path.join(l_dir, 'model.h5'))
         json.dump(desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
 
+def zeroloss(yt, yp):
+    return 0.0
 
 def custom_loss(y_true, y_pred):
     '''
         max margin loss
     '''
-    # y_neg = K.concatenate(y_pred[1:])
-    # y_pos = K.repeat(y_pred, 20)
-    # K.eval(y_pos)
-    # K.eval(y_neg)
-    y_pos = y_pred[:,:20]
-    y_neg= y_pred[:,20:]
-    return K.mean(K.maximum(1.0 - y_pos +  y_neg, 0.) , axis=-1)
+    # y_pos = y_pred[0]
+    # y_neg= y_pred[1]
+    return K.sum(K.maximum(1.0 - y_pred, 0.))
 
 """
     Data Time!
 """
 # Pull the data up from disk
-x_p = np.load(open(DATA_DIR + '/P.npz'))
-x_q = np.load(open(DATA_DIR + '/Q.npz'))
-y = np.load(open(DATA_DIR + '/Y.npz'))
+pos_paths = np.load(DATA_DIR + '/tP.npz')
+neg_paths = np.load(DATA_DIR + '/fP.npz')
+questions = np.load(DATA_DIR + '/Q.npz')
 
 # Shuffle these matrices together @TODO this!
 np.random.seed(0) # Random train/test splits stay the same between runs
-indices = np.random.permutation(x_p.shape[0])
-x_p = x_p[indices]
-x_q = x_q[indices]
-y = y[indices]
 
 # Divide the data into diff blocks
-x_path_train = np.asarray(x_p[:int(len(x_p) * .80)]).astype('float32')
-y_train = np.asarray(y[:int(len(y) * .80)]).astype('float32')
-x_path_test = np.asarray(x_p[int(len(x_p) * .80):]).astype('float32')
-y_test = np.asarray(y[int(len(y) * .80):]).astype('float32')
-q_path_train = np.asarray(x_q[:int(len(x_q) * .80)]).astype('float32')
-q_path_test = np.asarray(x_q[int(len(x_q) * .80):]).astype('float32')
+split_point = lambda x: int(len(x)/20 * .80) * 20
 
-question_input_shape = q_path_train.shape[1:]
-path_input_shape = x_path_train.shape[2:]
+def train_split(x):
+    return np.asarray(x[:split_point(x)]).astype('float32')
+def test_split(x):
+    return np.asarray(x[split_point(x):]).astype('float32')
 
-with K.tf.device('/gpu:0'):
+train_pos_paths = train_split(pos_paths)
+train_neg_paths = train_split(neg_paths)
+train_questions = train_split(questions)
+
+# indices = np.random.permutation(train_pos_paths.shape[0])
+
+# train_pos_paths = train_pos_paths[indices]
+# train_neg_paths = train_neg_paths[indices]
+# train_questions = train_questions[indices]
+
+test_pos_paths = test_split(pos_paths)
+test_neg_paths = test_split(neg_paths)
+test_questions = test_split(questions)
+
+question_input_shape = train_questions.shape[1:]
+path_input_shape = train_pos_paths.shape[1:]
+
+with K.tf.device('/gpu:' + gpu):
     K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
     """
         Model Time!
     """
     # Define input to the models
     x_ques = Input(shape=question_input_shape)
-    x_paths = [ Input(shape=path_input_shape) for x in range(x_path_train.shape[1])]
+    x_pos_path = Input(shape=path_input_shape)
+    x_neg_path = Input(shape=path_input_shape)
 
     # Encode the questions
-    ques_encoded = LSTM(128)(x_ques)
+    ques_encoder = Bidirectional(LSTM(64, dropout = 0.3))
+    # forwardVector = Dense(32)
+    # dropout = Dropout(0.5)
+    # ques_encoded = (forwardVector(ques_encoder(x_ques)))
+    ques_encoded = ques_encoder(x_ques)
 
     # Encode 21 paths
-    path_encoder = LSTM(128)
-    path_encoded = [path_encoder(x) for x in x_paths]
+    path_encoder = Bidirectional(LSTM(64, dropout = 0.3))
+    # forwardVector = Dense(32)
+    # dropout = Dropout(0.5)
+    # pos_path_encoded = (forwardVector(path_encoder(x_pos_path)))
+    # neg_path_encoded = (forwardVector(path_encoder(x_neg_path)))
+    pos_path_encoded = path_encoder(x_pos_path)
+    neg_path_encoded = path_encoder(x_neg_path)
 
     # forwardMatrix = Dense(64, activation='tanh')
     # dropout = Dropout(0.5)
-    # forwardVector = Dense(1, activation='tanh')
+    # forwardVector = Dense(1, activation='sigmoid')
 
-    # For every path, concatenate question with the path
-    merges = [dot([ques_encoded, x], axes=-1) for x in path_encoded]
-    # pos = merges[0]
-    # neg = merges[1:]
-
-
-    """
-        Run Time
-    """
-    pos = merges[0]
-    repeat_pos = RepeatVector(20)(pos)
-    neg = merges[1:]
-    concat_neg = concatenate(neg)
-    reshaped_concat_neg = Reshape((20,))(concat_neg)
-    reshaped_repeat_pos = Reshape((20,))(repeat_pos)
-    concatenated_output = concatenate([reshaped_repeat_pos,reshaped_concat_neg])
-    # Prepare input tensors
-    inputs = [x_ques] + x_paths
+    pos_score = (dot([ques_encoded, pos_path_encoded], axes=-1))
+    neg_score = (dot([ques_encoded, neg_path_encoded], axes=-1))
 
     # Model time!
-    model = Model(inputs=inputs, outputs=concatenated_output)
+    model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+        outputs=[pos_score, subtract([pos_score, neg_score])])
 
     print(model.summary())
 
     model.compile(optimizer=OPTIMIZER,
-                  loss=custom_loss)
+                  loss=[None, custom_loss], loss_weights=[None, 1.])
 
     # Prepare training data
-    training_input = [q_path_train] + [x_path_train[:, i, :, :] for i in range(x_path_train.shape[1])]
-    model.fit(training_input, np.concatenate((y_train[:,:20],y_train[:,:20]),axis=1), batch_size=BATCH_SIZE, epochs=EPOCHS)
-
+    training_input = [train_questions, train_pos_paths, train_neg_paths]
+    dummy_y = np.zeros(train_questions.shape[0])
+    model.fit(training_input, dummy_y, batch_size=BATCH_SIZE, epochs=EPOCHS)
 
     smart_save_model(model)
 
     # Prepare test data
-    testing_input = [q_path_test] + [x_path_test[:, i, :, :] for i in range(x_path_test.shape[1])]
-    output = model.predict(testing_input)
-    precision = float(len(np.where(np.argmax(output[:,19:], axis=1)==0)[0]))/len(output)
+
+    only_questions = test_questions[range(0, test_questions.shape[0], 20)]
+    only_pos_paths = test_pos_paths[range(0, test_pos_paths.shape[0], 20)]
+
+    pos_outputs = np.array(model.predict([only_questions, only_pos_paths, only_pos_paths])[0])
+    neg_outputs = np.array(model.predict([test_questions, test_neg_paths, test_neg_paths])[0])
+    neg_outputs = np.reshape(neg_outputs, [only_pos_paths.shape[0], 20])
+    all_outputs = np.hstack([pos_outputs, neg_outputs])
+
+    precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
     print "Precision (hits@1) = ", precision
 
 # print "Evaluation Complete"

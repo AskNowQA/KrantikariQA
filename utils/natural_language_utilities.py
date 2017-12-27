@@ -9,14 +9,12 @@ STOPWORDLIST = 'resources/atire_puurula.txt'
 KNOWN_SHORTHANDS = ['dbo', 'dbp', 'rdf', 'rdfs', 'dbr', 'foaf', 'geo']
 DBP_SHORTHANDS = {'dbo': 'http://dbpedia.org/ontology/', 'dbp': 'http://dbpedia.org/property',
                   'dbr': 'http://dbpedia.org/resource'}
+# @TODO Import the above list from http://dbpedia.org/sparql?nsdecl
 
 # Few regex to convert camelCase to _ i.e DonaldTrump to donald trump
 first_cap_re = re.compile('(.)([A-Z][a-z]+)')
 all_cap_re = re.compile('([a-z0-9])([A-Z])')
 stopwords = open(STOPWORDLIST).read().split('\n')
-
-
-# @TODO Import the above list from http://dbpedia.org/sparql?nsdecl
 
 
 def has_url(_string):

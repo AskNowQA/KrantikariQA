@@ -32,6 +32,7 @@ EMBEDDING = "GLOVE"  # OR WORD2VEC
 EMBEDDING_DIM = 300
 MAX_FALSE_PATHS = 20
 embedding_glove, embedding_word2vec = {}, {}  # Declaring the two things we're gonna use
+pADDTYPECONSTRAINT = 0.35
 
 
 # Better warning formatting. Ignore
@@ -59,7 +60,7 @@ def prepare(_embedding=EMBEDDING):
     # Preparing embeddings.
     if EMBEDDING == _embedding:
 
-        if DEBUG: print "Using Glove."
+        if DEBUG: print("Using Glove.")
 
         try:
             embedding_glove = pickle.load(open(os.path.join(GLOVE_DIR, "glove_parsed.pickle")))
@@ -70,9 +71,6 @@ def prepare(_embedding=EMBEDDING):
             embedding_glove = {}
             f = open(os.path.join(GLOVE_DIR, 'glove.42B.300d.txt'))
             iterable = f
-            if DEBUG:
-                prog_bar = ProgressBar()
-                iterable = prog_bar(iterable)
 
             for line in iterable:
                 values = line.split()
@@ -84,10 +82,10 @@ def prepare(_embedding=EMBEDDING):
             # Now convert this to a numpy object
             pickle.dump(embedding_glove, open(os.path.join(GLOVE_DIR, "glove_parsed.pickle"), 'w+'))
 
-            if DEBUG: print "GloVe successfully parsed and stored. This won't happen again."
+            if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")
 
     elif EMBEDDING == _embedding:  # @TODO: check what's up with this here.
-        if DEBUG: print "Using Glove."
+        if DEBUG: print("Using Glove.")
 
         embedding_word2vec = models.KeyedVectors.load_word2vec_format(
             os.path.join(WORD2VEC_DIR, 'GoogleNews-vectors-negative300.bin'), binary=True)
@@ -114,6 +112,8 @@ def vectorize(_tokens, _report_unks=False):
             token_embedding = np.repeat(1, 300)
         elif token == "-":
             token_embedding = np.repeat(-1, 300)
+        elif token == "/":
+            token_embedding = np.repeat(0.5, 300)
         else:
             try:
                 if EMBEDDING == "GLOVE":
@@ -126,8 +126,6 @@ def vectorize(_tokens, _report_unks=False):
                 token_embedding = np.zeros(300, dtype=np.float32)
 
         op += [token_embedding]
-
-    # if DEBUG: print _tokens, "\n",
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
 
@@ -161,8 +159,6 @@ def parse(_raw):
     @TODO: Generalize this for more than one topic entity.
     """
 
-    # if DEBUG: print "Question: ", str(_raw[u'corrected_question'])
-
     # Get the question
     question = _raw[u'corrected_question']
 
@@ -180,6 +176,7 @@ def parse(_raw):
         path_sf.append(x[0])
         path_sf.append(dbp.get_label(x[1:]))
     true_path = entity_sf + path_sf
+
 
     """
         Create all possible paths.
@@ -261,7 +258,6 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='resources/parsed_
 
     :param _readfiledir:   the filename (directory info included) to read the JSONs that need parsing
     :param _writefilename:  the file to which the parsed (embedded+padded) data is to be written to
-    :param _debug:          the boolean param can be overwritten if wanted.
     :return: statuscode(?)
     """
 
@@ -485,13 +481,17 @@ def test():
     """
         Parsing tests.
     """
-    testdata = json.load(open(os.path.join('data', os.listdir('data')[0])))[-2]
-    # data = data.replace("'", '"')
-    q, tp, fp, y = parse(testdata)
-    pprint(q)
-    pprint(tp)
-    pprint(fp)
-    pprint(y)
+    # Load any JSON
+    testdata = json.load(open('data/preprocesseddata/535.json'))[4]
+    op = parse(testdata)
+    print op
+    # testdata = json.load(open(os.path.join('data', os.listdir('data')[0])))[-2]
+    # # data = data.replace("'", '"')
+    # q, tp, fp, y = parse(testdata)
+    # pprint(q)
+    # pprint(tp)
+    # pprint(fp)
+    # pprint(y)
 
 
 if __name__ == "__main__":

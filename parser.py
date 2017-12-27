@@ -12,6 +12,7 @@ import os
 import re
 import json
 import pickle
+import random
 import warnings
 import traceback
 import numpy as np
@@ -32,6 +33,8 @@ EMBEDDING_DIM = 300
 MAX_FALSE_PATHS = 20
 embedding_glove, embedding_word2vec = {}, {}  # Declaring the two things we're gonna use
 
+# Set a seed for deterministic randomness
+random.seed(42)
 
 # Better warning formatting. Ignore
 def better_warning(message, category, filename, lineno, file=None, line=None):
@@ -293,9 +296,23 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='data/training/pai
         # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
         prepare("GLOVE")
 
+        # Pull all filenames from datafolder
+        iterable = os.listdir(_readfiledir)
+
+        # Shuffle Shuffle
+        random.shuffle(iterable)
+
+        if DEBUG:
+            prog_bar = ProgressBar()
+            iterable = prog_bar(iterable)
+            print("parser: phase I: Started reading JSONs from disk.")
+
         # Read JSON files.
-        for filename in os.listdir(_readfiledir):
+        for filename in iterable:
             data = json.load(open(os.path.join(_readfiledir, filename)))
+
+            # Shuffle data too
+            random.shuffle(data)
 
             # Each file has multiple datapoints (questions).
             for question in data:

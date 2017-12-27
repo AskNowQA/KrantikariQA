@@ -291,7 +291,7 @@ def create_dataset(debug=True,time_limit=False):
     json_data = open(file_directory).read()
     data = json.loads(json_data)
     counter = 0
-    skip = 58
+    skip = 0
     for node in data:
         '''
             For now focusing on just simple question
@@ -304,7 +304,7 @@ def create_dataset(debug=True,time_limit=False):
             skip -= 1
             continue
         try:
-            if node[u"sparql_template_id"] in [1,301,401,101]: # :
+            if node[u"sparql_template_id"] in [1,301,401,101] and not PASSED: # :
                 '''
                     {
                         u'_id': u'9a7523469c8c45b58ec65ed56af6e306',

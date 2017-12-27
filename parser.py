@@ -16,6 +16,7 @@ import random
 import warnings
 import traceback
 import numpy as np
+from progressbar import ProgressBar
 
 from pprint import pprint
 from gensim import models
@@ -68,7 +69,12 @@ def prepare(_embedding=EMBEDDING):
 
             embedding_glove = {}
             f = open(os.path.join(GLOVE_DIR, 'glove.42B.300d.txt'))
-            for line in f:
+            iterable = f
+            if DEBUG:
+                prog_bar = ProgressBar()
+                iterable = prog_bar(iterable)
+
+            for line in iterable:
                 values = line.split()
                 word = values[0]
                 coefs = np.asarray(values[1:], dtype='float32')
@@ -92,19 +98,11 @@ def vectorize(_tokens, _report_unks=False):
         Function to embed a sentence and return it as a list of vectors.
         WARNING: Give it already split. I ain't splitting it for ye.
 
-        :param _input: The sentence you want embedded. (Assumed pre-tokenized input)
+        :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
         :param _report_unks: Whether or not return the out of vocab words
         :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
     """
 
-    # # Cleaned sentence
-    # cleaned_input = _input.replace("?", "").replace(",", "").strip()
-    #
-    # # Split the sentence into word tokens
-    # # @TODO: Use a proper tokenizer.
-    # tokens = cleaned_input.split()
-
-    # Logic for Glove
     op = []
     unks = []
     for token in _tokens:

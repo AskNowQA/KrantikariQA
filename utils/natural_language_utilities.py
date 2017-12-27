@@ -5,6 +5,7 @@ import os.path
 from urlparse import urlparse
 
 # SOME MACROS
+STOPWORDLIST = 'resources/atire_puurula.txt'
 KNOWN_SHORTHANDS = ['dbo', 'dbp', 'rdf', 'rdfs', 'dbr', 'foaf', 'geo']
 DBP_SHORTHANDS = {'dbo': 'http://dbpedia.org/ontology/', 'dbp': 'http://dbpedia.org/property',
                   'dbr': 'http://dbpedia.org/resource'}
@@ -12,6 +13,7 @@ DBP_SHORTHANDS = {'dbo': 'http://dbpedia.org/ontology/', 'dbp': 'http://dbpedia.
 # Few regex to convert camelCase to _ i.e DonaldTrump to donald trump
 first_cap_re = re.compile('(.)([A-Z][a-z]+)')
 all_cap_re = re.compile('([a-z0-9])([A-Z])')
+stopwords = open(STOPWORDLIST).read().split('\n')
 
 
 # @TODO Import the above list from http://dbpedia.org/sparql?nsdecl
@@ -23,7 +25,7 @@ def has_url(_string):
     return False
 
 
-def tokenize(_input, _ignore_brackets=False):
+def tokenize(_input, _ignore_brackets=False, _remove_stopwords=False):
     """
         Tokenize a question.
         Changes:
@@ -35,7 +37,8 @@ def tokenize(_input, _ignore_brackets=False):
         @TODO: Improve tokenization
 
         Used in: parser.py; krantikari.py
-        :param _input: str, _ignore_brackets: bool
+        :param _input: str,
+        :param _ignore_brackets: bool
         :return: list of tokens
     """
     cleaner_input = _input.replace("?", "").replace(",", "").strip()
@@ -51,7 +54,7 @@ def tokenize(_input, _ignore_brackets=False):
                                                                              cleaner_input.index(substring) + len(
                                                                                  substring):]
 
-    return cleaner_input.strip().split()
+    return cleaner_input.strip().split() if not _remove_stopwords else remove_stopwords(cleaner_input.strip().split())
 
 
 def is_clean_url(_string):
@@ -156,6 +159,9 @@ def get_label_via_parsing(_uri, lower=False):
         return label.lower()
     return label
 
+
+def remove_stopwords(_tokens):
+    return [x for x in _tokens if x.strip().lower() in stopwords]
 
 if __name__ == "__main__":
     uris = ["http://dbpedia.org/ontology/Airport", "http://dbpedia.org/property/garrison",

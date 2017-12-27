@@ -28,7 +28,7 @@ K_HOP_1_u = 2                               # Selects the number of relations in
 K_HOP_2_u = 2                               # Selects the number of relations in second hop in the wrong direction
 PASSED = False
 WRITE_INTERVAL = 10                         # Interval for periodic write in a file
-OUTPUT_DIR = 'data/preprocesseddata_new'    # Place to store the files
+OUTPUT_DIR = 'data/preprocesseddata_new_v2'    # Place to store the files
 
 
 '''
@@ -244,6 +244,8 @@ def get_rdf_type_candidates(sparql,rdf_type=True,constraint = '',count=False):
     :param _entity: takes in a sparql and ch
     :return: classes list
     '''
+    print constraint
+    print sparql
     URI_Type = ' ?uri <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?type .'
     X_Type = ' ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?type .'
     original_string = 'SELECT DISTINCT ?uri WHERE'
@@ -267,7 +269,7 @@ def get_rdf_type_candidates(sparql,rdf_type=True,constraint = '',count=False):
     type_x = []
     if '?x' in sparql:
         temp_sparql_x = temp_sparql[:index] + X_Type + temp_sparql[index:]
-        type_x = dbp.get_answer(temp_sparql_x)[0]
+        type_x = dbp.get_answer(temp_sparql_x)
         type_x = type_x[u'type']
         type_x = [x for x in type_x if
                                   x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
@@ -289,7 +291,7 @@ def create_dataset(debug=True,time_limit=False):
     json_data = open(file_directory).read()
     data = json.loads(json_data)
     counter = 0
-    skip = 38
+    skip = 58
     for node in data:
         '''
             For now focusing on just simple question
@@ -311,15 +313,19 @@ def create_dataset(debug=True,time_limit=False):
                         u'sparql_template_id': 1,
                         u'verbalized_question': u'What are the <schools> whose <city> is <Reading, Berkshire>?'
                     }
-
                 '''
                 data_node = node
+                if ". }" not in node[u'sparql_query']:
+                    node[u'sparql_query'] = node[u'sparql_query'].replace("}",". }")
                 triples = get_triples(node[u'sparql_query'])
                 data_node[u'entity'] = []
                 data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
                 data_node[u'training'] = {}
                 data_node[u'training'][data_node[u'entity'][0]] = {}
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
+                #need to include things here.
+                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
+                    data_node[u'entity'][0], [(triples[0].split(" ")[1][1:-1], False), (triples[0].split(" ")[1][1:-1], True)])
                 data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
                 data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] == 301 or node[u"sparql_template_id"] == 401:
@@ -366,12 +372,16 @@ def create_dataset(debug=True,time_limit=False):
                 '''
                 #TODO: Verify the 302 template
                 data_node = node
+                if ". }" not in node[u'sparql_query']:
+                    node[u'sparql_query'] = node[u'sparql_query'].replace("}",". }")
                 triples = get_triples(node[u'sparql_query'])
                 data_node[u'entity'] = []
                 data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
                 data_node[u'training'] = {}
                 data_node[u'training'][data_node[u'entity'][0]] = {}
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] =  [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
+                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
+                    data_node[u'entity'][0], [(triples[0].split(" ")[1][1:-1], True), (triples[0].split(" ")[1][1:-1], True)])
                 data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
                 data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] == 302 or node[u"sparql_template_id"] == 402:
@@ -432,12 +442,12 @@ def create_dataset(debug=True,time_limit=False):
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                     if node[u'sparql_template_id'] in [303,309]:
                         value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
-                                                        constraint=triples[1].split(" ")[2][1:-1], count=False)
+                                                        constraint=triples[2].split(" ")[2][1:-1], count=False)
                         data_node[u'training']['x'] = value[1]
                         data_node[u'training']['uri'] = value[0]
                     if node[u'sparql_template_id'] in [403,409]:
                         value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
-                                                        constraint=triples[1].split(" ")[2][1:-1], count=True)
+                                                        constraint=triples[2].split(" ")[2][1:-1], count=True)
                         data_node[u'training']['x'] = value[1]
                         data_node[u'training']['uri'] = value[0]
                 else:
@@ -505,12 +515,12 @@ def create_dataset(debug=True,time_limit=False):
                     data_node[u'training']['uri'] = value[0]
                 if node[u"sparql_template_id"] == 305:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
-                                                    constraint=triples[1].split(" ")[2][1:-1], count=False)
+                                                    constraint=triples[2].split(" ")[2][1:-1], count=False)
                     data_node[u'training']['x'] = value[1]
                     data_node[u'training']['uri'] = value[0]
                 if node[u"sparql_template_id"] == 405:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
-                                                    constraint=triples[1].split(" ")[2][1:-1], count=True)
+                                                    constraint=triples[2].split(" ")[2][1:-1], count=True)
                     data_node[u'training']['x'] = value[1]
                     data_node[u'training']['uri'] = value[0]
                 fo.write(str(data_node))
@@ -566,12 +576,12 @@ def create_dataset(debug=True,time_limit=False):
                     data_node[u'training']['uri'] = value[0]
                 if node[u"sparql_template_id"] == 306:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
-                                                    constraint=triples[1].split(" ")[2][1:-1], count=False)
+                                                    constraint=triples[2].split(" ")[2][1:-1], count=False)
                     data_node[u'training']['x'] = value[1]
                     data_node[u'training']['uri'] = value[0]
                 if node[u"sparql_template_id"] == 406:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
-                                                    constraint=triples[1].split(" ")[2][1:-1], count=True)
+                                                    constraint=triples[2].split(" ")[2][1:-1], count=True)
                     data_node[u'training']['x'] = value[1]
                     data_node[u'training']['uri'] = value[0]
                 fo.write(str(data_node))
@@ -590,7 +600,8 @@ def create_dataset(debug=True,time_limit=False):
         except:
             print traceback.print_exc()
             continue
-
+    with open('remaining.json', 'w') as fp:
+        json.dump(final_data, fp)
 
 def test(_entity, _relation):
     out, incoming = dbp.get_properties(_entity, _relation, label=False)
@@ -696,7 +707,5 @@ def create_simple_dataset():
 #TODO: Store as json : final answer dataset
 
 print "datasest call"
-create_dataset(debug = False)
+create_dataset(debug = True)
 
-with open('train_data.json', 'w') as fp:
-    json.dump(final_data, fp)

@@ -32,7 +32,7 @@ EMBEDDING = "GLOVE"  # OR WORD2VEC
 EMBEDDING_DIM = 300
 MAX_FALSE_PATHS = 20
 embedding_glove, embedding_word2vec = {}, {}  # Declaring the two things we're gonna use
-pADDTYPECONSTRAINT = 0.35
+pADDTYPE = 0.35
 
 
 # Better warning formatting. Ignore
@@ -177,7 +177,6 @@ def parse(_raw):
         path_sf.append(dbp.get_label(x[1:]))
     true_path = entity_sf + path_sf
 
-
     """
         Create all possible paths.
         Then choose some of them.
@@ -235,6 +234,61 @@ def parse(_raw):
 
     # From all these paths, randomly choose some.
     false_paths = np.random.choice(false_paths, MAX_FALSE_PATHS)
+
+    """
+        **rdf-type constraints:**
+
+        !!NOTE!! Parser does not care which variable has the type constraint.
+
+        Decisions:
+            - For true path, everytime you find rdf type constraint, add to t
+            - Add the original true path to false paths
+                        @TODO @nilesh-c shall I remove s'thing from false paths, then?
+
+            - For false paths:
+                - collect all false classes for both uri and x;
+                - for every false path (post random selection)
+                    - randomly choose whether or not to add false class (p = 0.3)
+                - @TODO: @nilesh-c: shall we add true_path + incorrect_classes in false paths too?
+    """
+    if _raw[u'constraints'].keys():
+        # Question has type constraints
+
+        if '?uri' in _raw[u'constraints'].keys():
+            # Have a type constraint on the answer.
+            true_class = _raw[u'constraints'][u'?uri']
+
+        elif '?x' in _raw[u'constraints'].keys():
+            # Have a type constraint on the intermediary variable.
+            true_class = _raw[u'constraints'][u'?x']
+
+        false_paths += [true_path]  # Add the path (without type constraint) in false paths.
+        true_path += ['/']
+        true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=True)
+
+    else:
+        # Question doesn't have type constraints.
+
+        if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
+
+            # Find all false classes
+            f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
+
+            # Get surface form, tokenize.
+            f_classes = [ nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
+
+            for i in range(len(false_paths)):
+
+                # Stochastically decide if we want type restrictions there
+                if random.random() < pADDTYPE:
+
+                    # If here, choose a random class, add to path
+                    path = false_paths[i]
+                    path += ['/']
+                    path += random.choice(f_classes)
+
+                    # Append path back to list
+                    false_paths[i] = path
 
     # Vectorize paths
     v_true_path = vectorize(true_path)
@@ -496,3 +550,5 @@ def test():
 
 if __name__ == "__main__":
     run()
+
+

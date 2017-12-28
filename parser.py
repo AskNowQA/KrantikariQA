@@ -363,40 +363,50 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]  # Pad the zeros mat with actual mat
 
         # Store Question
-        a = np.repeat(      # For 0-20/20-40.. in a zeros mat
+        Q[max_false_paths*i: max_false_paths*i + num_false_paths] = np.repeat(      # For 0-20/20-40.. in a zeros mat
             a=padded_question[np.newaxis, :, :],                            # transform v_q to have new axis
             repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
             axis=0)                                                         # and voila!
-        try:
-            Q[max_false_paths*i: max_false_paths*(i+1)] = a
-        except ValueError:
-            print "herror error herror error"
-            print "ashape:    ", a.shape
-            print "qspape:    ", Q.shape
-            print "lendatum2: ", len(datum[2])
-            print "i:         ", i
 
         # Pad true path
         padded_tp = np.zeros((max_path_length, embedding_dim))
         padded_tp[:datum[1].shape[0], :datum[1].shape[1]] = datum[1]
 
-        # Store true path
-        tP[max_false_paths*i: max_false_paths*(i+1)] = np.repeat(     # For 0-20/20-40.. in a zeros mat
-            a=padded_tp[np.newaxis, :, :],                                  # transform v_tp to have new axis
-            repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
-            axis=0)                                                         # and voila!
-
         # Pad false path
         padded_fps = np.zeros((max_false_paths, max_path_length, embedding_dim))
-        for j in range(len(datum[2])):
-            false_path = datum[2][j]
+        for j in range(max_false_paths):
+            try:
+                false_path = datum[2][j]
+            except IndexError:
+                false_path = datum[2][-1]
             padded_fp = np.zeros((max_path_length, embedding_dim))
             padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
 
-            # Store false paths
-            padded_fps[j] = padded_fp
+            fP[(max_false_paths * i) + j] = padded_fp
+            tP[(max_false_paths * i) + j] = padded_tp
 
-        fP[max_false_paths * i: max_false_paths * (i + 1)] = padded_fps
+
+        # for j in range(len(datum[2])):
+        #     false_path = datum[2][j]
+        #     padded_fp = np.zeros((max_path_length, embedding_dim))
+        #     padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
+        #
+        #     # Store false paths
+        #     padded_fps[j] = padded_fp
+        #
+        # # For the rest of the padded_fps, fill it with
+        #
+        # fP[max_false_paths * i: max_false_paths * (i + 1)] = padded_fps
+        #
+        #
+        #
+        #
+        # # Store true path
+        # tP[max_false_paths*i: max_false_paths*(i+1)] = np.repeat(     # For 0-20/20-40.. in a zeros mat
+        #     a=padded_tp[np.newaxis, :, :],                                  # transform v_tp to have new axis
+        #     repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
+        #     axis=0)                                                         # and voila!
+
 
     # Check if the folder exists
     try:

@@ -17,7 +17,7 @@ DEBUG = True
 glove_location = \
     {
         'dir': "./resources",
-        'raw': "glove.6B.300d.txt",
+        'raw': "glove.42B.300d.txt",
         'parsed': "glove_parsed_small.pickle"
     }
 

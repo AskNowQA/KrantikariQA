@@ -296,6 +296,7 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
                 # Collect data for each question
                 data_embedded.append([v_q, v_tp, v_fps, v_y])
 
+        embedding_dim = v_q.shape[1]
         if DEBUG:
             print("""
                 Phase I - Embedding DONE
@@ -320,12 +321,12 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
     '''
 
     # Find the embedding dimension (typically 300)
-    embedding_dim = 300
+    # embedding_dim = 300
 
     # Some info needed for padding
     max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
     max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
-    total_false_paths = np.sum([len(datum[2]) for datum in data_embedded])    # Find total false paths paths
+    max_false_paths = np.max([len(datum[2]) for datum in data_embedded])    # Find total false paths paths
 
     # Find max path length, including false paths
     for datum in data_embedded:
@@ -335,16 +336,16 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         )
 
     # Matrices which will store the data.
-    Q = np.zeros((total_false_paths, max_ques_length, embedding_dim))
-    tP = np.zeros((total_false_paths, max_path_length, embedding_dim))
-    fP = np.zeros((total_false_paths, max_path_length, embedding_dim))
+    Q = np.zeros((max_false_paths * len(data_embedded), max_ques_length, embedding_dim))
+    tP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
+    fP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
 
     paths_so_far = 0
 
     if DEBUG:
         print("Q: ", Q.shape, "tP: ", tP.shape, "fP: ", fP.shape)
 
-    # Create an interable to loop
+    # Create an iterable to loop
     iterable = range(len(data_embedded))
 
     if DEBUG:
@@ -362,7 +363,7 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]  # Pad the zeros mat with actual mat
 
         # Store Question
-        Q[paths_so_far: paths_so_far+num_false_paths] = np.repeat(      # For 0-20/20-40.. in a zeros mat
+        Q[max_false_paths*i: max_false_paths*(i+1)] = np.repeat(      # For 0-20/20-40.. in a zeros mat
             a=padded_question[np.newaxis, :, :],                            # transform v_q to have new axis
             repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
             axis=0)                                                         # and voila!
@@ -372,21 +373,22 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         padded_tp[:datum[1].shape[0], :datum[1].shape[1]] = datum[1]
 
         # Store true path
-        tP[paths_so_far: paths_so_far+num_false_paths] = np.repeat(     # For 0-20/20-40.. in a zeros mat
+        tP[max_false_paths*i: max_false_paths*(i+1)] = np.repeat(     # For 0-20/20-40.. in a zeros mat
             a=padded_tp[np.newaxis, :, :],                                  # transform v_tp to have new axis
             repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
             axis=0)                                                         # and voila!
 
         # Pad false path
+        padded_fps = np.zeros((max_false_paths, max_path_length, embedding_dim))
         for j in range(len(datum[2])):
             false_path = datum[2][j]
             padded_fp = np.zeros((max_path_length, embedding_dim))
             padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
 
             # Store false paths
-            fP[paths_so_far + j] = padded_fp
+            padded_fps[j] = padded_fp
 
-        paths_so_far += num_false_paths
+        fP[max_false_paths * i: max_false_paths * (i + 1)] = padded_fps
 
     # Check if the folder exists
     try:

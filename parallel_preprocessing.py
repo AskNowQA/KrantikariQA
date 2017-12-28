@@ -12,7 +12,9 @@
 import os
 import json
 import traceback
+import sys
 from pprint import pprint
+
 
 # Custom files
 import utils.dbpedia_interface as db_interface
@@ -28,7 +30,6 @@ K_HOP_1_u = 2                               # Selects the number of relations in
 K_HOP_2_u = 2                               # Selects the number of relations in second hop in the wrong direction
 PASSED = False
 WRITE_INTERVAL = 10                         # Interval for periodic write in a file
-OUTPUT_DIR = 'data/preprocesseddata_new_v2'    # Place to store the files
 
 
 '''
@@ -43,10 +44,7 @@ final_answer_dataset = []                   # Used in create_simple_dataset()
 
 
 # Ensure that a folder already exists in OUTPUT_DIR
-try:
-    os.makedirs(OUTPUT_DIR)
-except OSError:
-    print("Folder already exists")
+
 
 
 def get_rank_rel(_relationsip_list, rel,_score=False):
@@ -278,31 +276,92 @@ def get_rdf_type_candidates(sparql,rdf_type=True,constraint = '',count=False):
     return type_uri,type_x
 # print get_rdf_type_candidates(sparql=sparql,rdf_type=True,constraint = constraint)
 
+def get_something(SPARQL,te1,te2,id):
+    if id ==1 :
+        temp = {}
+        temp['te1'] = te1
+        temp['te2'] = te2
+        answer = dbp.get_answer(SPARQL)  # -,+
+        data_temp = []
+        for i in xrange(len(answer['r1'])):
+            data_temp.append(['-', answer['r1'][i], "+", answer['r2'][i], '-'])
+        temp['path'] = data_temp
+        return temp
+    if id == 2:
+        temp = {}
+        temp['te1'] = te1
+        temp['te2'] = te2
+        answer = dbp.get_answer(SPARQL)  # -,+
+        data_temp = []
+        for i in xrange(len(answer['r1'])):
+            data_temp.append(['+', answer['r1'][i], "+", answer['r2'][i], '-'])
+        temp['path'] = data_temp
+        return temp
+    if id == 3:
+        temp = {}
+        temp['te1'] = te1
+        temp['te2'] = te2
+        answer = dbp.get_answer(SPARQL)  # -,+
+        data_temp = []
+        for i in xrange(len(answer['r1'])):
+            data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i], '-'])
+        temp['path'] = data_temp
+        return temp
 
+
+def two_topic_entity(te1,te2):
+    '''
+        There are three ways to fit the set of te1,te2 and r1,r2
+         > SELECT DISTINCT ?uri WHERE { ?uri <%(e_to_e_out)s> <%(e_out_1)s> . ?uri <%(e_to_e_out)s> <%(e_out_2)s>}
+         > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. <%(e_in_2)s> <%(e_in_to_e_2)s> ?uri}
+         > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. ?uri <%(e_in_2)s> <%(e_in_to_e_2)s> }
+    '''
+    te1 = "<" + te1 + ">"
+    te2 = "<" + te2 + ">"
+    data = []
+    SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
+    SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
+    SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+
+    SPARQL1 = SPARQL1 % {'te1': te1, 'te2' : te2}
+    SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
+    SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+    data.append(get_something(SPARQL1,te1,te2,1))
+    data.append(get_something(SPARQL1, te2, te1,1))
+    data.append(get_something(SPARQL2, te1, te2,2))
+    data.append(get_something(SPARQL2, te2, te1,2))
+    data.append(get_something(SPARQL3, te1, te2,3))
+    data.append(get_something(SPARQL3, te2, te1,3))
+    return data
+    # pprint(data)
 
 fo = open('interm_output.txt', 'w+')
 debug = True
 controller = []
 
 
-def create_dataset(debug=True,time_limit=False):
+def create_dataset(skip=0,end=None,debug=True,time_limit=False):
     final_data = []
     file_directory = "resources/data_seven.json"
     json_data = open(file_directory).read()
     data = json.loads(json_data)
     counter = 0
-    skip = 0
-    for node in data:
+    skip = skip
+    if end == None:
+        end = len(data)
+    OUTPUT_DIR = 'data/preprocesseddata_new_v2/' + str(skip)+str(end)  # Place to store the files
+    print OUTPUT_DIR
+    try:
+        os.makedirs(OUTPUT_DIR)
+    except OSError:
+        print("Folder already exists")
+
+    for node in data[int(skip):int(end)]:
         '''
             For now focusing on just simple question
         '''
         print counter
         counter += 1
-        if counter == 40:
-            continue
-        if skip > 0:
-            skip -= 1
-            continue
         try:
             if node[u"sparql_template_id"] in [1,301,401,101] and not PASSED: # :
                 '''
@@ -669,7 +728,7 @@ def create_dataset(debug=True,time_limit=False):
             continue
 
 
-    with open('remaining.json', 'w') as fp:
+    with open(OUTPUT_DIR+ "/"+ 'remaining.json', 'w') as fp:
         json.dump(final_data, fp)
 
 def test(_entity, _relation):
@@ -777,62 +836,10 @@ def create_simple_dataset():
 
 print "datasest call"
 
-def get_something(SPARQL,te1,te2,id):
-    if id ==1 :
-        temp = {}
-        temp['te1'] = te1
-        temp['te2'] = te2
-        answer = dbp.get_answer(SPARQL)  # -,+
-        data_temp = []
-        for i in xrange(len(answer['r1'])):
-            data_temp.append(['-', answer['r1'][i], "+", answer['r2'][i], '-'])
-        temp['path'] = data_temp
-        return temp
-    if id == 2:
-        temp = {}
-        temp['te1'] = te1
-        temp['te2'] = te2
-        answer = dbp.get_answer(SPARQL)  # -,+
-        data_temp = []
-        for i in xrange(len(answer['r1'])):
-            data_temp.append(['+', answer['r1'][i], "+", answer['r2'][i], '-'])
-        temp['path'] = data_temp
-        return temp
-    if id == 3:
-        temp = {}
-        temp['te1'] = te1
-        temp['te2'] = te2
-        answer = dbp.get_answer(SPARQL)  # -,+
-        data_temp = []
-        for i in xrange(len(answer['r1'])):
-            data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i], '-'])
-        temp['path'] = data_temp
-        return temp
 
 
-def two_topic_entity(te1,te2):
-    '''
-        There are three ways to fit the set of te1,te2 and r1,r2
-         > SELECT DISTINCT ?uri WHERE { ?uri <%(e_to_e_out)s> <%(e_out_1)s> . ?uri <%(e_to_e_out)s> <%(e_out_2)s>}
-         > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. <%(e_in_2)s> <%(e_in_to_e_2)s> ?uri}
-         > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. ?uri <%(e_in_2)s> <%(e_in_to_e_2)s> }
-    '''
-    te1 = "<" + te1 + ">"
-    te2 = "<" + te2 + ">"
-    data = []
-    SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
-    SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
-    SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+if __name__ == "__main__":
+    skip = int(sys.argv[1])
+    end = int(sys.argv[2])
+    create_dataset(skip,end,debug=True)
 
-    SPARQL1 = SPARQL1 % {'te1': te1, 'te2' : te2}
-    SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
-    SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
-    data.append(get_something(SPARQL1,te1,te2,1))
-    data.append(get_something(SPARQL1, te2, te1,1))
-    data.append(get_something(SPARQL2, te1, te2,2))
-    data.append(get_something(SPARQL2, te2, te1,2))
-    data.append(get_something(SPARQL3, te1, te2,3))
-    data.append(get_something(SPARQL3, te2, te1,3))
-    return data
-    # pprint(data)
-create_dataset(debug = True)

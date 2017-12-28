@@ -8,23 +8,21 @@
         -> Embed a sentence
 
 """
-import os
-import re
 import json
+import os
 import pickle
 import random
-import warnings
 import traceback
+import warnings
 import numpy as np
-from progressbar import ProgressBar
-
 from pprint import pprint
 from gensim import models
+from progressbar import ProgressBar
 
+from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
 
-# Some Macros and Declarations
 DEBUG = True
 WORD2VEC_DIR = "./resources"  # https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
 GLOVE_DIR = "./resources"  # https://nlp.stanford.edu/projects/glove/
@@ -94,45 +92,6 @@ def prepare(_embedding=EMBEDDING):
             os.path.join(WORD2VEC_DIR, 'GoogleNews-vectors-negative300.bin'), binary=True)
 
 
-def vectorize(_tokens, _report_unks=False):
-    """
-        Function to embed a sentence and return it as a list of vectors.
-        WARNING: Give it already split. I ain't splitting it for ye.
-
-        :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
-        :param _report_unks: Whether or not return the out of vocab words
-        :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
-    """
-
-    op = []
-    unks = []
-    for token in _tokens:
-
-        # Small cap everything
-        token = token.lower()
-
-        if token == "+":
-            token_embedding = np.repeat(1, 300)
-        elif token == "-":
-            token_embedding = np.repeat(-1, 300)
-        elif token == "/":
-            token_embedding = np.repeat(0.5, 300)
-        else:
-            try:
-                if EMBEDDING == "GLOVE":
-                    token_embedding = embedding_glove[token]
-                elif EMBEDDING == 'WORD2VEC':
-                    token_embedding = embedding_word2vec[token]
-
-            except KeyError:
-                if _report_unks: unks.append(token)
-                token_embedding = np.zeros(300, dtype=np.float32)
-
-        op += [token_embedding]
-
-    return (np.asarray(op), unks) if _report_unks else np.asarray(op)
-
-
 def compute_true_labels(_question, _truepath, _falsepaths):
     """
         Function to compute the training labels corresponding to the paths given in training data.
@@ -169,7 +128,7 @@ def parse(_raw):
     question = nlutils.tokenize(question)
 
     # Now, embed the question.
-    v_question = vectorize(question, False)
+    v_question = embeddings_interface.vectorize(question, _report_unks=False, _encode_special_chars=True)
 
     # Make the correct path
     entity = _raw[u'entity'][0]
@@ -292,10 +251,9 @@ def parse(_raw):
                 # Append path back to list
                 false_paths[i] = path
 
-    print "poop"
     # Vectorize paths
-    v_true_path = vectorize(true_path)
-    v_false_paths = [vectorize(x) for x in false_paths]
+    v_true_path = embeddings_interface.vectorize(true_path, _encode_special_chars=True)
+    v_false_paths = [embeddings_interface.vectorize(x, _encode_special_chars=True) for x in false_paths]
 
     # Corresponding to all these, compute the true labels
     v_y_true = compute_true_labels(question, true_path, false_paths)
@@ -517,7 +475,7 @@ def test():
         ]
 
         for sentence in sents:
-            embedding = vectorize(nlutils.tokenize(sentence))
+            embedding = embeddings_interface.vectorize(nlutils.tokenize(sentence))
             pprint(embedding)
             raw_input(sentence)
 
@@ -533,7 +491,7 @@ def test():
             else:
                 tok = [tok]
 
-            result = vectorize(tok)
+            result = embeddings_interface.vectorize(tok)
             print result
             try:
                 print result.shape

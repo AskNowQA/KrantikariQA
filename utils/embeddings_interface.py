@@ -1,5 +1,5 @@
 """
-    calculates the simialrity between two phrases using word2vec
+    Script does all the magic with word embeddings including lazy loading them in the RAM and all that.
 
     @TODO: Check how well is this performing
 """
@@ -9,8 +9,6 @@ import gensim
 import pickle
 import warnings
 import numpy as np
-from progressbar import ProgressBar
-
 
 word2vec_embeddings = None
 glove_embeddings = None
@@ -52,7 +50,7 @@ def __prepare__(_word2vec=True, _glove=False):
     """
     global word2vec_embeddings, glove_embeddings
 
-    if DEBUG: print("phrase_similarity: Loading Word Vectors to Memory.")
+    if DEBUG: print("embeddings_interface: Loading Word Vector to Memory.")
 
     if _word2vec:
         gensim.models.KeyedVectors.load_word2vec_format('resources/GoogleNews-vectors-negative300.bin', binary=True)
@@ -88,7 +86,7 @@ def stupid_gaurav_function(_vector_set, ignore=[]):
         return np.dot(np.transpose(_vector_set), ignore) / sum(ignore)
 
 
-def phrase_similarity(_phrase_1, _phrase_2, embedding = 'word2vec'):
+def phrase_similarity(_phrase_1, _phrase_2, embedding='word2vec'):
 
     __check_prepared__(embedding)
 
@@ -117,4 +115,46 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding = 'word2vec'):
     cosine_similarity = np.dot(v_phrase_1, v_phrase_2) / (np.linalg.norm(v_phrase_1) * np.linalg.norm(v_phrase_2))
     return float(cosine_similarity)
 
-print(type(float(phrase_similarity("military branchere","child organization"))))
+
+def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embedding='glove'):
+    """
+        Function to embed a sentence and return it as a list of vectors.
+        WARNING: Give it already split. I ain't splitting it for ye.
+
+        :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
+        :param _report_unks: Whether or not return the out of vocab words
+        :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
+    """
+
+    __check_prepared__(_embedding)
+
+    op = []
+    unks = []
+    for token in _tokens:
+
+        # Small cap everything
+        token = token.lower()
+
+        try:
+            if _embedding == "glove":
+                token_embedding = glove_embeddings[token]
+            elif _embedding == 'word2vec':
+                token_embedding = word2vec_embeddings[token]
+
+        except KeyError:
+            if _report_unks: unks.append(token)
+            token_embedding = np.zeros(300, dtype=np.float32)
+
+        finally:
+
+            if _encode_special_chars:
+                # If you want path dividers like +, - or / to be treated specially
+                if token == "+":
+                    token_embedding = np.repeat(1, 300)
+                elif token == "-":
+                    token_embedding = np.repeat(-1, 300)
+                elif token == "/":
+                    token_embedding = np.repeat(0.5, 300)
+            op += [token_embedding]
+
+    return (np.asarray(op), unks) if _report_unks else np.asarray(op)

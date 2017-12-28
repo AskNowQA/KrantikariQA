@@ -50,8 +50,6 @@ GET_LABEL_OF_RESOURCE = '''SELECT DISTINCT ?label WHERE { %(target_resource)s <h
 
 GET_TYPE_OF_RESOURCE = '''SELECT DISTINCT ?type WHERE { %(target_resource)s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?type } '''
 
-# GET_TYPE_OF_RESOURCE = '''SELECT DISTINCT ?type WHERE { %(target_resource)s <http://dbpedia.org/ontology/type> ?type } '''
-
 GET_CLASS_PATH = '''SELECT DISTINCT ?type WHERE { %(target_class)s rdfs:subClassOf* ?type }'''
 
 GET_SUPERCLASS = '''SELECT DISTINCT ?type WHERE { %(target_class)s rdfs:subClassOf ?type }'''

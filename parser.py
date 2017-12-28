@@ -24,13 +24,9 @@ from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
 
 DEBUG = True
-WORD2VEC_DIR = "./resources"  # https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
-GLOVE_DIR = "./resources"  # https://nlp.stanford.edu/projects/glove/
-EMBEDDING = "GLOVE"  # OR WORD2VEC
+pADDTYPE = 0.35
 EMBEDDING_DIM = 300
 MAX_FALSE_PATHS = 20
-embedding_glove, embedding_word2vec = {}, {}  # Declaring the two things we're gonna use
-pADDTYPE = 0.35
 
 # Set a seed for deterministic randomness
 random.seed(42)
@@ -46,50 +42,6 @@ if DEBUG:
 
 # Initialize DBpedia
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
-
-
-def prepare(_embedding=EMBEDDING):
-    """
-        **Call this function prior to doing absolutely anything else.**
-
-        :param _embedding: str | either GLOVE or WORD2VEC.
-                Choose which one to use.
-        :return: None
-    """
-    global embedding_glove, embedding_word2vec
-
-    # Preparing embeddings.
-    if EMBEDDING == _embedding:
-
-        if DEBUG: print("Using Glove.")
-
-        try:
-            embedding_glove = pickle.load(open(os.path.join(GLOVE_DIR, "glove_parsed.pickle")))
-        except IOError:
-            # Glove is not parsed and stored. Do it.
-            if DEBUG: warnings.warn(" GloVe is not parsed and stored. This will take some time.")
-
-            embedding_glove = {}
-            f = open(os.path.join(GLOVE_DIR, 'glove.42B.300d.txt'))
-            iterable = f
-
-            for line in iterable:
-                values = line.split()
-                word = values[0]
-                coefs = np.asarray(values[1:], dtype='float32')
-                embedding_glove[word] = coefs
-            f.close()
-
-            # Now convert this to a numpy object
-            pickle.dump(embedding_glove, open(os.path.join(GLOVE_DIR, "glove_parsed.pickle"), 'w+'))
-
-            if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")
-
-    elif EMBEDDING == _embedding:  # @TODO: check what's up with this here.
-        if DEBUG: print("Using Glove.")
-
-        embedding_word2vec = models.KeyedVectors.load_word2vec_format(
-            os.path.join(WORD2VEC_DIR, 'GoogleNews-vectors-negative300.bin'), binary=True)
 
 
 def compute_true_labels(_question, _truepath, _falsepaths):

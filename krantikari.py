@@ -80,6 +80,7 @@ from pprint import pprint
 from keras.models import load_model
 
 # Local file imports
+from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
 
@@ -106,68 +107,7 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
 
 
-def vectorize(_tokens, _report_unks=False):
-    """
-        Function to embed a sentence and return it as a list of vectors.
-        WARNING: Give it already split. I ain't splitting it for ye.
-
-        :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
-        :param _report_unks: Whether or not return the out of vocab words
-        :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
-    """
-
-    op = []
-    unks = []
-    for token in _tokens:
-
-        # Small cap everything
-        token = token.lower()
-
-        try:
-            token_embedding = embedding_glove[token]
-
-        except KeyError:
-            if _report_unks: unks.append(token)
-            token_embedding = np.zeros(300, dtype=np.float32)
-
-        op += [token_embedding]
-
-    return (np.asarray(op), unks) if _report_unks else np.asarray(op)
-
-
-def prepare():
-    """
-        **Call this function prior to doing absolutely anything else.**
-
-        :param None
-        :return: None
-    """
-    global embedding_glove
-
-    if DEBUG: print("Loading Glove.")
-
-    try:
-        embedding_glove = pickle.load(open(os.path.join(glove_location['dir'], glove_location['parsed'])))
-    except IOError:
-        # Glove is not parsed and stored. Do it.
-        if DEBUG: warnings.warn(" GloVe is not parsed and stored. This will take some time.")
-
-        embedding_glove = {}
-        f = open(os.path.join(glove_location['dir'], glove_location['raw']))
-        for line in f:
-            values = line.split()
-            word = values[0]
-            coefs = np.asarray(values[1:], dtype='float32')
-            embedding_glove[word] = coefs
-        f.close()
-
-        # Now convert this to a numpy object
-        pickle.dump(embedding_glove, open(os.path.join(glove_location['dir'], glove_location['parsed']), 'w+'))
-
-        if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")
-
-
-def convert_core_chain_to_sparql(_core_chain):
+def convert_core_chain_to_sparql(_core_chain):  # @TODO
     pass
 
 
@@ -176,27 +116,31 @@ def similar_predicates(_question, _predicates, _k=5):
         Function used to tokenize the question and compare the tokens with the predicates.
         Then their top k are selected.
 
+        @TODO: Verify this chain of thought.
+
     :param _question: a string of question
     :param _predicates: a list of strings (surface forms/uri? @TODO: Verify)
     :param _k: int :- select top k from sorted list
     :return: a list of strings (subset of predicates)
     """
     # Tokenize question
-    qt = nlutils.tokenize(_question, _remove_stopwords=True)
+    qt = nlutils.tokenize(_question, _remove_stopwords=False)
 
     # Vectorize question
-    v_qt = vectorize(qt)
+    v_qt = embeddings_interface.vectorize(qt)
 
     # Vectorize predicates
-    v_pt = np.asarray([ np.mean(vectorize(nlutils.tokenize(x)), axis=0) for x in _predicates])
+    v_pt = np.asarray([ np.mean(embeddings_interface.vectorize(nlutils.tokenize(x)), axis=0) for x in _predicates])
 
     # Compute similarity
     similarity_mat = np.dot(v_pt, np.transpose(v_qt))
 
     # Find the best scoring values for every path
-    argmaxes = np.argsort(np.max(similarity_mat, axis=1))
+    # Sort ( best match score for each predicate) in descending order, and choose top k
+    argmaxes = np.argsort(np.max(similarity_mat, axis=1))[::-1][:_k]
 
-    # Use this to choose from _predicates and return @TODO.
+    # Use this to choose from _predicates and return
+    return [_predicates[i] for i in argmaxes]
 
 
 def runtime(_question, _entities, _return_core_chains = False, _return_answers = False):
@@ -215,16 +159,33 @@ def runtime(_question, _entities, _return_core_chains = False, _return_answers =
         # Get 1-hop subgraph around the entity
         right_properties, left_properties = dbp.get_properties(_uri=_entities[0], label=False)
 
-        # Get the surface form of these properties
-        # @TODO
+        # Get the surface forms of Entity and the predicates
+        entity_sf = dbp.get_label(_resource_uri=_entities[0])
+        right_properties_sf = [dbp.get_label(x) for x in right_properties]
+        left_properties_sf = [dbp.get_label(x) for x in left_properties]
 
-        # Generate 1-hop paths based on word2vec similarity
-        right_properties_filtered = similar_predicates( _question=_question, _predicates=right_properties, k=5)
-        left_properties_filtered = similar_predicates( _question=_question, _predicates=left_properties, k=5)
+        # Filter relevant predicates based on word-embedding similarity
+        right_properties_filtered = similar_predicates( _question=_question, _predicates=right_properties_sf, _k=10)
+        left_properties_filtered = similar_predicates( _question=_question, _predicates=left_properties_sf, _k=10)
+
+        # Generate 1-hop paths out of them
+        paths = [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p) for _p in right_properties_filtered]
+        paths += [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p) for _p in left_properties_filtered]
+
+        # Now, select top k of them using the model.
+
+
 
     if len(_entities) >= 2:
         pass
 
 
+if __name__ == "__main__":
 
+    """
+        TEST1 : Accuracy of similar_predicates
+    """
+    q = 'Who is the president of United States'
+    p = ['abstract', 'motto', 'population total', 'official language', 'legislature', 'lower house', 'president', 'leader', 'prime minister']
 
+    print(similar_predicates(q, p, 5))

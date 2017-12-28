@@ -8,31 +8,25 @@
         -> Embed a sentence
 
 """
-import os
-import re
 import json
+import os
 import pickle
 import random
-import warnings
 import traceback
+import warnings
 import numpy as np
-from progressbar import ProgressBar
-
 from pprint import pprint
 from gensim import models
+from progressbar import ProgressBar
 
+from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
 
-# Some Macros and Declarations
 DEBUG = True
-WORD2VEC_DIR = "./resources"  # https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
-GLOVE_DIR = "./resources"  # https://nlp.stanford.edu/projects/glove/
-EMBEDDING = "GLOVE"  # OR WORD2VEC
+pADDTYPE = 0.35
 EMBEDDING_DIM = 300
 MAX_FALSE_PATHS = 20
-embedding_glove, embedding_word2vec = {}, {}  # Declaring the two things we're gonna use
-pADDTYPE = 0.35
 
 # Set a seed for deterministic randomness
 random.seed(42)
@@ -48,89 +42,6 @@ if DEBUG:
 
 # Initialize DBpedia
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
-
-
-def prepare(_embedding=EMBEDDING):
-    """
-        **Call this function prior to doing absolutely anything else.**
-
-        :param _embedding: str | either GLOVE or WORD2VEC.
-                Choose which one to use.
-        :return: None
-    """
-    global embedding_glove, embedding_word2vec
-
-    # Preparing embeddings.
-    if EMBEDDING == _embedding:
-
-        if DEBUG: print("Using Glove.")
-
-        try:
-            embedding_glove = pickle.load(open(os.path.join(GLOVE_DIR, "glove_parsed.pickle")))
-        except IOError:
-            # Glove is not parsed and stored. Do it.
-            if DEBUG: warnings.warn(" GloVe is not parsed and stored. This will take some time.")
-
-            embedding_glove = {}
-            f = open(os.path.join(GLOVE_DIR, 'glove.42B.300d.txt'))
-            iterable = f
-
-            for line in iterable:
-                values = line.split()
-                word = values[0]
-                coefs = np.asarray(values[1:], dtype='float32')
-                embedding_glove[word] = coefs
-            f.close()
-
-            # Now convert this to a numpy object
-            pickle.dump(embedding_glove, open(os.path.join(GLOVE_DIR, "glove_parsed.pickle"), 'w+'))
-
-            if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")
-
-    elif EMBEDDING == _embedding:  # @TODO: check what's up with this here.
-        if DEBUG: print("Using Glove.")
-
-        embedding_word2vec = models.KeyedVectors.load_word2vec_format(
-            os.path.join(WORD2VEC_DIR, 'GoogleNews-vectors-negative300.bin'), binary=True)
-
-
-def vectorize(_tokens, _report_unks=False):
-    """
-        Function to embed a sentence and return it as a list of vectors.
-        WARNING: Give it already split. I ain't splitting it for ye.
-
-        :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
-        :param _report_unks: Whether or not return the out of vocab words
-        :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
-    """
-
-    op = []
-    unks = []
-    for token in _tokens:
-
-        # Small cap everything
-        token = token.lower()
-
-        if token == "+":
-            token_embedding = np.repeat(1, 300)
-        elif token == "-":
-            token_embedding = np.repeat(-1, 300)
-        elif token == "/":
-            token_embedding = np.repeat(0.5, 300)
-        else:
-            try:
-                if EMBEDDING == "GLOVE":
-                    token_embedding = embedding_glove[token]
-                elif EMBEDDING == 'WORD2VEC':
-                    token_embedding = embedding_word2vec[token]
-
-            except KeyError:
-                if _report_unks: unks.append(token)
-                token_embedding = np.zeros(300, dtype=np.float32)
-
-        op += [token_embedding]
-
-    return (np.asarray(op), unks) if _report_unks else np.asarray(op)
 
 
 def compute_true_labels(_question, _truepath, _falsepaths):
@@ -169,11 +80,11 @@ def parse(_raw):
     question = nlutils.tokenize(question)
 
     # Now, embed the question.
-    v_question = vectorize(question, False)
+    v_question = embeddings_interface.vectorize(question, _report_unks=False, _encode_special_chars=True)
 
     # Make the correct path
     entity = _raw[u'entity'][0]
-    entity_sf = nlutils.tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: When dealing with many ent, fix this.
+    entity_sf = nlutils.tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: multi-entity alert
     path_sf = []
     for x in _raw[u'path']:
         path_sf.append(x[0])
@@ -244,7 +155,7 @@ def parse(_raw):
         !!NOTE!! Parser does not care which variable has the type constraint.
 
         Decisions:
-            - For true path, everytime you find rdf type constraint, add to t
+            - For true path, everytime you find rdf type constraint, add to true paths
             - Add the original true path to false paths
                         @TODO @nilesh-c shall I remove s'thing from false paths, then?
 
@@ -254,7 +165,7 @@ def parse(_raw):
                     - randomly choose whether or not to add false class (p = 0.3)
                 - @TODO: @nilesh-c: shall we add true_path + incorrect_classes in false paths too?
     """
-    if _raw[u'constraints'].keys():
+    if '?uri' in _raw[u'constraints'].keys() or '?x' in _raw[u'constraints'].keys():
         # Question has type constraints
 
         if '?uri' in _raw[u'constraints'].keys():
@@ -265,37 +176,36 @@ def parse(_raw):
             # Have a type constraint on the intermediary variable.
             true_class = _raw[u'constraints'][u'?x']
 
-        false_paths += [true_path]  # Add the path (without type constraint) in false paths.
+        false_paths = [true_path] + false_paths.tolist()  # Add the path (without type constraint) in false paths.
         true_path += ['/']
         true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=True)
 
-    else:
-        # Question doesn't have type constraints.
+    if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
 
-        if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
+        # Find all false classes
+        f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
 
-            # Find all false classes
-            f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
+        # Remove correct ones.
 
-            # Get surface form, tokenize.
-            f_classes = [ nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
+        # Get surface form, tokenize.
+        f_classes = [nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
 
-            for i in range(len(false_paths)):
+        for i in range(len(false_paths)):
 
-                # Stochastically decide if we want type restrictions there
-                if random.random() < pADDTYPE:
+            # Stochastically decide if we want type restrictions there
+            if random.random() < pADDTYPE:
 
-                    # If here, choose a random class, add to path
-                    path = false_paths[i]
-                    path += ['/']
-                    path += random.choice(f_classes)
+                # If here, choose a random class, add to path
+                path = false_paths[i]
+                path += ['/']
+                path += random.choice(f_classes)
 
-                    # Append path back to list
-                    false_paths[i] = path
+                # Append path back to list
+                false_paths[i] = path
 
     # Vectorize paths
-    v_true_path = vectorize(true_path)
-    v_false_paths = [vectorize(x) for x in false_paths]
+    v_true_path = embeddings_interface.vectorize(true_path, _encode_special_chars=True)
+    v_false_paths = [embeddings_interface.vectorize(x, _encode_special_chars=True) for x in false_paths]
 
     # Corresponding to all these, compute the true labels
     v_y_true = compute_true_labels(question, true_path, false_paths)
@@ -309,7 +219,7 @@ def parse(_raw):
     return v_question, v_true_path, v_false_paths, v_y_true
 
 
-def run(_readfiledir='data/preprocesseddata/', _writefilename='data/training/pairwise/'):
+def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/training/pairwise/'):
     """
     Get the show on the road.
 
@@ -442,7 +352,6 @@ def run(_readfiledir='data/preprocesseddata/', _writefilename='data/training/pai
         datum = data_embedded[i]
         num_false_paths = len(datum[2])
 
-
         # Pad Question
         padded_question = np.zeros((max_ques_length, embedding_dim))  # Create an zeros mat with max dims
         padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]  # Pad the zeros mat with actual mat
@@ -518,7 +427,7 @@ def test():
         ]
 
         for sentence in sents:
-            embedding = vectorize(nlutils.tokenize(sentence))
+            embedding = embeddings_interface.vectorize(nlutils.tokenize(sentence))
             pprint(embedding)
             raw_input(sentence)
 
@@ -534,7 +443,7 @@ def test():
             else:
                 tok = [tok]
 
-            result = vectorize(tok)
+            result = embeddings_interface.vectorize(tok)
             print result
             try:
                 print result.shape
@@ -549,7 +458,7 @@ def test():
         Parsing tests.
     """
     # Load any JSON
-    testdata = json.load(open('data/preprocesseddata/535.json'))[4]
+    testdata = json.load(open('data/preprocesseddata_new_v2/1294.json'))[4]
     op = parse(testdata)
     print op
 
@@ -564,6 +473,6 @@ def test():
 
 
 if __name__ == "__main__":
-    run()
+    test()
 
 

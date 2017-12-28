@@ -2,7 +2,7 @@ import json
 from pprint import pprint
 import utils.dbpedia_interface as db_interface
 import utils.natural_language_utilities as nlutils
-import utils.phrase_similarity as sim
+import utils.embeddings_interface as sim
 
 short_forms = {
 	'dbo:' : 'http://dbpedia.org/ontology/',

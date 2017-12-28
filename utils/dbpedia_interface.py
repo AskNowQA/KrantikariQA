@@ -50,8 +50,6 @@ GET_LABEL_OF_RESOURCE = '''SELECT DISTINCT ?label WHERE { %(target_resource)s <h
 
 GET_TYPE_OF_RESOURCE = '''SELECT DISTINCT ?type WHERE { %(target_resource)s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?type } '''
 
-# GET_TYPE_OF_RESOURCE = '''SELECT DISTINCT ?type WHERE { %(target_resource)s <http://dbpedia.org/ontology/type> ?type } '''
-
 GET_CLASS_PATH = '''SELECT DISTINCT ?type WHERE { %(target_class)s rdfs:subClassOf* ?type }'''
 
 GET_SUPERCLASS = '''SELECT DISTINCT ?type WHERE { %(target_class)s rdfs:subClassOf ?type }'''
@@ -263,10 +261,13 @@ class DBPedia:
 
 			Always returns one value
 		"""
+
         # print _resource_uri, "**"
         if not nlutils.has_url(_resource_uri):
-            # warnings.warn("The passed resource %s is not a proper URI but probably a shorthand. This is strongly discouraged." % _resource_uri)
             _resource_uri = nlutils.convert_shorthand_to_uri(_resource_uri)
+
+        # Remove leading and trailing angle brackets
+        _resource_uri = _resource_uri.replace('<', '').replace('>', '')
 
         # Preparing the Query
         _resource_uri = '<' + _resource_uri + '>'

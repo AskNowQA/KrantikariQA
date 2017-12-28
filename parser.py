@@ -363,10 +363,18 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]  # Pad the zeros mat with actual mat
 
         # Store Question
-        Q[max_false_paths*i: max_false_paths*(i+1)] = np.repeat(      # For 0-20/20-40.. in a zeros mat
+        a = np.repeat(      # For 0-20/20-40.. in a zeros mat
             a=padded_question[np.newaxis, :, :],                            # transform v_q to have new axis
             repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
             axis=0)                                                         # and voila!
+        try:
+            Q[max_false_paths*i: max_false_paths*(i+1)] = a
+        except ValueError:
+            print "herror error herror error"
+            print "ashape:    ", a.shape
+            print "qspape:    ", Q.shape
+            print "lendatum2: ", len(datum[2])
+            print "i:         ", i
 
         # Pad true path
         padded_tp = np.zeros((max_path_length, embedding_dim))

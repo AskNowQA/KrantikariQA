@@ -210,11 +210,6 @@ def parse(_raw):
     # Corresponding to all these, compute the true labels
     v_y_true = compute_true_labels(question, true_path, false_paths)
 
-    # if DEBUG:
-    #     print true_path
-    #     print "now fps"
-    #     print false_paths
-
     # Throw it out.
     return v_question, v_true_path, v_false_paths, v_y_true
 
@@ -255,9 +250,6 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         # Create vars to keep ze data @TODO: think of datatype here
         data_embedded = []
 
-        # Load the vectorizing matrices in memory. TAKES TIME. Prepare your coffee now.
-        prepare("GLOVE")
-
         # Pull all filenames from datafolder
         iterable = os.listdir(_readfiledir)
 
@@ -292,8 +284,6 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
                 # Collect data for each question
                 data_embedded.append([v_q, v_tp, v_fps, v_y])
 
-        # Find the embedding dimension (typically 300)
-        embedding_dim = v_q.shape[1]
         if DEBUG:
             print("""
                 Phase I - Embedding DONE
@@ -316,6 +306,9 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
             v_q | v_tp _ v_fp1 | [0 1]
         Pad everything.
     '''
+
+    # Find the embedding dimension (typically 300)
+    embedding_dim = v_q.shape[1]
 
     # Some info needed for padding
     max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
@@ -393,7 +386,7 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
     # Print these things to file.
     np.save(open(os.path.join(_writefilename, 'Q.npz'), 'w+'), Q)
     np.save(open(os.path.join(_writefilename, 'tP.npz'), 'w+'), tP)
-    np.save(open(os.path.join(_writefilename, 'fp.npz'), 'w+'), fP)
+    np.save(open(os.path.join(_writefilename, 'fP.npz'), 'w+'), fP)
 
     print("""
             Phase II - Padding and Final Matrices
@@ -423,7 +416,7 @@ def test():
     options = raw_input("Type in the numbers corresponding to the tests you want to run.")
 
     if "1" in options:
-        prepare("GLOVE")
+
         print "Finished loading the embedding. Moving on."
 
     if "2" in options:
@@ -480,6 +473,6 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    run()
 
 

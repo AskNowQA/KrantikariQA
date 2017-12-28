@@ -342,14 +342,14 @@ controller = []
 
 def create_dataset(skip=0,end=None,debug=True,time_limit=False):
     final_data = []
-    file_directory = "resources/data_seven.json"
+    file_directory = "resources/data_set.json"
     json_data = open(file_directory).read()
     data = json.loads(json_data)
     counter = 0
     skip = skip
     if end == None:
         end = len(data)
-    OUTPUT_DIR = 'data/preprocesseddata_new_v2/' + str(skip)+str(end)  # Place to store the files
+    OUTPUT_DIR = 'data/preprocesseddata_parallel/' + str(skip)+str(end)  # Place to store the files
     print OUTPUT_DIR
     try:
         os.makedirs(OUTPUT_DIR)

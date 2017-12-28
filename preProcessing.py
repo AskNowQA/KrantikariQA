@@ -287,7 +287,7 @@ controller = []
 
 def create_dataset(debug=True,time_limit=False):
     final_data = []
-    file_directory = "resources/data_seven.json"
+    file_directory = "resources/data_set.json"
     json_data = open(file_directory).read()
     data = json.loads(json_data)
     counter = 0

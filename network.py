@@ -97,6 +97,9 @@ def fmeasure(y_true, y_pred):
     return fbeta_score(y_true, y_pred, beta=1)
 
 
+'''
+    More Helper Functions
+'''
 def smart_save_model(model):
     """
         Function to properly save the model to disk.
@@ -149,8 +152,10 @@ def smart_save_model(model):
         model.save(os.path.join(l_dir, 'model.h5'))
         json.dump(desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
 
+
 def zeroloss(yt, yp):
     return 0.0
+
 
 def custom_loss(y_true, y_pred):
     '''
@@ -160,103 +165,105 @@ def custom_loss(y_true, y_pred):
     # y_neg= y_pred[1]
     return K.sum(K.maximum(1.0 - y_pred, 0.))
 
-"""
-    Data Time!
-"""
-# Pull the data up from disk
-pos_paths = np.load(DATA_DIR + '/tP.npz')
-neg_paths = np.load(DATA_DIR + '/fP.npz')
-questions = np.load(DATA_DIR + '/Q.npz')
 
-# Shuffle these matrices together @TODO this!
-np.random.seed(0) # Random train/test splits stay the same between runs
-
-# Divide the data into diff blocks
-split_point = lambda x: int(len(x)/20 * .80) * 20
-
-def train_split(x):
-    return np.asarray(x[:split_point(x)]).astype('float32')
-def test_split(x):
-    return np.asarray(x[split_point(x):]).astype('float32')
-
-train_pos_paths = train_split(pos_paths)
-train_neg_paths = train_split(neg_paths)
-train_questions = train_split(questions)
-
-# indices = np.random.permutation(train_pos_paths.shape[0])
-
-# train_pos_paths = train_pos_paths[indices]
-# train_neg_paths = train_neg_paths[indices]
-# train_questions = train_questions[indices]
-
-test_pos_paths = test_split(pos_paths)
-test_neg_paths = test_split(neg_paths)
-test_questions = test_split(questions)
-
-question_input_shape = train_questions.shape[1:]
-path_input_shape = train_pos_paths.shape[1:]
-
-with K.tf.device('/gpu:' + gpu):
-    K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+if __name__ == "__main__":
     """
-        Model Time!
+        Data Time!
     """
-    # Define input to the models
-    x_ques = Input(shape=question_input_shape)
-    x_pos_path = Input(shape=path_input_shape)
-    x_neg_path = Input(shape=path_input_shape)
+    # Pull the data up from disk
+    pos_paths = np.load(DATA_DIR + '/tP.npz')
+    neg_paths = np.load(DATA_DIR + '/fP.npz')
+    questions = np.load(DATA_DIR + '/Q.npz')
 
-    # Encode the questions
-    ques_encoder = Bidirectional(LSTM(64, dropout = 0.3))
-    # forwardVector = Dense(32)
-    # dropout = Dropout(0.5)
-    # ques_encoded = (forwardVector(ques_encoder(x_ques)))
-    ques_encoded = ques_encoder(x_ques)
+    # Shuffle these matrices together @TODO this!
+    np.random.seed(0) # Random train/test splits stay the same between runs
 
-    # Encode 21 paths
-    path_encoder = Bidirectional(LSTM(64, dropout = 0.3))
-    # forwardVector = Dense(32)
-    # dropout = Dropout(0.5)
-    # pos_path_encoded = (forwardVector(path_encoder(x_pos_path)))
-    # neg_path_encoded = (forwardVector(path_encoder(x_neg_path)))
-    pos_path_encoded = path_encoder(x_pos_path)
-    neg_path_encoded = path_encoder(x_neg_path)
+    # Divide the data into diff blocks
+    split_point = lambda x: int(len(x)/20 * .80) * 20
 
-    # forwardMatrix = Dense(64, activation='tanh')
-    # dropout = Dropout(0.5)
-    # forwardVector = Dense(1, activation='sigmoid')
+    def train_split(x):
+        return np.asarray(x[:split_point(x)]).astype('float32')
+    def test_split(x):
+        return np.asarray(x[split_point(x):]).astype('float32')
 
-    pos_score = (dot([ques_encoded, pos_path_encoded], axes=-1))
-    neg_score = (dot([ques_encoded, neg_path_encoded], axes=-1))
+    train_pos_paths = train_split(pos_paths)
+    train_neg_paths = train_split(neg_paths)
+    train_questions = train_split(questions)
 
-    # Model time!
-    model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
-        outputs=[pos_score, subtract([pos_score, neg_score])])
+    # indices = np.random.permutation(train_pos_paths.shape[0])
 
-    print(model.summary())
+    # train_pos_paths = train_pos_paths[indices]
+    # train_neg_paths = train_neg_paths[indices]
+    # train_questions = train_questions[indices]
 
-    model.compile(optimizer=OPTIMIZER,
-                  loss=[None, custom_loss], loss_weights=[None, 1.])
+    test_pos_paths = test_split(pos_paths)
+    test_neg_paths = test_split(neg_paths)
+    test_questions = test_split(questions)
 
-    # Prepare training data
-    training_input = [train_questions, train_pos_paths, train_neg_paths]
-    dummy_y = np.zeros(train_questions.shape[0])
-    model.fit(training_input, dummy_y, batch_size=BATCH_SIZE, epochs=EPOCHS)
+    question_input_shape = train_questions.shape[1:]
+    path_input_shape = train_pos_paths.shape[1:]
 
-    smart_save_model(model)
+    with K.tf.device('/gpu:' + gpu):
+        K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+        """
+            Model Time!
+        """
+        # Define input to the models
+        x_ques = Input(shape=question_input_shape)
+        x_pos_path = Input(shape=path_input_shape)
+        x_neg_path = Input(shape=path_input_shape)
 
-    # Prepare test data
+        # Encode the questions
+        ques_encoder = Bidirectional(LSTM(64, dropout = 0.3))
+        # forwardVector = Dense(32)
+        # dropout = Dropout(0.5)
+        # ques_encoded = (forwardVector(ques_encoder(x_ques)))
+        ques_encoded = ques_encoder(x_ques)
 
-    only_questions = test_questions[range(0, test_questions.shape[0], 20)]
-    only_pos_paths = test_pos_paths[range(0, test_pos_paths.shape[0], 20)]
+        # Encode 21 paths
+        path_encoder = Bidirectional(LSTM(64, dropout = 0.3))
+        # forwardVector = Dense(32)
+        # dropout = Dropout(0.5)
+        # pos_path_encoded = (forwardVector(path_encoder(x_pos_path)))
+        # neg_path_encoded = (forwardVector(path_encoder(x_neg_path)))
+        pos_path_encoded = path_encoder(x_pos_path)
+        neg_path_encoded = path_encoder(x_neg_path)
 
-    pos_outputs = np.array(model.predict([only_questions, only_pos_paths, only_pos_paths])[0])
-    neg_outputs = np.array(model.predict([test_questions, test_neg_paths, test_neg_paths])[0])
-    neg_outputs = np.reshape(neg_outputs, [only_pos_paths.shape[0], 20])
-    all_outputs = np.hstack([pos_outputs, neg_outputs])
+        # forwardMatrix = Dense(64, activation='tanh')
+        # dropout = Dropout(0.5)
+        # forwardVector = Dense(1, activation='sigmoid')
 
-    precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
-    print "Precision (hits@1) = ", precision
+        pos_score = (dot([ques_encoded, pos_path_encoded], axes=-1))
+        neg_score = (dot([ques_encoded, neg_path_encoded], axes=-1))
+
+        # Model time!
+        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+            outputs=[pos_score, subtract([pos_score, neg_score])])
+
+        print(model.summary())
+
+        model.compile(optimizer=OPTIMIZER,
+                      loss=[None, custom_loss], loss_weights=[None, 1.])
+
+        # Prepare training data
+        training_input = [train_questions, train_pos_paths, train_neg_paths]
+        dummy_y = np.zeros(train_questions.shape[0])
+        model.fit(training_input, dummy_y, batch_size=BATCH_SIZE, epochs=EPOCHS)
+
+        smart_save_model(model)
+
+        # Prepare test data
+
+        only_questions = test_questions[range(0, test_questions.shape[0], 20)]
+        only_pos_paths = test_pos_paths[range(0, test_pos_paths.shape[0], 20)]
+
+        pos_outputs = np.array(model.predict([only_questions, only_pos_paths, only_pos_paths])[0])
+        neg_outputs = np.array(model.predict([test_questions, test_neg_paths, test_neg_paths])[0])
+        neg_outputs = np.reshape(neg_outputs, [only_pos_paths.shape[0], 20])
+        all_outputs = np.hstack([pos_outputs, neg_outputs])
+
+        precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
+        print "Precision (hits@1) = ", precision
 
 # print "Evaluation Complete"
 # print "Loss     = ", results[0]

@@ -165,6 +165,7 @@ def parse(_raw):
                     - randomly choose whether or not to add false class (p = 0.3)
                 - @TODO: @nilesh-c: shall we add true_path + incorrect_classes in false paths too?
     """
+    true_class = None
     if '?uri' in _raw[u'constraints'].keys() or '?x' in _raw[u'constraints'].keys():
         # Question has type constraints
 
@@ -176,7 +177,9 @@ def parse(_raw):
             # Have a type constraint on the intermediary variable.
             true_class = _raw[u'constraints'][u'?x']
 
-        false_paths = [true_path] + false_paths.tolist()  # Add the path (without type constraint) in false paths.
+        # Add the path (without type constraint) in false paths.
+        false_paths = [true_path] + false_paths.tolist()[1:]    # NOTE: Removing first false path.
+
         true_path += ['/']
         true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=True)
 
@@ -187,6 +190,8 @@ def parse(_raw):
             f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
 
             # Remove correct ones.
+            if true_class in f_classes:
+                f_classes.remove(true_class)
 
             # Get surface form, tokenize.
             f_classes = [nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
@@ -315,7 +320,7 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
     '''
 
     # Find the embedding dimension (typically 300)
-    embedding_dim = v_q.shape[1]
+    embedding_dim = 300
 
     # Some info needed for padding
     max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])

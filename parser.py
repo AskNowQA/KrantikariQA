@@ -383,6 +383,13 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
 
         paths_so_far += num_false_paths
 
+    # Check if the folder exists
+    try:
+        os.mkdir(_writefilename)
+    except OSError:
+        # Folder exists.
+        pass
+
     # Print these things to file.
     np.save(open(os.path.join(_writefilename, 'Q.npz'), 'w+'), Q)
     np.save(open(os.path.join(_writefilename, 'tP.npz'), 'w+'), tP)

@@ -180,28 +180,35 @@ def parse(_raw):
         true_path += ['/']
         true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=True)
 
-    if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
+    try:
+        if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
 
-        # Find all false classes
-        f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
+            # Find all false classes
+            f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
 
-        # Remove correct ones.
+            # Remove correct ones.
 
-        # Get surface form, tokenize.
-        f_classes = [nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
+            # Get surface form, tokenize.
+            f_classes = [nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
 
-        for i in range(len(false_paths)):
+            for i in range(len(false_paths)):
 
-            # Stochastically decide if we want type restrictions there
-            if random.random() < pADDTYPE:
+                # Stochastically decide if we want type restrictions there
+                if random.random() < pADDTYPE:
 
-                # If here, choose a random class, add to path
-                path = false_paths[i]
-                path += ['/']
-                path += random.choice(f_classes)
+                    # If here, choose a random class, add to path
+                    path = false_paths[i]
+                    path += ['/']
+                    path += random.choice(f_classes)
 
-                # Append path back to list
-                false_paths[i] = path
+                    # Append path back to list
+                    false_paths[i] = path
+
+    except KeyError:
+
+        if DEBUG:
+            print("KeyError while parsing rdf:type (False). Datafile: ")
+            pprint(_raw)
 
     # Vectorize paths
     v_true_path = embeddings_interface.vectorize(true_path, _encode_special_chars=True)

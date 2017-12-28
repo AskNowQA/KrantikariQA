@@ -607,7 +607,7 @@ def test(_entity, _relation):
     out, incoming = dbp.get_properties(_entity, _relation, label=False)
     rel = (_relation, True)
     rel_list = get_rank_rel([out, incoming], rel,score=True)
-    # rel_list = get_set_list(get_top_k(get_rank_rel([out,incoming],rel),rel))
+    # rel_list = get_set_list(get_top_k(get_rank_rel([out,incoming],rel=),rel))
     pprint(rel_list)
 
 
@@ -707,5 +707,73 @@ def create_simple_dataset():
 #TODO: Store as json : final answer dataset
 
 print "datasest call"
+
+def get_something(SPARQL,te1,te2,id):
+    if id ==1 :
+        temp = {}
+        temp['te1'] = te1
+        temp['te2'] = te2
+        answer = dbp.get_answer(SPARQL)  # -,+
+        data_temp = []
+        for i in xrange(len(answer['r1'])):
+            data_temp.append(['-', answer['r1'][i], "+", answer['r2'][i], '-'])
+        temp['path'] = data_temp
+        return temp
+    if id == 2:
+        temp = {}
+        temp['te1'] = te1
+        temp['te2'] = te2
+        answer = dbp.get_answer(SPARQL)  # -,+
+        data_temp = []
+        for i in xrange(len(answer['r1'])):
+            data_temp.append(['+', answer['r1'][i], "+", answer['r2'][i], '-'])
+        temp['path'] = data_temp
+        return temp
+    if id == 3:
+        temp = {}
+        temp['te1'] = te1
+        temp['te2'] = te2
+        answer = dbp.get_answer(SPARQL)  # -,+
+        data_temp = []
+        for i in xrange(len(answer['r1'])):
+            data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i], '-'])
+        temp['path'] = data_temp
+        return temp
+
+
+def two_topic_entity(te1,te2):
+    '''
+        There are three ways to fit the set of te1,te2 and r1,r2
+         > SELECT DISTINCT ?uri WHERE { ?uri <%(e_to_e_out)s> <%(e_out_1)s> . ?uri <%(e_to_e_out)s> <%(e_out_2)s>}
+         > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. <%(e_in_2)s> <%(e_in_to_e_2)s> ?uri}
+         > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. ?uri <%(e_in_2)s> <%(e_in_to_e_2)s> }
+    '''
+    data = []
+    SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
+    SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
+    SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+
+    SPARQL1 = SPARQL1 % {'te1': te1, 'te2' : te2}
+    SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
+    SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+    data.append(get_something(SPARQL1,te1,te2,1))
+    data.append(get_something(SPARQL1, te2, te1,1))
+    data.append(get_something(SPARQL2, te1, te2,2))
+    data.append(get_something(SPARQL2, te2, te1,2))
+    data.append(get_something(SPARQL3, te1, te2,3))
+    data.append(get_something(SPARQL3, te2, te1,3))
+    pprint(data)
 create_dataset(debug = True)
+
+
+#
+# SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri  %(r1)s %(te1)s. ?uri %(r2)s %(te2)s . } '''
+#     SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s %(r1)s ?uri.  %(te2)s %(r2)s ?uri . } '''
+#     SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s %(r1)s ?uri.  ?uri %(r2)s %(te2)s . } '''
+#
+# {u'_id': u'6ff03a568e2e4105b491ab1c1411c1ab',
+#  u'corrected_question': u'What tv series can be said to be related to the sarah jane adventure and dr who confidential?',
+#  u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/The_Sarah_Jane_Adventures> . ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/Doctor_Who_Confidential> . }',
+#  u'sparql_template_id': 7,
+#  u'verbalized_question': u'What is the <television show> whose <relateds> are <The Sarah Jane Adventures> and <Doctor Who Confidential>?'}
 

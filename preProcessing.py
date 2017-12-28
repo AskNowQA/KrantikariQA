@@ -287,7 +287,7 @@ controller = []
 
 def create_dataset(debug=True,time_limit=False):
     final_data = []
-    file_directory = "resources/data_set.json"
+    file_directory = "resources/data_seven.json"
     json_data = open(file_directory).read()
     data = json.loads(json_data)
     counter = 0
@@ -532,7 +532,7 @@ def create_dataset(debug=True,time_limit=False):
                 # raw_input()
                 final_data.append(data_node)
 
-            elif node[u'sparql_template_id']  == [6, 306, 406, 106] and not PASSED:
+            elif node[u'sparql_template_id']  in [6, 306, 406, 106] and not PASSED:
                 '''
                     {
                         u'_id': u'd3695db03a5e45ae8906a2527508e7c5',
@@ -592,6 +592,68 @@ def create_dataset(debug=True,time_limit=False):
                         pprint(data_node)
                         controller.append(data_node['sparql_template_id'])
 
+            elif node[u'sparql_template_id'] in [7, 307, 407, 107] and not PASSED:
+                '''
+                    {
+                        u'_id': u'6ff03a568e2e4105b491ab1c1411c1ab',
+                        u'corrected_question': u'What tv series can be said to be related to the sarah jane adventure and dr who confidential?',
+                        u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/The_Sarah_Jane_Adventures> . ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/Doctor_Who_Confidential> . }',
+                        u'sparql_template_id': 7,
+                        u'verbalized_question': u'What is the <television show> whose <relateds> are <The Sarah Jane Adventures> and <Doctor Who Confidential>?'
+                     }
+                '''
+                # pprint(node)
+                data_node = node
+                triples = get_triples(node[u'sparql_query'])
+                rel1 = triples[0].split(" ")[1][1:-1]
+                rel2 = triples[1].split(" ")[1][1:-1]
+                data_node[u'entity'] = []
+                data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+                data_node[u'path'] = ["-" + rel1, "+" + rel2]
+                data_node[u'training'] = {}
+                data_node[u'training'][data_node[u'entity'][0]] = {}
+                data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
+                                                                            list(dbp.get_properties(
+                                                                                data_node[u'entity'][0],
+                                                                                label=False))]
+                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = two_topic_entity(triples[0].split(" ")[2][1:-1],triples[1].split(" ")[2][1:-1])
+                if node[u"sparql_template_id"] in [307, 407]:
+                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
+                else:
+                    data_node[u'constraints'] = {}
+                if node[u"sparql_template_id"] in [407, 107]:
+                    data_node[u'constraints'] = {'count': True}
+                # pprint(data_node)
+                # raw_input()
+                if node[u"sparql_template_id"] == 7:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 107:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 307:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[2].split(" ")[2][1:-1], count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] == 407:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[2].split(" ")[2][1:-1], count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                fo.write(str(data_node))
+                fo.write("\n")
+                final_data.append(data_node)
+                if debug:
+                    if data_node['sparql_template_id'] not in controller:
+                        pprint(data_node)
+                        controller.append(data_node['sparql_template_id'])
+
+
             # print final_data[-1]
             if len(final_data) > WRITE_INTERVAL:
                 with open(OUTPUT_DIR+ "/" + str(counter)+ ".json", 'w') as fp:
@@ -600,6 +662,8 @@ def create_dataset(debug=True,time_limit=False):
         except:
             print traceback.print_exc()
             continue
+
+
     with open('remaining.json', 'w') as fp:
         json.dump(final_data, fp)
 
@@ -748,6 +812,8 @@ def two_topic_entity(te1,te2):
          > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. <%(e_in_2)s> <%(e_in_to_e_2)s> ?uri}
          > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. ?uri <%(e_in_2)s> <%(e_in_to_e_2)s> }
     '''
+    te1 = "<" + te1 + ">"
+    te2 = "<" + te2 + ">"
     data = []
     SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
     SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
@@ -762,13 +828,14 @@ def two_topic_entity(te1,te2):
     data.append(get_something(SPARQL2, te2, te1,2))
     data.append(get_something(SPARQL3, te1, te2,3))
     data.append(get_something(SPARQL3, te2, te1,3))
-    pprint(data)
+    return data
+    # pprint(data)
 create_dataset(debug = True)
 
 
 #
 # SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri  %(r1)s %(te1)s. ?uri %(r2)s %(te2)s . } '''
-#     SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s %(r1)s ?uri.  %(te2)s %(r2)s ?uri . } '''
+#     SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te 1)s %(r1)s ?uri.  %(te2)s %(r2)s ?uri . } '''
 #     SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s %(r1)s ?uri.  ?uri %(r2)s %(te2)s . } '''
 #
 # {u'_id': u'6ff03a568e2e4105b491ab1c1411c1ab',

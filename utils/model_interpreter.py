@@ -49,14 +49,14 @@ class ModelInterpreter:
         self.path_len = input_shapes[1][0]
         self.question_len = input_shapes[0][0]
 
-    def rank(self, _v_q, _v_ps, _return_indices=False, _k=0):
+    def rank(self, _v_q, _v_ps, _return_only_indices=False, _k=0):
         """
             Function to evaluate a bunch of paths and return a ranked list
 
         :param _v_q: vector of dimension (n, 300)
         :param _v_ps: list of vectors, each of dimensions (m, 300)
         :param _k: int: if more than 0, returns cropped results
-        :param _return_indices: Boolean, deciding whether to return paths or
+        :param _return_only_indices: Boolean, deciding whether to return paths or
 
         :return: indices, or path vectors
         """
@@ -90,12 +90,9 @@ class ModelInterpreter:
 
         if 0 < _k <= rank.shape[0]:
             # If one needs top-k results or not
-            return rank[:_k] if _return_indices else _v_ps[rank[:_k]]
+            return rank[:_k] if _return_only_indices else rank[:_k], similarities[rank[:_k]]
         else:
-            return rank if _return_indices else _v_ps[rank]
-
-
-
+            return rank if _return_only_indices else rank, similarities[rank]
 
 
 

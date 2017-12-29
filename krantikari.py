@@ -189,13 +189,53 @@ def runtime(_question, _entities, _return_core_chains = False, _return_answers =
         v_ps = [embeddings_interface.vectorize(path) for path in paths_sf]
 
         # Now rank and select top k
-        best_hop1_indices = model.rank(_v_q=v_q, _v_ps=v_ps, _return_indices=True, _k=K_1HOP_MODEL)
+        hop1_indices, hop1_scores = model.rank(_v_q=v_q, _v_ps=v_ps, _return_only_indices=False, _k=K_1HOP_MODEL)
 
         # Impose indices on the paths.
-        ranked_paths_hop1 = [paths_sf[i] for i in best_hop1_indices]
+        ranked_paths_hop1 = [paths_sf[i] for i in hop1_indices]
 
         if DEBUG:
             pprint(ranked_paths_hop1)
+
+        # Collect URI of predicates so filtered (for 2nd hop)
+        left_properties_filtered, right_properties_filtered = [], []
+
+        # Gather all the left and right predicates (from paths selected by the model)
+        for i in hop1_indices:
+
+            hop1_path = paths_sf[i]
+
+            # See if it is from the left or right predicate set.
+            if '-' in hop1_path:
+                # This belongs to the left pred list.
+                # Offset index to match to left_properties_filter_indices index.
+
+                i -= K_1HOP_GLOVE
+                predicate = left_properties[left_properties_filter_indices[i]]
+                print predicate
+                left_properties_filtered.append(predicate)
+
+            else:
+                # This belongs to the right pred list.
+                # No offset needed
+
+                predicate = right_properties[right_properties_filter_indices[i]]
+                print predicate
+                right_properties_filtered.append(predicate)
+
+
+        if DEBUG:
+            print "Check URI of filtered paths. Left, then right."
+            pprint(left_properties_filtered)
+            pprint(right_properties_filtered)
+
+        """
+            2 - Hop COMMENCES
+        """
+
+
+
+
 
     if len(_entities) >= 2:
         pass

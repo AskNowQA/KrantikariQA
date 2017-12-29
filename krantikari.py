@@ -84,17 +84,17 @@ from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
 
-
 # Some MACROS
 DEBUG = True
 K_1HOP_GLOVE = 20
 K_1HOP_MODEL = 5
+K_2HOP_GLOVE = 10
+K_2HOP_MODEL = 5
 MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 
-
 # Global Variables
-dbp = db_interface.DBPedia(_verbose=True, caching=False)    # Summon a DBpedia interface
-model = model_interpreter.ModelInterpreter()                # Model interpreter to be used for ranking
+dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
 
 
 # Better warning formatting. Ignore.
@@ -104,6 +104,31 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 def convert_core_chain_to_sparql(_core_chain):  # @TODO
     pass
+
+
+def get_hop2_subgraph(_entity, _predicate, _right=True):
+    """
+        Function fetches the 2hop subgraph around this entity, and following this predicate
+    :param _entity: str: URI of the entity around which we need the subgraph
+    :param _predicate: str: URI of the predicate with which we curtail the 2hop graph (and get a tangible number of ops)
+    :param _right: Boolean: True -> _predicate is on the right of entity (outgoing), else left (incoming)
+
+    :return: List, List: ight (outgoing), left (incoming) preds
+    """
+    # Get the entities which will come out of _entity +/- _predicate chain
+    intermediate_entities = dbp.get_entity(_entity, [_predicate], _right)
+
+    # Filter out the literals, and keep uniques.
+    intermediate_entities = list(set([x for x in intermediate_entities if x.startswith('http://dbpedia.org/resource')]))
+
+    left_predicates, right_predicates = [], []  # Places to store data.
+
+    for entity in intermediate_entities:
+        temp_l, temp_r = dbp.get_properties(_uri=entity, label=False)
+        left_predicates += temp_l
+        right_predicates += temp_r
+
+    return list(set(right_predicates)), list(set(left_predicates))
 
 
 def similar_predicates(_question, _predicates, _return_indices=False, _k=5):
@@ -126,7 +151,7 @@ def similar_predicates(_question, _predicates, _return_indices=False, _k=5):
     v_qt = embeddings_interface.vectorize(qt)
 
     # Vectorize predicates
-    v_pt = np.asarray([ np.mean(embeddings_interface.vectorize(nlutils.tokenize(x)), axis=0) for x in _predicates])
+    v_pt = np.asarray([np.mean(embeddings_interface.vectorize(nlutils.tokenize(x)), axis=0) for x in _predicates])
 
     # Compute similarity
     similarity_mat = np.dot(v_pt, np.transpose(v_qt))
@@ -142,7 +167,7 @@ def similar_predicates(_question, _predicates, _return_indices=False, _k=5):
     return [_predicates[i] for i in argmaxes]
 
 
-def runtime(_question, _entities, _return_core_chains = False, _return_answers = False):
+def runtime(_question, _entities, _return_core_chains=False, _return_answers=False):
     """
         This function inputs one question, and topic entities, and returns a SPARQL query (or s'thing else)
 
@@ -167,15 +192,15 @@ def runtime(_question, _entities, _return_core_chains = False, _return_answers =
         right_properties_sf = [dbp.get_label(x) for x in right_properties]
         left_properties_sf = [dbp.get_label(x) for x in left_properties]
 
-        # Filter relevant predicates based on word-embedding similarity
+        # WORD-EMBEDDING FILTERING
         right_properties_filter_indices = similar_predicates(_question=_question,
-                                                       _predicates=right_properties_sf,
-                                                       _return_indices=True,
-                                                       _k=K_1HOP_GLOVE)
+                                                             _predicates=right_properties_sf,
+                                                             _return_indices=True,
+                                                             _k=K_1HOP_GLOVE)
         left_properties_filter_indices = similar_predicates(_question=_question,
-                                                      _predicates=left_properties_sf,
-                                                      _return_indices=True,
-                                                      _k=K_1HOP_GLOVE)
+                                                            _predicates=left_properties_sf,
+                                                            _return_indices=True,
+                                                            _k=K_1HOP_GLOVE)
 
         # Impose these indices to generate filtered predicate list.
         right_properties_filtered = [right_properties_sf[i] for i in right_properties_filter_indices]
@@ -188,8 +213,11 @@ def runtime(_question, _entities, _return_core_chains = False, _return_answers =
         # Vectorize these paths.
         v_ps = [embeddings_interface.vectorize(path) for path in paths_sf]
 
-        # Now rank and select top k
-        hop1_indices, hop1_scores = model.rank(_v_q=v_q, _v_ps=v_ps, _return_only_indices=False, _k=K_1HOP_MODEL)
+        # MODEL FILTERING
+        hop1_indices, hop1_scores = model.rank(_v_q=v_q,
+                                               _v_ps=v_ps,
+                                               _return_only_indices=False,
+                                               _k=K_1HOP_MODEL)
 
         # Impose indices on the paths.
         ranked_paths_hop1 = [paths_sf[i] for i in hop1_indices]
@@ -212,7 +240,6 @@ def runtime(_question, _entities, _return_core_chains = False, _return_answers =
 
                 i -= K_1HOP_GLOVE
                 predicate = left_properties[left_properties_filter_indices[i]]
-                print predicate
                 left_properties_filtered.append(predicate)
 
             else:
@@ -220,34 +247,65 @@ def runtime(_question, _entities, _return_core_chains = False, _return_answers =
                 # No offset needed
 
                 predicate = right_properties[right_properties_filter_indices[i]]
-                print predicate
                 right_properties_filtered.append(predicate)
 
-
         if DEBUG:
-            print "Check URI of filtered paths. Left, then right."
+            print("Check URI of filtered paths. Left, then right.")
             pprint(left_properties_filtered)
             pprint(right_properties_filtered)
 
         """
             2 - Hop COMMENCES
+
+            Note: Switching to LC-QuAD nomenclature hereon. Refer to /resources/nomenclature.png
         """
+        e_in_in_to_e_in = []
+        e_in_to_e_in_out = []
+        e_out_to_e_out_out = []
+        e_out_in_to_e_out = []
 
+        for pred in right_properties_filtered:
+            temp_r, temp_l = get_hop2_subgraph(_entity=_entities[0], _predicate=pred, _right=True)
+            e_out_to_e_out_out += temp_r
+            e_out_in_to_e_out += temp_l
 
+        for pred in left_properties_filtered:
+            temp_r, temp_l =  get_hop2_subgraph(_entity=_entities[0], _predicate=pred, _right=False)
+            e_in_to_e_in_out += temp_r
+            e_in_in_to_e_in += temp_l
 
+        # Get uniques
+        e_in_in_to_e_in = list(set(e_in_in_to_e_in))
+        e_in_to_e_in_out = list(set(e_in_to_e_in_out))
+        e_out_to_e_out_out = list(set(e_out_to_e_out_out))
+        e_out_in_to_e_out = list(set(e_out_in_to_e_out))
 
+        # Predicates generated. @TODO: Use predicate whitelist/blacklist to trim this shit.
+
+        if DEBUG:
+            print("HOP2 Subgraph")
+            pprint(e_in_in_to_e_in)
+            pprint(e_in_to_e_in_out)
+            pprint(e_out_to_e_out_out)
+            pprint(e_out_in_to_e_out)
+
+        # Get their surface forms
+        e_in_in_to_e_in_sf = [dbp.get_label(x) for x in e_in_in_to_e_in]
+        e_in_to_e_in_out_sf = [dbp.get_label(x) for x in e_in_to_e_in_out]
+        e_out_to_e_out_out_sf = [dbp.get_label(x) for x in e_out_to_e_out_out]
+        e_out_in_to_e_out_sf = [dbp.get_label(x) for x in e_out_in_to_e_out]
 
     if len(_entities) >= 2:
         pass
 
 
 if __name__ == "__main__":
-
     """
         TEST1 : Accuracy of similar_predicates
     """
     q = 'Who is the president of United States'
-    p = ['abstract', 'motto', 'population total', 'official language', 'legislature', 'lower house', 'president', 'leader', 'prime minister']
+    p = ['abstract', 'motto', 'population total', 'official language', 'legislature', 'lower house', 'president',
+         'leader', 'prime minister']
     e = 'http://dbpedia.org/resource/United_States'
     # print(similar_predicates(q, p, 5))
     print runtime(q, [e])

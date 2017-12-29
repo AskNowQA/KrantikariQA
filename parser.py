@@ -385,29 +385,6 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
             fP[(max_false_paths * i) + j] = padded_fp
             tP[(max_false_paths * i) + j] = padded_tp
 
-
-        # for j in range(len(datum[2])):
-        #     false_path = datum[2][j]
-        #     padded_fp = np.zeros((max_path_length, embedding_dim))
-        #     padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
-        #
-        #     # Store false paths
-        #     padded_fps[j] = padded_fp
-        #
-        # # For the rest of the padded_fps, fill it with
-        #
-        # fP[max_false_paths * i: max_false_paths * (i + 1)] = padded_fps
-        #
-        #
-        #
-        #
-        # # Store true path
-        # tP[max_false_paths*i: max_false_paths*(i+1)] = np.repeat(     # For 0-20/20-40.. in a zeros mat
-        #     a=padded_tp[np.newaxis, :, :],                                  # transform v_tp to have new axis
-        #     repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
-        #     axis=0)                                                         # and voila!
-
-
     # Check if the folder exists
     try:
         os.mkdir(_writefilename)

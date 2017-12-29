@@ -597,7 +597,7 @@ def create_dataset(debug=True,time_limit=False):
                         pprint(data_node)
                         controller.append(data_node['sparql_template_id'])
 
-            elif node[u'sparql_template_id'] in [7, 307, 407, 107] and not PASSED:
+            elif node[u'sparql_template_id'] in [7, 8, 307, 308 , 407, 408, 107, 108] and not PASSED:
                 '''
                     {
                         u'_id': u'6ff03a568e2e4105b491ab1c1411c1ab',
@@ -622,30 +622,30 @@ def create_dataset(debug=True,time_limit=False):
                                                                                 data_node[u'entity'][0],
                                                                                 label=False))]
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = two_topic_entity(triples[0].split(" ")[2][1:-1],triples[1].split(" ")[2][1:-1])
-                if node[u"sparql_template_id"] in [307, 407]:
+                if node[u"sparql_template_id"] in [307, 407,308,408]:
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                 else:
                     data_node[u'constraints'] = {}
-                if node[u"sparql_template_id"] in [407, 107]:
+                if node[u"sparql_template_id"] in [407, 107,408,108]:
                     data_node[u'constraints'] = {'count': True}
                 # pprint(data_node)
                 # raw_input()
-                if node[u"sparql_template_id"] == 7:
+                if node[u"sparql_template_id"] in [7,8]:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
                                                     constraint='', count=False)
                     data_node[u'training']['x'] = value[1]
                     data_node[u'training']['uri'] = value[0]
-                if node[u"sparql_template_id"] == 107:
+                if node[u"sparql_template_id"] in [107,108]:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
                                                     constraint='', count=True)
                     data_node[u'training']['x'] = value[1]
                     data_node[u'training']['uri'] = value[0]
-                if node[u"sparql_template_id"] == 307:
+                if node[u"sparql_template_id"] in [307,308]:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
                                                     constraint=triples[2].split(" ")[2][1:-1], count=False)
                     data_node[u'training']['x'] = value[1]
                     data_node[u'training']['uri'] = value[0]
-                if node[u"sparql_template_id"] == 407:
+                if node[u"sparql_template_id"] in [407,408]:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
                                                     constraint=triples[2].split(" ")[2][1:-1], count=True)
                     data_node[u'training']['x'] = value[1]
@@ -657,7 +657,67 @@ def create_dataset(debug=True,time_limit=False):
                     if data_node['sparql_template_id'] not in controller:
                         pprint(data_node)
                         controller.append(data_node['sparql_template_id'])
-
+            elif node[u'sparql_template_id'] in [15, 16, 315, 316, 415, 416, 115, 116] and not PASSED:
+                '''
+                    {
+                        u'_id': u'6ff03a568e2e4105b491ab1c1411c1ab',
+                        u'corrected_question': u'What tv series can be said to be related to the sarah jane adventure and dr who confidential?',
+                        u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/The_Sarah_Jane_Adventures> . ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/Doctor_Who_Confidential> . }',
+                        u'sparql_template_id': 7,
+                        u'verbalized_question': u'What is the <television show> whose <relateds> are <The Sarah Jane Adventures> and <Doctor Who Confidential>?'
+                     }
+                '''
+                # pprint(node)
+                data_node = node
+                triples = get_triples(node[u'sparql_query'])
+                rel1 = triples[0].split(" ")[1][1:-1]
+                rel2 = triples[1].split(" ")[1][1:-1]
+                data_node[u'entity'] = []
+                data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
+                data_node[u'path'] = ["+" + rel1, "+" + rel2]
+                data_node[u'training'] = {}
+                data_node[u'training'][data_node[u'entity'][0]] = {}
+                data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
+                                                                            list(dbp.get_properties(
+                                                                                data_node[u'entity'][0],
+                                                                                label=False))]
+                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = two_topic_entity(
+                    triples[0].split(" ")[0][1:-1], triples[1].split(" ")[0][1:-1])
+                if node[u"sparql_template_id"] in [315, 415, 316, 416]:
+                    data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
+                else:
+                    data_node[u'constraints'] = {}
+                if node[u"sparql_template_id"] in [415, 115, 416, 116]:
+                    data_node[u'constraints'] = {'count': True}
+                # pprint(data_node)
+                # raw_input()
+                if node[u"sparql_template_id"] in [15,16]:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] in [115,116]:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
+                                                    constraint='', count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] in [315,316]:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[2].split(" ")[2][1:-1], count=False)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                if node[u"sparql_template_id"] in [415,416]:
+                    value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
+                                                    constraint=triples[2].split(" ")[2][1:-1], count=True)
+                    data_node[u'training']['x'] = value[1]
+                    data_node[u'training']['uri'] = value[0]
+                fo.write(str(data_node))
+                fo.write("\n")
+                final_data.append(data_node)
+                if debug:
+                    if data_node['sparql_template_id'] not in controller:
+                        pprint(data_node)
+                        controller.append(data_node['sparql_template_id'])
 
             # print final_data[-1]
             if len(final_data) > WRITE_INTERVAL:

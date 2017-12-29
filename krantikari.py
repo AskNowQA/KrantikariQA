@@ -77,9 +77,9 @@ import warnings
 import traceback
 import numpy as np
 from pprint import pprint
-from keras.models import load_model
 
 # Local file imports
+from utils import model_interpreter
 from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
@@ -87,19 +87,14 @@ from utils import natural_language_utilities as nlutils
 
 # Some MACROS
 DEBUG = True
+K_1HOP_GLOVE = 20
+K_1HOP_MODEL = 5
 MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
-glove_location = \
-    {
-        'dir': "./resources",
-        'raw': "glove.6B.300d.txt",
-        'parsed': "glove_parsed_small.pickle"
-    }
 
 
 # Global Variables
 dbp = db_interface.DBPedia(_verbose=True, caching=False)    # Summon a DBpedia interface
-model = None                                                # Keras model to be used for ranking
-embedding_glove = {}
+model = model_interpreter.ModelInterpreter()                # Model interpreter to be used for ranking
 
 
 # Better warning formatting. Ignore.
@@ -111,7 +106,7 @@ def convert_core_chain_to_sparql(_core_chain):  # @TODO
     pass
 
 
-def similar_predicates(_question, _predicates, _k=5):
+def similar_predicates(_question, _predicates, _return_indices=False, _k=5):
     """
         Function used to tokenize the question and compare the tokens with the predicates.
         Then their top k are selected.
@@ -120,6 +115,7 @@ def similar_predicates(_question, _predicates, _k=5):
 
     :param _question: a string of question
     :param _predicates: a list of strings (surface forms/uri? @TODO: Verify)
+    :param _return_indices: BOOLEAN to only return indices or not.
     :param _k: int :- select top k from sorted list
     :return: a list of strings (subset of predicates)
     """
@@ -139,6 +135,9 @@ def similar_predicates(_question, _predicates, _k=5):
     # Sort ( best match score for each predicate) in descending order, and choose top k
     argmaxes = np.argsort(np.max(similarity_mat, axis=1))[::-1][:_k]
 
+    if _return_indices:
+        return argmaxes
+
     # Use this to choose from _predicates and return
     return [_predicates[i] for i in argmaxes]
 
@@ -152,12 +151,16 @@ def runtime(_question, _entities, _return_core_chains = False, _return_answers =
     :return: SPARQL/CoreChain/Answers (and or)
     """
 
-    # Algo differs based on whether there's one topic entity or two
+    # Vectorize the question
+    v_q = embeddings_interface.vectorize(nlutils.tokenize(_question))
 
+    # Algo differs based on whether there's one topic entity or two
     if len(_entities) == 1:
 
         # Get 1-hop subgraph around the entity
         right_properties, left_properties = dbp.get_properties(_uri=_entities[0], label=False)
+
+        # @TODO: Use predicate whitelist/blacklist to trim this shit.
 
         # Get the surface forms of Entity and the predicates
         entity_sf = dbp.get_label(_resource_uri=_entities[0])
@@ -165,16 +168,34 @@ def runtime(_question, _entities, _return_core_chains = False, _return_answers =
         left_properties_sf = [dbp.get_label(x) for x in left_properties]
 
         # Filter relevant predicates based on word-embedding similarity
-        right_properties_filtered = similar_predicates( _question=_question, _predicates=right_properties_sf, _k=10)
-        left_properties_filtered = similar_predicates( _question=_question, _predicates=left_properties_sf, _k=10)
+        right_properties_filter_indices = similar_predicates(_question=_question,
+                                                       _predicates=right_properties_sf,
+                                                       _return_indices=True,
+                                                       _k=K_1HOP_GLOVE)
+        left_properties_filter_indices = similar_predicates(_question=_question,
+                                                      _predicates=left_properties_sf,
+                                                      _return_indices=True,
+                                                      _k=K_1HOP_GLOVE)
+
+        # Impose these indices to generate filtered predicate list.
+        right_properties_filtered = [right_properties_sf[i] for i in right_properties_filter_indices]
+        left_properties_filtered = [left_properties_sf[i] for i in left_properties_filter_indices]
 
         # Generate 1-hop paths out of them
-        paths = [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p) for _p in right_properties_filtered]
-        paths += [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p) for _p in left_properties_filtered]
+        paths_sf = [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p) for _p in right_properties_filtered]
+        paths_sf += [nlutils.tokenize(entity_sf) + ['-'] + nlutils.tokenize(_p) for _p in left_properties_filtered]
 
-        # Now, select top k of them using the model.
+        # Vectorize these paths.
+        v_ps = [embeddings_interface.vectorize(path) for path in paths_sf]
 
+        # Now rank and select top k
+        best_hop1_indices = model.rank(_v_q=v_q, _v_ps=v_ps, _return_indices=True, _k=K_1HOP_MODEL)
 
+        # Impose indices on the paths.
+        ranked_paths_hop1 = [paths_sf[i] for i in best_hop1_indices]
+
+        if DEBUG:
+            pprint(ranked_paths_hop1)
 
     if len(_entities) >= 2:
         pass
@@ -187,5 +208,6 @@ if __name__ == "__main__":
     """
     q = 'Who is the president of United States'
     p = ['abstract', 'motto', 'population total', 'official language', 'legislature', 'lower house', 'president', 'leader', 'prime minister']
-
-    print(similar_predicates(q, p, 5))
+    e = 'http://dbpedia.org/resource/United_States'
+    # print(similar_predicates(q, p, 5))
+    print runtime(q, [e])

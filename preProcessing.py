@@ -28,7 +28,7 @@ K_HOP_1_u = 2                               # Selects the number of relations in
 K_HOP_2_u = 2                               # Selects the number of relations in second hop in the wrong direction
 PASSED = False
 WRITE_INTERVAL = 10                         # Interval for periodic write in a file
-OUTPUT_DIR = 'data/preprocesseddata_new_v2'    # Place to store the files
+OUTPUT_DIR = 'data/preprocesseddata_new_vfull'    # Place to store the files
 
 
 '''
@@ -669,6 +669,7 @@ def create_dataset(debug=True,time_limit=False):
                 '''
                 # pprint(node)
                 data_node = node
+                node[u'sparql_query'] = node[u'sparql_query'].replace('uri}','uri . }')
                 triples = get_triples(node[u'sparql_query'])
                 rel1 = triples[0].split(" ")[1][1:-1]
                 rel2 = triples[1].split(" ")[1][1:-1]

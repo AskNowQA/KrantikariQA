@@ -315,18 +315,18 @@ def runtime(_question, _entities, _return_core_chains=False, _return_answers=Fal
         e_out_in_to_e_out_sf = [sf_vocab[x] for uris in e_out_in_to_e_out.values() for x in uris]
 
         # WORD-EMBEDDING FILTERING
-        e_in_in_to_e_in_filter_indices = similar_predicates(_question = _question,
+        e_in_in_to_e_in_filter_indices = similar_predicates(_question=_question,
                                                             _predicates=e_in_in_to_e_in_sf,
                                                             _return_indices=True,
-                                                            _k = K_2HOP_GLOVE)
-        e_in_to_e_in_out_filter_indices = similar_predicates(_question = _question,
+                                                            _k=K_2HOP_GLOVE)
+        e_in_to_e_in_out_filter_indices = similar_predicates(_question=_question,
                                                              _predicates=e_in_to_e_in_out_sf,
                                                              _return_indices=True,
-                                                             _k = K_2HOP_GLOVE)
-        e_out_to_e_out_out_filter_indices = similar_predicates(_question = _question,
+                                                             _k=K_2HOP_GLOVE)
+        e_out_to_e_out_out_filter_indices = similar_predicates(_question=_question,
                                                                _predicates=e_out_to_e_out_out_sf,
                                                                _return_indices=True,
-                                                               _k = K_2HOP_GLOVE)
+                                                               _k=K_2HOP_GLOVE)
         e_out_in_to_e_out_filter_indices = similar_predicates(_question=_question,
                                                               _predicates=e_out_in_to_e_out_sf,
                                                               _return_indices=True,
@@ -400,6 +400,36 @@ def runtime(_question, _entities, _return_core_chains=False, _return_answers=Fal
                                 e_out_in_to_e_out_filtered_subgraph[hop1] = [uri]
 
         # Generate 2-hop paths out of them.
+        paths_log = []
+        paths_sf = []
+        for key in e_in_in_to_e_in_filtered_subgraph.keys():
+            for r2 in e_in_in_to_e_in_filtered_subgraph[key]:
+                path = [nlutils.tokenize(entity_sf)
+                        + ['-'] + nlutils.tokenize(sf_vocab[key])
+                        + ['-'] + nlutils.tokenize(sf_vocab[r2])]
+                paths_sf.append(path)
+        paths_log.append(len(paths_sf))
+        for key in e_in_to_e_in_out_filtered_subgraph.keys():
+            for r2 in e_in_to_e_in_out_filtered_subgraph[key]:
+                path = [nlutils.tokenize(entity_sf)
+                        + ['-'] + nlutils.tokenize(sf_vocab[key])
+                        + ['+'] + nlutils.tokenize(sf_vocab[r2])]
+                paths_sf.append(path)
+        paths_log.append(len(paths_sf))
+        for key in e_out_to_e_out_out_filtered_subgraph.keys():
+            for r2 in e_out_to_e_out_out_filtered_subgraph[key]:
+                path = [nlutils.tokenize(entity_sf)
+                        + ['+'] + nlutils.tokenize(sf_vocab[key])
+                        + ['+'] + nlutils.tokenize(sf_vocab[r2])]
+                paths_sf.append(path)
+        paths_log.append(len(paths_sf))
+        for key in e_out_to_e_out_out_filtered_subgraph.keys():
+            for r2 in e_out_to_e_out_out_filtered_subgraph[key]:
+                path = [nlutils.tokenize(entity_sf)
+                        + ['+'] + nlutils.tokenize(sf_vocab[key])
+                        + ['-'] + nlutils.tokenize(sf_vocab[r2])]
+                paths_sf.append(path)
+        paths_log.append(len(paths_sf))
 
         # Vectorize these paths
 

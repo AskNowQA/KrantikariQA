@@ -292,6 +292,7 @@ def create_dataset(debug=True,time_limit=False):
     data = json.loads(json_data)
     counter = 0
     skip = 0
+    log = []
     for node in data:
         '''
             For now focusing on just simple question
@@ -343,7 +344,7 @@ def create_dataset(debug=True,time_limit=False):
                         data_node[u'training']['uri'] = value[0]
 
                 if node[u"sparql_template_id"] in [401,101]:
-                    data_node[u'constraints'] = {'count' : True}
+                    data_node[u'constraints']['count'] = True
                     if node[u"sparql_template_id"] == 401:
                         value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
                                                         constraint=triples[1].split(" ")[2][1:-1], count=True)
@@ -389,7 +390,7 @@ def create_dataset(debug=True,time_limit=False):
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [402,102]:
-                    data_node[u'constraints'] = {'count' : True}
+                    data_node[u'constraints']['count'] = True
                 if node[u"sparql_template_id"] == 2:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
                                                     constraint='', count=False)
@@ -438,6 +439,7 @@ def create_dataset(debug=True,time_limit=False):
                 data_node[u'training'][data_node[u'entity'][0]] = {}
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0],[(rel1,True),(rel2,True)])
+                data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [303,309,403,409]:
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                     if node[u'sparql_template_id'] in [303,309]:
@@ -453,7 +455,7 @@ def create_dataset(debug=True,time_limit=False):
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [403,409,103,109]:
-                    data_node[u'constraints'] = {'count' : True}
+                    data_node[u'constraints']['count'] = True
                     if node[u'sparql_template_id'] in [103,109]:
                         value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
                                                         constraint='', count=True)
@@ -496,13 +498,14 @@ def create_dataset(debug=True,time_limit=False):
                 data_node[u'training'][data_node[u'entity'][0]] = {}
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
                                                                             list(dbp.get_properties(data_node[u'entity'][0],label=False))]
+                data_node[u'constraints'] = {}
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0], [(rel1, False), (rel2, True)])
                 if node[u"sparql_template_id"] in [305,405] :
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [105,405,111]:
-                    data_node[u'constraints'] = {'count' : True}
+                    data_node[u'constraints']['count'] = True
                 if node[u"sparql_template_id"] == 5:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=False,
                                                     constraint='', count=False)
@@ -561,12 +564,13 @@ def create_dataset(debug=True,time_limit=False):
                                                                             list(dbp.get_properties(data_node[u'entity'][0],label=False))]
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
                     data_node[u'entity'][0], [(rel1, False), (rel2, False)])
+                data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [306,406]:
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [406,106]:
-                    data_node[u'constraints'] = {'count' : True}
+                    data_node[u'constraints']['count'] = True
                 # pprint(data_node)
                 # raw_input()
                 if node[u"sparql_template_id"] == 6:
@@ -614,6 +618,7 @@ def create_dataset(debug=True,time_limit=False):
                 rel2 = triples[1].split(" ")[1][1:-1]
                 data_node[u'entity'] = []
                 data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+                data_node[u'entity'].append(triples[1].split(" ")[2][1:-1])
                 data_node[u'path'] = ["-" + rel1, "+" + rel2]
                 data_node[u'training'] = {}
                 data_node[u'training'][data_node[u'entity'][0]] = {}
@@ -622,12 +627,13 @@ def create_dataset(debug=True,time_limit=False):
                                                                                 data_node[u'entity'][0],
                                                                                 label=False))]
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = two_topic_entity(triples[0].split(" ")[2][1:-1],triples[1].split(" ")[2][1:-1])
+                data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [307, 407,308,408]:
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [407, 107,408,108]:
-                    data_node[u'constraints'] = {'count': True}
+                    data_node[u'constraints']['count'] = True
                 # pprint(data_node)
                 # raw_input()
                 if node[u"sparql_template_id"] in [7,8]:
@@ -660,14 +666,12 @@ def create_dataset(debug=True,time_limit=False):
             elif node[u'sparql_template_id'] in [15, 16, 315, 316, 415, 416, 115, 116] and not PASSED:
                 '''
                     {
-                        u'_id': u'6ff03a568e2e4105b491ab1c1411c1ab',
-                        u'corrected_question': u'What tv series can be said to be related to the sarah jane adventure and dr who confidential?',
-                        u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/The_Sarah_Jane_Adventures> . ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/Doctor_Who_Confidential> . }',
-                        u'sparql_template_id': 7,
-                        u'verbalized_question': u'What is the <television show> whose <relateds> are <The Sarah Jane Adventures> and <Doctor Who Confidential>?'
-                     }
+	                    "template": " SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e)s> ?uri. <%(e_in_2)s> <%(e_in_to_e)s> ?uri} ",
+	                    "id": 15,
+	                    "n_entities": 2,
+	                    "type": "vanilla"
+                    }
                 '''
-                # pprint(node)
                 data_node = node
                 node[u'sparql_query'] = node[u'sparql_query'].replace('uri}','uri . }')
                 triples = get_triples(node[u'sparql_query'])
@@ -675,6 +679,7 @@ def create_dataset(debug=True,time_limit=False):
                 rel2 = triples[1].split(" ")[1][1:-1]
                 data_node[u'entity'] = []
                 data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
+                data_node[u'entity'].append(triples[1].split(" ")[0][1:-1])
                 data_node[u'path'] = ["+" + rel1, "+" + rel2]
                 data_node[u'training'] = {}
                 data_node[u'training'][data_node[u'entity'][0]] = {}
@@ -684,12 +689,13 @@ def create_dataset(debug=True,time_limit=False):
                                                                                 label=False))]
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = two_topic_entity(
                     triples[0].split(" ")[0][1:-1], triples[1].split(" ")[0][1:-1])
+                data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [315, 415, 316, 416]:
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                 else:
                     data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [415, 115, 416, 116]:
-                    data_node[u'constraints'] = {'count': True}
+                    data_node[u'constraints']['count'] = True
                 # pprint(data_node)
                 # raw_input()
                 if node[u"sparql_template_id"] in [15,16]:
@@ -727,11 +733,14 @@ def create_dataset(debug=True,time_limit=False):
                 final_data = []
         except:
             print traceback.print_exc()
+            log.append(node)
             continue
 
-
-    with open('remaining.json', 'w') as fp:
+    with open(OUTPUT_DIR+ "/" + "remaining.json", 'w') as fp:
         json.dump(final_data, fp)
+
+    with open('log.json','w') as fp:
+        json.dump(log,fp )
 
 def test(_entity, _relation):
     out, incoming = dbp.get_properties(_entity, _relation, label=False)
@@ -739,99 +748,6 @@ def test(_entity, _relation):
     rel_list = get_rank_rel([out, incoming], rel,score=True)
     # rel_list = get_set_list(get_top_k(get_rank_rel([out,incoming],rel=),rel))
     pprint(rel_list)
-
-
-
-def create_simple_dataset():
-
-    file_directory = "resources/data_set.json"
-    json_data = open(file_directory).read()
-    data = json.loads(json_data)
-    counter = 0
-    for node in data:
-        # print node[u"sparql_template_id"]
-        # raw_input("check sparql templated id")
-        # pass
-        if node[u"sparql_template_id"] in [1] :
-            counter = counter + 1
-            print counter
-
-            '''
-                            {
-                                u'_id': u'9a7523469c8c45b58ec65ed56af6e306',
-                                u'corrected_question': u'What are the schools whose city is Reading, Berkshire?',
-                                u'sparql_query': u' SELECT DISTINCT ?uri WHERE {?uri <http://dbpedia.org/ontology/city> <http://dbpedia.org/resource/Reading,_Berkshire> } ',
-                                u'sparql_template_id': 1,
-                                u'verbalized_question': u'What are the <schools> whose <city> is <Reading, Berkshire>?'
-                            }
-
-            '''
-            '''
-                >I need answer and the label of the entity
-            '''
-            answer_data_node = {}
-            data_node = node
-            triples = get_triples(node[u'sparql_query'])
-            data_node[u'entity'] = []
-            data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
-            data_node[u'training'] = {}
-            data_node[u'training'][data_node[u'entity'][0]] = {}
-            data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(
-                dbp.get_properties(data_node[u'entity'][0],label=False))]
-            data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
-            data_node[u'constraints'] = {}
-            if node[u"sparql_template_id"] == 301 or node[u"sparql_template_id"] == 401:
-                data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
-            else:
-                data_node[u'constraints'] = {}
-
-            if node[u"sparql_template_id"] in [401, 101]:
-                data_node[u'constraints'] = {'count': True}
-            final_data.append(data_node)
-            # pprint(data_node)
-            # pprint("loda")
-            answer_data_node['entity'] = dbp.get_label(data_node[u'entity'][0])
-            answer_data_node['answer']   = [dbp.get_label(x) for x in dbp.get_answer(data_node[u'sparql_query'])['uri']]
-            answer_data_node['question'] = node['corrected_question']
-            final_answer_dataset.append(answer_data_node)
-            # raw_input()
-
-        elif node[u"sparql_template_id"] in [2]:
-            '''
-                {	u'_id': u'8216e5b6033a407191548689994aa32e',
-                    u'corrected_question': u'Name the municipality of Roberto Clemente Bridge ?',
-                    u'sparql_query': u' SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Roberto_Clemente_Bridge> <http://dbpedia.org/ontology/municipality> ?uri } ',
-                    u'sparql_template_id': 2,
-                    u'verbalized_question': u'What is the <municipality> of Roberto Clemente Bridge ?'
-                }
-            '''
-            counter += 1
-            print counter
-
-            #TODO: Verify the 302 template
-            answer_data_node = {}
-            data_node = node
-            triples = get_triples(node[u'sparql_query'])
-            data_node[u'entity'] = []
-            data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
-            data_node[u'training'] = {}
-            data_node[u'training'][data_node[u'entity'][0]] = {}
-            data_node[u'training'][data_node[u'entity'][0]][u'rel1'] =  [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
-            data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
-            data_node[u'constraints'] = {}
-            if node[u"sparql_template_id"] == 302 or node[u"sparql_template_id"] == 402:
-                data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
-            else:
-                data_node[u'constraints'] = {}
-            if node[u"sparql_template_id"] in [402,102]:
-                data_node[u'constraints'] = {'count' : True}
-            final_data.append(data_node)
-            answer_data_node['entity'] = dbp.get_label(data_node[u'entity'][0])
-            answer_data_node['answer'] = [dbp.get_label(x) for x in dbp.get_answer(data_node[u'sparql_query'])['uri']]
-            answer_data_node['question'] = node['corrected_question']
-            final_answer_dataset.append(answer_data_node)
-            # pprint(final_answer_dataset)
-            # raw_input("check at 2")
 
 
 #TODO: Store as json : final answer dataset
@@ -897,3 +813,93 @@ def two_topic_entity(te1,te2):
     return data
     # pprint(data)
 create_dataset(debug = True)
+    #
+    #     file_directory = "resources/data_set.json"
+    #     json_data = open(file_directory).read()
+    #     data = json.loads(json_data)
+    #     counter = 0
+    #     for node in data:
+    #         # print node[u"sparql_template_id"]
+    #         # raw_input("check sparql templated id")
+    #         # pass
+    #         if node[u"sparql_template_id"] in [1] :
+    #             counter = counter + 1
+    #             print counter
+    #
+    #             '''
+    #                             {
+    #                                 u'_id': u'9a7523469c8c45b58ec65ed56af6e306',
+    #                                 u'corrected_question': u'What are the schools whose city is Reading, Berkshire?',
+    #                                 u'sparql_query': u' SELECT DISTINCT ?uri WHERE {?uri <http://dbpedia.org/ontology/city> <http://dbpedia.org/resource/Reading,_Berkshire> } ',
+    #                                 u'sparql_template_id': 1,
+    #                                 u'verbalized_question': u'What are the <schools> whose <city> is <Reading, Berkshire>?'
+    #                             }
+    #
+    #             '''
+    #             '''
+    #                 >I need answer and the label of the entity
+    #             '''
+    #             answer_data_node = {}
+    #             data_node = node
+    #             triples = get_triples(node[u'sparql_query'])
+    #             data_node[u'entity'] = []
+    #             data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+    #             data_node[u'training'] = {}
+    #             data_node[u'training'][data_node[u'entity'][0]] = {}
+    #             data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(
+    #                 dbp.get_properties(data_node[u'entity'][0],label=False))]
+    #             data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
+    #             data_node[u'constraints'] = {}
+    #             if node[u"sparql_template_id"] == 301 or node[u"sparql_template_id"] == 401:
+    #                 data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
+    #             else:
+    #                 data_node[u'constraints'] = {}
+    #
+    #             if node[u"sparql_template_id"] in [401, 101]:
+    #                 data_node[u'constraints']['count']: True
+    #             final_data.append(data_node)
+    #             # pprint(data_node)
+    #             # pprint("loda")
+    #             answer_data_node['entity'] = dbp.get_label(data_node[u'entity'][0])
+    #             answer_data_node['answer']   = [dbp.get_label(x) for x in dbp.get_answer(data_node[u'sparql_query'])['uri']]
+    #             answer_data_node['question'] = node['corrected_question']
+    #             final_answer_dataset.append(answer_data_node)
+    #             # raw_input()
+    #
+    #         elif node[u"sparql_template_id"] in [2]:
+    #             '''
+    #                 {	u'_id': u'8216e5b6033a407191548689994aa32e',
+    #                     u'corrected_question': u'Name the municipality of Roberto Clemente Bridge ?',
+    #                     u'sparql_query': u' SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Roberto_Clemente_Bridge> <http://dbpedia.org/ontology/municipality> ?uri } ',
+    #                     u'sparql_template_id': 2,
+    #                     u'verbalized_question': u'What is the <municipality> of Roberto Clemente Bridge ?'
+    #                 }
+    #             '''
+    #             counter += 1
+    #             print counter
+    #
+    #             #TODO: Verify the 302 template
+    #             answer_data_node = {}
+    #             data_node = node
+    #             triples = get_triples(node[u'sparql_query'])
+    #             data_node[u'entity'] = []
+    #             data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
+    #             data_node[u'training'] = {}
+    #             data_node[u'training'][data_node[u'entity'][0]] = {}
+    #             data_node[u'training'][data_node[u'entity'][0]][u'rel1'] =  [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
+    #             data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
+    #             data_node[u'constraints'] = {}
+    #             if node[u"sparql_template_id"] == 302 or node[u"sparql_template_id"] == 402:
+    #                 data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[1][1:-1]}
+    #             else:
+    #                 data_node[u'constraints'] = {}
+    #             if node[u"sparql_template_id"] in [402,102]:
+    #                 data_node[u'constraints']['count'] = True
+    #             final_data.append(data_node)
+    #             answer_data_node['entity'] = dbp.get_label(data_node[u'entity'][0])
+    #             answer_data_node['answer'] = [dbp.get_label(x) for x in dbp.get_answer(data_node[u'sparql_query'])['uri']]
+    #             answer_data_node['question'] = node['corrected_question']
+    #             final_answer_dataset.append(answer_data_node)
+    #             # pprint(final_answer_dataset)
+    #             # raw_input("check at 2")
+# def create_simple_dataset():

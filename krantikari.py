@@ -238,7 +238,7 @@ def runtime(_question, _entities, _return_core_chains=False, _return_answers=Fal
                 # This belongs to the left pred list.
                 # Offset index to match to left_properties_filter_indices index.
 
-                i -= K_1HOP_GLOVE
+                i -= len(right_properties_filtered)
                 predicate = left_properties[left_properties_filter_indices[i]]
                 left_properties_filtered.append(predicate)
 
@@ -294,6 +294,41 @@ def runtime(_question, _entities, _return_core_chains=False, _return_answers=Fal
         e_in_to_e_in_out_sf = [dbp.get_label(x) for x in e_in_to_e_in_out]
         e_out_to_e_out_out_sf = [dbp.get_label(x) for x in e_out_to_e_out_out]
         e_out_in_to_e_out_sf = [dbp.get_label(x) for x in e_out_in_to_e_out]
+
+        # WORD-EMBEDDING FILTERING
+        e_in_in_to_e_in_filter_indices = similar_predicates(_question = _question,
+                                                            _predicates=e_in_in_to_e_in_sf,
+                                                            _return_indices=True,
+                                                            _k = K_2HOP_GLOVE)
+        e_in_to_e_in_out_filter_indices = similar_predicates(_question = _question,
+                                                             _predicates=e_in_to_e_in_out_sf,
+                                                             _return_indices=True,
+                                                             _k = K_2HOP_GLOVE)
+        e_out_to_e_out_out_filter_indices = similar_predicates(_question = _question,
+                                                               _predicates=e_out_to_e_out_out_sf,
+                                                               _return_indices=True,
+                                                               _k = K_2HOP_GLOVE)
+        e_out_in_to_e_out_filter_indices = similar_predicates(_question=_question,
+                                                              _predicates=e_out_in_to_e_out_sf,
+                                                              _return_indices=True,
+                                                              _k=K_2HOP_GLOVE)
+
+        # Impose these indices to generate filtered predicate list.
+        e_in_in_to_e_in_filtered = [e_in_in_to_e_in_sf[i] for i in e_in_in_to_e_in_filter_indices]
+        e_in_to_e_in_out_filtered = [e_in_to_e_in_out_sf[i] for i in e_in_to_e_in_out_filter_indices]
+        e_out_to_e_out_out_filtered = [e_out_to_e_out_out_sf[i] for i in e_out_to_e_out_out_filter_indices]
+        e_out_in_to_e_out_filtered = [e_out_in_to_e_out_sf[i] for i in e_out_in_to_e_out_filter_indices]
+
+        # Generate 2-hop paths out of them.
+
+        # Vectorize these paths
+
+        # MODEL FILTERING
+
+        # Impose indices
+
+
+
 
     if len(_entities) >= 2:
         pass

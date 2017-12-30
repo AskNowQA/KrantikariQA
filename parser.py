@@ -80,7 +80,7 @@ def parse(_raw):
     question = nlutils.tokenize(question)
 
     # Now, embed the question.
-    v_question = embeddings_interface.vectorize(question, _report_unks=False, _encode_special_chars=True)
+    id_question = embeddings_interface.vocabularize(question, _report_unks=False)
 
     # Make the correct path
     entity = _raw[u'entity'][0]
@@ -216,14 +216,14 @@ def parse(_raw):
             pprint(_raw)
 
     # Vectorize paths
-    v_true_path = embeddings_interface.vectorize(true_path, _encode_special_chars=True)
-    v_false_paths = [embeddings_interface.vectorize(x, _encode_special_chars=True) for x in false_paths]
+    id_true_path = embeddings_interface.vocabularize(true_path)
+    id_false_paths = [embeddings_interface.vocabularize(x) for x in false_paths]
 
     # Corresponding to all these, compute the true labels
     v_y_true = compute_true_labels(question, true_path, false_paths)
 
     # Throw it out.
-    return v_question, v_true_path, v_false_paths, v_y_true
+    return id_question, id_true_path, id_false_paths, v_y_true
 
 
 def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/training/pairwise/'):
@@ -283,20 +283,14 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
             # Each file has multiple datapoints (questions).
             for question in data:
 
-                # Collect the repsonse
-                v_q, v_tp, v_fps, v_y = parse(question)
-
-                if DEBUG:
-                    if np.max([fp.shape[0] for fp in v_fps]) >= 23:
-                        warnings.warn("Phase I: Encountered huge question. Filename: %(fn)s. ID: %(id)s" % {
-                            'fn': filename,
-                            'id': question['_id']
-                        })
+                # Collect the response
+                id_q, id_tp, id_fps, v_y = parse(question)
 
                 # Collect data for each question
-                data_embedded.append([v_q, v_tp, v_fps, v_y])
+                data_embedded.append([id_q, id_tp, id_fps, v_y])
 
-        embedding_dim = v_q.shape[1]
+        embedding_dim = 300
+
         if DEBUG:
             print("""
                 Phase I - Embedding DONE
@@ -320,9 +314,6 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         Pad everything.
     '''
 
-    # Find the embedding dimension (typically 300)
-    # embedding_dim = 300
-
     # Some info needed for padding
     max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
     max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
@@ -336,9 +327,9 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         )
 
     # Matrices which will store the data.
-    Q = np.zeros((max_false_paths * len(data_embedded), max_ques_length, embedding_dim))
-    tP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
-    fP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
+    Q = np.zeros((max_false_paths * len(data_embedded), max_ques_length))
+    tP = np.zeros((max_false_paths * len(data_embedded), max_path_length))
+    fP = np.zeros((max_false_paths * len(data_embedded), max_path_length))
 
     paths_so_far = 0
 
@@ -359,29 +350,29 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         num_false_paths = len(datum[2])
 
         # Pad Question
-        padded_question = np.zeros((max_ques_length, embedding_dim))  # Create an zeros mat with max dims
-        padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]  # Pad the zeros mat with actual mat
+        padded_question = np.zeros(max_ques_length)  # Create an zeros mat with max dims
+        padded_question[:datum[0].shape[0]] = datum[0]  # Pad the zeros mat with actual mat
 
         # Store Question
         Q[max_false_paths*i: max_false_paths*i + num_false_paths] = np.repeat(      # For 0-20/20-40.. in a zeros mat
-            a=padded_question[np.newaxis, :, :],                            # transform v_q to have new axis
+            a=padded_question[np.newaxis, :],                               # transform v_q to have new axis
             repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
             axis=0)                                                         # and voila!
 
         # Pad true path
-        padded_tp = np.zeros((max_path_length, embedding_dim))
-        padded_tp[:datum[1].shape[0], :datum[1].shape[1]] = datum[1]
+        padded_tp = np.zeros(max_path_length)
+        padded_tp[:datum[1].shape[0]] = datum[1]
 
         # Pad false path
-        padded_fps = np.zeros((max_false_paths, max_path_length, embedding_dim))
         for j in range(max_false_paths):
             try:
                 false_path = datum[2][j]
             except IndexError:
                 false_path = datum[2][-1]
-            padded_fp = np.zeros((max_path_length, embedding_dim))
-            padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
+            padded_fp = np.zeros(max_path_length)
+            padded_fp[:false_path.shape[0]] = false_path
 
+            # Store true path AND false path
             fP[(max_false_paths * i) + j] = padded_fp
             tP[(max_false_paths * i) + j] = padded_tp
 

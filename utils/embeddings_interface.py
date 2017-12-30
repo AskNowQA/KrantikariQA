@@ -52,7 +52,7 @@ def __prepare__(_word2vec=True, _glove=False):
         :param None
         :return: None
     """
-    global word2vec_embeddings, glove_embeddings
+    global word2vec_embeddings, glove_embeddings, glove_vocab
 
     if DEBUG: print("embeddings_interface: Loading Word Vector to Memory.")
 
@@ -99,7 +99,7 @@ def __prepare__(_word2vec=True, _glove=False):
 
             # Now store them to disk
             pickle.dump(glove_embeddings, open(os.path.join(glove_location['dir'], glove_location['parsed']), 'w+'))
-            pickle.dump(glove_embeddings, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))
+            pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))
 
             if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")
 
@@ -196,12 +196,14 @@ def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
         token = token.lower()
 
         try:
+
             if _embedding == "glove":
                 token_id = glove_vocab[token]
-            elif _embedding == 'word2vec':
+            else:
                 token_id = glove_vocab[token]
 
         except KeyError:
+
             if _report_unks: unks.append(token)
             token_id = 0
 

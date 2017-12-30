@@ -28,9 +28,9 @@ import natural_language_utilities as nlutils
 import labels_mulitple_form
 
 # GLOBAL MACROS
-# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/', 'http://live.dbpedia.org/sparql/']
+DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/', 'http://live.dbpedia.org/sparql/']
 # DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
-DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']
+# DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']
 MAX_WAIT_TIME = 1.0
 
 # SPARQL Templates
@@ -59,6 +59,8 @@ CHECK_URL = '''ASk {<%(target_resource)s> a owl:Thing} '''
 GET_SUBJECT = '''SELECT DISTINCT ?entity WHERE { ?entity %(property)s %(target_resource)s } '''
 
 GET_OBJECT = '''SELECT DISTINCT ?entity WHERE {	%(target_resource)s %(property)s ?entity } '''
+
+GET_SAME_AS = '''SELECT DISTINCT ?entity WHERE {?entity owl:sameAs %(target_resource)s}'''
 
 
 class DBPedia:
@@ -454,6 +456,23 @@ class DBPedia:
         except:
             # TODO: Find and handle exceptions appropriately
             print traceback.print_exc()
+
+    def get_dbpedia_URL(self, _uri):
+        '''
+            Give a freebase/wikidata/etc. uri gives the dbpedia uri; if it exists or none if it does not
+        '''
+        if _uri[0] != '<':
+            if _uri[-1] != '>':
+                url = "<" + _uri + ">"
+            else:
+                url = '<' + _uri
+        query = GET_SAME_AS % {'target_resource':url}
+        response = self.shoot_custom_query(query)
+        entity_list = [x[u'entity'][u'value'].encode('ascii', 'ignore') for x in response[u'results'][u'bindings']]
+        if entity_list:
+            return entity_list
+        else:
+            return None
 
 
 if __name__ == '__main__':

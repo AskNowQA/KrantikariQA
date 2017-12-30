@@ -11,14 +11,18 @@ import warnings
 import numpy as np
 
 word2vec_embeddings = None
+word2vec_vocab = None
 glove_embeddings = None
+glove_vocab = None
+
 DEFAULT_EMBEDDING = 'word2vec'
 DEBUG = True
 glove_location = \
     {
         'dir': "./resources",
         'raw': "glove.42B.300d.txt",
-        'parsed': "glove_parsed_small.pickle"
+        'parsed': "glove_parsed.pickle",
+        'vocab': "glove_vocab.pickle"
     }
 
 
@@ -58,36 +62,56 @@ def __prepare__(_word2vec=True, _glove=False):
     if _glove:
         try:
             glove_embeddings = pickle.load(open(os.path.join(glove_location['dir'], glove_location['parsed'])))
+            glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab'])))
         except IOError:
             # Glove is not parsed and stored. Do it.
             if DEBUG: warnings.warn(" GloVe is not parsed and stored. This will take some time.")
-    
+
             glove_embeddings = {}
+            glove_vocab = {}
+
+            # Set some initial values
+            glove_vocab['UNK'] = 0
+            glove_embeddings[0] = np.zeros(300, dtype=np.float32)
+
+            glove_vocab['+'] = 1
+            glove_embeddings[1] = np.repeat(1, 300)
+
+            glove_vocab['-'] = 2
+            glove_embeddings[2] = np.repeat(-1, 300)
+
+            glove_vocab['/'] = 3
+            glove_embeddings[3] = np.repeat(0.5, 300)
+
             f = open(os.path.join(glove_location['dir'], glove_location['raw']))
             iterable = f
-
+            counter = 4
             for line in iterable:
                 values = line.split()
                 word = values[0]
+                if word in ['UNK', '+', '-', '/']:
+                    continue
                 coefs = np.asarray(values[1:], dtype='float32')
-                glove_embeddings[word] = coefs
+                glove_vocab[word] = counter
+                glove_embeddings[counter] = coefs
+                counter += 1
             f.close()
-    
-            # Now convert this to a numpy object
+
+            # Now store them to disk
             pickle.dump(glove_embeddings, open(os.path.join(glove_location['dir'], glove_location['parsed']), 'w+'))
-    
+            pickle.dump(glove_embeddings, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))
+
             if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")
 
 
 def stupid_gaurav_function(_vector_set, ignore=[]):
     if len(ignore) == 0:
-        return np.mean(_vector_set, axis = 0)
+        return np.mean(_vector_set, axis=0)
     else:
         return np.dot(np.transpose(_vector_set), ignore) / sum(ignore)
 
 
 def phrase_similarity(_phrase_1, _phrase_2, embedding='word2vec'):
-
     __check_prepared__(embedding)
 
     phrase_1 = _phrase_1.split(" ")
@@ -98,14 +122,14 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding='word2vec'):
         try:
             # print phrase
             vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower() if embedding == 'word2vec'
-                else glove_embeddings[phrase.lower()]))
+                                                            else glove_embeddings[glove_vocab[phrase.lower()]]))
         except:
             # print traceback.print_exc()
             continue
     for phrase in phrase_2:
         try:
             vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower() if embedding == 'word2vec'
-                else glove_embeddings[phrase.lower()]))
+                                                            else glove_embeddings[glove_vocab[phrase.lower()]]))
         except:
             continue
     if len(vw_phrase_1) == 0 or len(vw_phrase_2) == 0:
@@ -116,10 +140,10 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding='word2vec'):
     return float(cosine_similarity)
 
 
-def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embedding='glove'):
+def vectorize(_tokens, _report_unks=False, _embedding='glove'):
     """
         Function to embed a sentence and return it as a list of vectors.
-        WARNING: Give it already split. I ain't splitting it for ye.
+        WARNING: Give it already split strings. I ain't splitting it for ye.
 
         :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
         :param _report_unks: Whether or not return the out of vocab words
@@ -137,9 +161,9 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
 
         try:
             if _embedding == "glove":
-                token_embedding = glove_embeddings[token]
+                token_embedding = glove_embeddings[glove_vocab[token]]
             elif _embedding == 'word2vec':
-                token_embedding = word2vec_embeddings[token]
+                token_embedding = word2vec_embeddings[glove_vocab[token]]
 
         except KeyError:
             if _report_unks: unks.append(token)
@@ -147,14 +171,42 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
 
         finally:
 
-            if _encode_special_chars:
-                # If you want path dividers like +, - or / to be treated specially
-                if token == "+":
-                    token_embedding = np.repeat(1, 300)
-                elif token == "-":
-                    token_embedding = np.repeat(-1, 300)
-                elif token == "/":
-                    token_embedding = np.repeat(0.5, 300)
             op += [token_embedding]
+
+    return (np.asarray(op), unks) if _report_unks else np.asarray(op)
+
+
+def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
+    """
+            Function to embed a sentence and return it as a list of "IDS".
+            WARNING: Give it already split. I ain't splitting it for ye.
+
+            :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
+            :param _report_unks: Whether or not return the out of vocab words
+            :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
+        """
+
+    __check_prepared__(_embedding)
+
+    op = []
+    unks = []
+    for token in _tokens:
+
+        # Small cap everything
+        token = token.lower()
+
+        try:
+            if _embedding == "glove":
+                token_id = glove_vocab[token]
+            elif _embedding == 'word2vec':
+                token_id = glove_vocab[token]
+
+        except KeyError:
+            if _report_unks: unks.append(token)
+            token_id = 0
+
+        finally:
+
+            op += [token_id]
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)

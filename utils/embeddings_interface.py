@@ -20,9 +20,9 @@ DEBUG = True
 glove_location = \
     {
         'dir': "./resources",
-        'raw': "glove.42B.300d.txt",
-        'parsed': "glove_parsed.pickle",
-        'vocab': "glove_vocab.pickle"
+        'raw': "glove.6B.300d.txt",
+        'parsed': "glove_parsed_small.pickle",
+        'vocab': "glove_vocab_small.pickle"
     }
 
 
@@ -67,21 +67,21 @@ def __prepare__(_word2vec=True, _glove=False):
             # Glove is not parsed and stored. Do it.
             if DEBUG: warnings.warn(" GloVe is not parsed and stored. This will take some time.")
 
-            glove_embeddings = {}
+            glove_embeddings = []
             glove_vocab = {}
 
             # Set some initial values
             glove_vocab['UNK'] = 0
-            glove_embeddings[0] = np.zeros(300, dtype=np.float32)
+            glove_embeddings.append(np.zeros(300, dtype=np.float32))
 
             glove_vocab['+'] = 1
-            glove_embeddings[1] = np.repeat(1, 300)
+            glove_embeddings.append(np.repeat(1, 300))
 
             glove_vocab['-'] = 2
-            glove_embeddings[2] = np.repeat(-1, 300)
+            glove_embeddings.append(np.repeat(-1, 300))
 
             glove_vocab['/'] = 3
-            glove_embeddings[3] = np.repeat(0.5, 300)
+            glove_embeddings.append(np.repeat(0.5, 300))
 
             f = open(os.path.join(glove_location['dir'], glove_location['raw']))
             iterable = f
@@ -93,9 +93,12 @@ def __prepare__(_word2vec=True, _glove=False):
                     continue
                 coefs = np.asarray(values[1:], dtype='float32')
                 glove_vocab[word] = counter
-                glove_embeddings[counter] = coefs
+                glove_embeddings.append(coefs)
                 counter += 1
             f.close()
+
+            # Convert embeddings to numpy object
+            glove_embeddings = np.asarray(glove_embeddings)
 
             # Now store them to disk
             pickle.dump(glove_embeddings, open(os.path.join(glove_location['dir'], glove_location['parsed']), 'w+'))

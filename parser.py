@@ -289,8 +289,6 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
                 # Collect data for each question
                 data_embedded.append([id_q, id_tp, id_fps, v_y])
 
-        embedding_dim = 300
-
         if DEBUG:
             print("""
                 Phase I - Embedding DONE
@@ -303,100 +301,6 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
         f = open('resources/data_embedded_phase_i.pickle', 'w+')
         pickle.dump(data_embedded, f)
         f.close()
-
-    '''
-        Phase II - Padding and Final Matrices
-
-        Find the max question length; max path length, total paths etc
-        Put the data in the following manner:
-            v_q | v_tp _ v_fp1 | [0 1]
-            v_q | v_tp _ v_fp1 | [0 1]
-        Pad everything.
-    '''
-
-    # Some info needed for padding
-    max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
-    max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
-    max_false_paths = np.max([len(datum[2]) for datum in data_embedded])    # Find total false paths paths
-
-    # Find max path length, including false paths
-    for datum in data_embedded:
-        max_path_length = max(
-            np.max([fp.shape[0] for fp in datum[2]]),   # Find the largest false path
-            max_path_length                             # amongst the 20 for this question.
-        )
-
-    # Matrices which will store the data.
-    Q = np.zeros((max_false_paths * len(data_embedded), max_ques_length))
-    tP = np.zeros((max_false_paths * len(data_embedded), max_path_length))
-    fP = np.zeros((max_false_paths * len(data_embedded), max_path_length))
-
-    paths_so_far = 0
-
-    if DEBUG:
-        print("Q: ", Q.shape, "tP: ", tP.shape, "fP: ", fP.shape)
-
-    # Create an iterable to loop
-    iterable = range(len(data_embedded))
-
-    if DEBUG:
-        prog_bar = ProgressBar()
-        iterable = prog_bar(iterable)
-
-    # Fun Time
-    for i in iterable:
-
-        datum = data_embedded[i]
-        num_false_paths = len(datum[2])
-
-        # Pad Question
-        padded_question = np.zeros(max_ques_length)  # Create an zeros mat with max dims
-        padded_question[:datum[0].shape[0]] = datum[0]  # Pad the zeros mat with actual mat
-
-        # Store Question
-        Q[max_false_paths*i: max_false_paths*i + num_false_paths] = np.repeat(      # For 0-20/20-40.. in a zeros mat
-            a=padded_question[np.newaxis, :],                               # transform v_q to have new axis
-            repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
-            axis=0)                                                         # and voila!
-
-        # Pad true path
-        padded_tp = np.zeros(max_path_length)
-        padded_tp[:datum[1].shape[0]] = datum[1]
-
-        # Pad false path
-        for j in range(max_false_paths):
-            try:
-                false_path = datum[2][j]
-            except IndexError:
-                false_path = datum[2][-1]
-            padded_fp = np.zeros(max_path_length)
-            padded_fp[:false_path.shape[0]] = false_path
-
-            # Store true path AND false path
-            fP[(max_false_paths * i) + j] = padded_fp
-            tP[(max_false_paths * i) + j] = padded_tp
-
-    # Check if the folder exists
-    try:
-        os.mkdir(_writefilename)
-    except OSError:
-        # Folder exists.
-        pass
-
-    # Print these things to file.
-    np.save(open(os.path.join(_writefilename, 'Q.npz'), 'w+'), Q)
-    np.save(open(os.path.join(_writefilename, 'tP.npz'), 'w+'), tP)
-    np.save(open(os.path.join(_writefilename, 'fP.npz'), 'w+'), fP)
-
-    print("""
-            Phase II - Padding and Final Matrices
-
-        Find the max question length; max path length, total paths etc
-        Put the data in the following manner:
-            v_q | v_tp _ v_fp1 | [0 1]
-            v_q | v_tp _ v_fp1 | [0 1]
-        Pad everything.
-    """)
 
 
 def test():

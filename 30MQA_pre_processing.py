@@ -65,44 +65,48 @@ content_counter = 0
 periodic_counter = 0
 counter = 0
 for con in content:
-	value = dbp.get_answer(SPARQL %{'target_resource' : con[0]})
-	if value['label'] and value['entity']:
-		indices = random_indice_generator(len(content),FALSE_PATH_LENGTH,content_counter)
-		for i in xrange(len(indices)):
-			condition = True
-			while condition:
-				try:
-					a = content[i][1]
-				except:
-					print content
-				if content[indices[i]][1] == con[1]:
-					indices[i] = random.randint(0,len(content))
-				if content[indices[i]][1] != con[1]:
-					condition = False
-		false_path = [content[i][1] for i in indices]
-		tokenized_false_path = [vectorize_relation(path) for path in false_path]
-		question_vector = embeddings_interface.vectorize(nlutils.tokenize(con[3]))
-		entity_vector = embeddings_interface.vectorize(nlutils.tokenize(value['label'][0]))
-		relation_vector = vectorize_relation(con[1])
-		plus_vector = embeddings_interface.vectorize(['+'])
-		entity_vector = np.concatenate((entity_vector,plus_vector),axis=0)
-		new_entity_vector = np.concatenate((entity_vector,relation_vector),axis=0)
-		y_vector = np.zeros(FALSE_PATH_LENGTH + 1)
-		final_data.append([question_vector,new_entity_vector,tokenized_false_path,y_vector])
-		periodic_counter = periodic_counter + 1
-		print "write counter is ", counter
-		counter = counter + 1
-		if periodic_counter > WRITE_INTERVAL:
-			with open(OUTPUT_DIR + "/" + str(content_counter) + ".pickle", 'w') as fp:
-				pickle.dump(final_data, fp)
-			periodic_counter = 0
-			final_data = []
+	try:
+		value = dbp.get_answer(SPARQL %{'target_resource' : con[0]})
+		if value['label'] and value['entity']:
+			indices = random_indice_generator(len(content),FALSE_PATH_LENGTH,content_counter)
+			for i in xrange(len(indices)):
+				condition = True
+				while condition:
+					try:
+						a = content[i][1]
+					except:
+						print content
+					if content[indices[i]][1] == con[1]:
+						indices[i] = random.randint(0,len(content))
+					if content[indices[i]][1] != con[1]:
+						condition = False
+			false_path = [content[i][1] for i in indices]
+			tokenized_false_path = [vectorize_relation(path) for path in false_path]
+			question_vector = embeddings_interface.vectorize(nlutils.tokenize(con[3]))
+			entity_vector = embeddings_interface.vectorize(nlutils.tokenize(value['label'][0]))
+			relation_vector = vectorize_relation(con[1])
+			plus_vector = embeddings_interface.vectorize(['+'])
+			entity_vector = np.concatenate((entity_vector,plus_vector),axis=0)
+			new_entity_vector = np.concatenate((entity_vector,relation_vector),axis=0)
+			y_vector = np.zeros(FALSE_PATH_LENGTH + 1)
+			final_data.append([question_vector,new_entity_vector,tokenized_false_path,y_vector])
+			periodic_counter = periodic_counter + 1
+			print "write counter is ", counter
+			counter = counter + 1
+			if periodic_counter > WRITE_INTERVAL:
+				with open(OUTPUT_DIR + "/" + str(content_counter) + ".pickle", 'w') as fp:
+					pickle.dump(final_data, fp)
+				periodic_counter = 0
+				final_data = []
+			content_counter = content_counter + 1
+			if counter > REQUIRED_QUESTION:
+				break
+		else:
+			content_counter = content_counter + 1
+			print content_counter
+	except:
 		content_counter = content_counter + 1
-		if counter > REQUIRED_QUESTION:
-			break
-	else:
-		content_counter = content_counter + 1
-		print content_counter
+		continue
 
 
 if len(final_data) > 0:

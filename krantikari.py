@@ -144,6 +144,10 @@ def similar_predicates(_question, _predicates, _return_indices=False, _k=5):
     :param _k: int :- select top k from sorted list
     :return: a list of strings (subset of predicates)
     """
+    # If there are no predicates
+    if len(_predicates) == 0:
+        return np.asarray([]) if _return_indices else []
+
     # Tokenize question
     qt = nlutils.tokenize(_question, _remove_stopwords=False)
 
@@ -238,7 +242,7 @@ def runtime(_question, _entities, _return_core_chains=False, _return_answers=Fal
                 # This belongs to the left pred list.
                 # Offset index to match to left_properties_filter_indices index.
 
-                i -= len(right_properties_filtered)
+                i -= len(right_properties_filter_indices)
                 predicate = left_properties[left_properties_filter_indices[i]]
                 left_properties_filtered.append(predicate)
 
@@ -259,26 +263,26 @@ def runtime(_question, _entities, _return_core_chains=False, _return_answers=Fal
 
             Note: Switching to LC-QuAD nomenclature hereon. Refer to /resources/nomenclature.png
         """
-        e_in_in_to_e_in = []
-        e_in_to_e_in_out = []
-        e_out_to_e_out_out = []
-        e_out_in_to_e_out = []
+        e_in_in_to_e_in = {}
+        e_in_to_e_in_out = {}
+        e_out_to_e_out_out = {}
+        e_out_in_to_e_out = {}
 
         for pred in right_properties_filtered:
             temp_r, temp_l = get_hop2_subgraph(_entity=_entities[0], _predicate=pred, _right=True)
-            e_out_to_e_out_out += temp_r
-            e_out_in_to_e_out += temp_l
+            e_out_to_e_out_out[pred] = temp_r
+            e_out_in_to_e_out[pred] = temp_l
 
         for pred in left_properties_filtered:
             temp_r, temp_l =  get_hop2_subgraph(_entity=_entities[0], _predicate=pred, _right=False)
-            e_in_to_e_in_out += temp_r
-            e_in_in_to_e_in += temp_l
+            e_in_to_e_in_out[pred] = temp_r
+            e_in_in_to_e_in[pred] = temp_l
 
         # Get uniques
-        e_in_in_to_e_in = list(set(e_in_in_to_e_in))
-        e_in_to_e_in_out = list(set(e_in_to_e_in_out))
-        e_out_to_e_out_out = list(set(e_out_to_e_out_out))
-        e_out_in_to_e_out = list(set(e_out_in_to_e_out))
+        # e_in_in_to_e_in = list(set(e_in_in_to_e_in))
+        # e_in_to_e_in_out = list(set(e_in_to_e_in_out))
+        # e_out_to_e_out_out = list(set(e_out_to_e_out_out))
+        # e_out_in_to_e_out = list(set(e_out_in_to_e_out))
 
         # Predicates generated. @TODO: Use predicate whitelist/blacklist to trim this shit.
 
@@ -289,11 +293,26 @@ def runtime(_question, _entities, _return_core_chains=False, _return_answers=Fal
             pprint(e_out_to_e_out_out)
             pprint(e_out_in_to_e_out)
 
-        # Get their surface forms
-        e_in_in_to_e_in_sf = [dbp.get_label(x) for x in e_in_in_to_e_in]
-        e_in_to_e_in_out_sf = [dbp.get_label(x) for x in e_in_to_e_in_out]
-        e_out_to_e_out_out_sf = [dbp.get_label(x) for x in e_out_to_e_out_out]
-        e_out_in_to_e_out_sf = [dbp.get_label(x) for x in e_out_in_to_e_out]
+        # Get their surface forms, maintain a key-value store
+        sf_vocab = {}
+        for key in e_in_in_to_e_in.keys():
+            for uri in e_in_in_to_e_in[key]:
+                sf_vocab[uri] = dbp.get_label(uri)
+        for key in e_in_to_e_in_out.keys():
+            for uri in e_in_to_e_in_out[key]:
+                sf_vocab[uri] = dbp.get_label(uri)
+        for key in e_out_to_e_out_out.keys():
+            for uri in e_out_in_to_e_out[key]:
+                sf_vocab[uri] = dbp.get_label(uri)
+        for key in e_out_in_to_e_out.keys():
+            for uri in e_out_in_to_e_out[key]:
+                sf_vocab[uri] = dbp.get_label(uri)
+
+        # Flatten the four kind of predicates, and use their surface forms.
+        e_in_in_to_e_in_sf = [sf_vocab[x] for uris in e_in_in_to_e_in.values() for x in uris]
+        e_in_to_e_in_out_sf = [sf_vocab[x] for uris in e_in_to_e_in_out.values() for x in uris]
+        e_out_to_e_out_out_sf = [sf_vocab[x] for uris in e_out_to_e_out_out.values() for x in uris]
+        e_out_in_to_e_out_sf = [sf_vocab[x] for uris in e_out_in_to_e_out.values() for x in uris]
 
         # WORD-EMBEDDING FILTERING
         e_in_in_to_e_in_filter_indices = similar_predicates(_question = _question,
@@ -318,6 +337,67 @@ def runtime(_question, _entities, _return_core_chains=False, _return_answers=Fal
         e_in_to_e_in_out_filtered = [e_in_to_e_in_out_sf[i] for i in e_in_to_e_in_out_filter_indices]
         e_out_to_e_out_out_filtered = [e_out_to_e_out_out_sf[i] for i in e_out_to_e_out_out_filter_indices]
         e_out_in_to_e_out_filtered = [e_out_in_to_e_out_sf[i] for i in e_out_in_to_e_out_filter_indices]
+
+        # Use them to make a filtered dictionary of hop1: [hop2_filtered] pairs
+        e_in_in_to_e_in_filtered_subgraph = {}
+        for x in e_in_in_to_e_in_filtered:
+            for uri in sf_vocab.keys():
+                if x == sf_vocab[uri]:
+
+                    # That's the URI. Find it's 1-hop Pred.
+                    for hop1 in e_in_in_to_e_in.keys():
+                        if uri  in e_in_in_to_e_in[hop1]:
+
+                            # Now we found a matching :sweat:
+                            try:
+                                e_in_in_to_e_in_filtered_subgraph[hop1].append(uri)
+                            except KeyError:
+                                e_in_in_to_e_in_filtered_subgraph[hop1] = [uri]
+
+        e_in_to_e_in_out_filtered_subgraph = {}
+        for x in e_in_to_e_in_out_filtered:
+            for uri in sf_vocab.keys():
+                if x == sf_vocab[uri]:
+
+                    # That's the URI. Find it's 1-hop Pred.
+                    for hop1 in e_in_to_e_in_out.keys():
+                        if uri in e_in_to_e_in_out[hop1]:
+
+                            # Now we found a matching :sweat:
+                            try:
+                                e_in_to_e_in_out_filtered_subgraph[hop1].append(uri)
+                            except KeyError:
+                                e_in_to_e_in_out_filtered_subgraph[hop1] = [uri]
+
+        e_out_to_e_out_out_filtered_subgraph = {}
+        for x in e_out_to_e_out_out_filtered:
+            for uri in sf_vocab.keys():
+                if x == sf_vocab[uri]:
+
+                    # That's the URI. Find it's 1-hop Pred.
+                    for hop1 in e_out_to_e_out_out.keys():
+                        if uri in e_out_to_e_out_out[hop1]:
+
+                            # Now we found a matching :sweat:
+                            try:
+                                e_out_to_e_out_out_filtered_subgraph[hop1].append(uri)
+                            except KeyError:
+                                e_out_to_e_out_out_filtered_subgraph[hop1] = [uri]
+
+        e_out_in_to_e_out_filtered_subgraph = {}
+        for x in e_out_in_to_e_out_filtered:
+            for uri in sf_vocab.keys():
+                if x == sf_vocab[uri]:
+
+                    # That's the URI. Find it's 1-hop Pred.
+                    for hop1 in e_out_in_to_e_out.keys():
+                        if uri in e_out_in_to_e_out[hop1]:
+
+                            # Now we found a matching :sweat:
+                            try:
+                                e_out_in_to_e_out_filtered_subgraph[hop1].append(uri)
+                            except KeyError:
+                                e_out_in_to_e_out_filtered_subgraph[hop1] = [uri]
 
         # Generate 2-hop paths out of them.
 

@@ -77,6 +77,7 @@ import warnings
 import traceback
 import numpy as np
 from pprint import pprint
+from keras import backend as K
 
 # Local file imports
 from utils import model_interpreter
@@ -95,6 +96,8 @@ MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 # Global Variables
 dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
 model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
+
+
 
 
 # Better warning formatting. Ignore.
@@ -152,17 +155,14 @@ def similar_predicates(_question, _predicates, _return_indices=False, _k=5):
     qt = nlutils.tokenize(_question, _remove_stopwords=False)
 
     # Vectorize question
-    v_qt = embeddings_interface.vectorize(qt)
+    v_qt = np.mean(embeddings_interface.vectorize(qt), axis=0)\
 
-    # Vectorize predicates
-    v_pt = np.asarray([np.mean(embeddings_interface.vectorize(nlutils.tokenize(x)), axis=0) for x in _predicates])
-
-    # Compute similarity
-    similarity_mat = np.dot(v_pt, np.transpose(v_qt))
+    # Vectorize predicates and compare
+    similarity_arr = np.asarray([ np.dot(np.mean(embeddings_interface.vectorize(nlutils.tokenize(x)), axis=0), np.transpose(v_qt)) for x in _predicates])
 
     # Find the best scoring values for every path
     # Sort ( best match score for each predicate) in descending order, and choose top k
-    argmaxes = np.argsort(np.max(similarity_mat, axis=1))[::-1][:_k]
+    argmaxes = np.argsort(similarity_arr, axis=0)[::-1][:_k]
 
     if _return_indices:
         return argmaxes
@@ -432,7 +432,8 @@ def runtime(_question, _entities, _return_core_chains=False, _return_answers=Fal
         paths_log.append(len(paths_sf))
 
         # Vectorize these paths
-
+        pprint(paths_log)
+        print "done"
         # MODEL FILTERING
 
         # Impose indices
@@ -448,9 +449,9 @@ if __name__ == "__main__":
     """
         TEST1 : Accuracy of similar_predicates
     """
-    q = 'Who is the president of United States'
+    q = 'Who is the president of Nicaragua ?'
     p = ['abstract', 'motto', 'population total', 'official language', 'legislature', 'lower house', 'president',
          'leader', 'prime minister']
-    e = 'http://dbpedia.org/resource/United_States'
+    e = 'http://dbpedia.org/resource/Nicaragua'
     # print(similar_predicates(q, p, 5))
     print runtime(q, [e])

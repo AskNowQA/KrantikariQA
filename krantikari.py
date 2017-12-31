@@ -280,10 +280,10 @@ class Krantikari:
                     predicate = right_properties[right_properties_filter_indices[i]]
                     right_properties_filtered.append(predicate)
 
-            if DEBUG:
-                print("Check URI of filtered paths. Left, then right.")
-                pprint(left_properties_filtered)
-                pprint(right_properties_filtered)
+            # if DEBUG:
+            #     print("Check URI of filtered paths. Left, then right.")
+            #     pprint(left_properties_filtered)
+            #     pprint(right_properties_filtered)
 
             """
                 2 - Hop COMMENCES
@@ -313,12 +313,12 @@ class Krantikari:
 
             # Predicates generated. @TODO: Use predicate whitelist/blacklist to trim this shit.
 
-            if DEBUG:
-                print("HOP2 Subgraph")
-                pprint(e_in_in_to_e_in)
-                pprint(e_in_to_e_in_out)
-                pprint(e_out_to_e_out_out)
-                pprint(e_out_in_to_e_out)
+            # if DEBUG:
+            #     print("HOP2 Subgraph")
+            #     pprint(e_in_in_to_e_in)
+            #     pprint(e_in_to_e_in_out)
+            #     pprint(e_out_to_e_out_out)
+            #     pprint(e_out_in_to_e_out)
 
             # Get their surface forms, maintain a key-value store
             sf_vocab = {}
@@ -329,7 +329,7 @@ class Krantikari:
                 for uri in e_in_to_e_in_out[key]:
                     sf_vocab[uri] = self.dbp.get_label(uri)
             for key in e_out_to_e_out_out.keys():
-                for uri in e_out_in_to_e_out[key]:
+                for uri in e_out_to_e_out_out[key]:
                     sf_vocab[uri] = self.dbp.get_label(uri)
             for key in e_out_in_to_e_out.keys():
                 for uri in e_out_in_to_e_out[key]:
@@ -425,33 +425,54 @@ class Krantikari:
             # Generate 2-hop paths out of them.
             paths_log = []
             paths_sf = []
+            paths_uri = []
             for key in e_in_in_to_e_in_filtered_subgraph.keys():
                 for r2 in e_in_in_to_e_in_filtered_subgraph[key]:
+
                     path = nlutils.tokenize(entity_sf)                  \
                             + ['-'] + nlutils.tokenize(sf_vocab[key])   \
                             + ['-'] + nlutils.tokenize(sf_vocab[r2])
                     paths_sf.append(path)
+
+                    path_uri = [_entities[0], '-', key, '-', r2]
+                    paths_uri.append(path_uri)
+
             paths_log.append(len(paths_sf))
             for key in e_in_to_e_in_out_filtered_subgraph.keys():
                 for r2 in e_in_to_e_in_out_filtered_subgraph[key]:
+
                     path = nlutils.tokenize(entity_sf)                  \
                             + ['-'] + nlutils.tokenize(sf_vocab[key])   \
                             + ['+'] + nlutils.tokenize(sf_vocab[r2])
                     paths_sf.append(path)
+
+                    path_uri = [_entities[0], '-', key, '+', r2]
+                    paths_uri.append(path_uri)
+
             paths_log.append(len(paths_sf))
             for key in e_out_to_e_out_out_filtered_subgraph.keys():
                 for r2 in e_out_to_e_out_out_filtered_subgraph[key]:
+
                     path = nlutils.tokenize(entity_sf)                  \
                             + ['+'] + nlutils.tokenize(sf_vocab[key])   \
                             + ['+'] + nlutils.tokenize(sf_vocab[r2])
                     paths_sf.append(path)
+
+                    path_uri = [_entities[0], '+', key, '+', r2]
+                    paths_uri.append(path_uri)
+
             paths_log.append(len(paths_sf))
             for key in e_out_to_e_out_out_filtered_subgraph.keys():
                 for r2 in e_out_to_e_out_out_filtered_subgraph[key]:
+
                     path = nlutils.tokenize(entity_sf)                  \
                             + ['+'] + nlutils.tokenize(sf_vocab[key])   \
                             + ['-'] + nlutils.tokenize(sf_vocab[r2])
                     paths_sf.append(path)
+
+                    path_uri = [_entities[0], '+', key, '+', r2]
+                    paths_uri.append(path_uri)
+
             paths_log.append(len(paths_sf))
 
             # Vectorize these paths
@@ -465,6 +486,7 @@ class Krantikari:
 
             # Impose indices
             ranked_paths_hop2 = [paths_sf[i] for i in hop2_indices]
+            ranked_paths_hop2_uri = [paths_uri[i] for i in hop2_indices]
 
             self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
 
@@ -716,14 +738,11 @@ def run_lcquad():
         e = parsed_data[u'entity']
 
         if len(e) > 1:
-            results.append(0)
+            results.append([0, 0])
             continue
 
         qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp)
-        if qa.path_length == len(parsed_data['path']):
-            results.append(1)
-        else:
-            results.append(-1)
+        results.append([qa.path_length, len(parsed_data['path'])])
 
     print results
 

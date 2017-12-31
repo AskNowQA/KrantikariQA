@@ -77,6 +77,7 @@ import warnings
 import traceback
 import numpy as np
 from pprint import pprint
+from progressbar import ProgressBar
 from keras import backend as K
 
 # Local file imports
@@ -87,16 +88,14 @@ from utils import natural_language_utilities as nlutils
 
 # Some MACROS
 DEBUG = True
-K_1HOP_GLOVE = 20
-K_1HOP_MODEL = 5
-K_2HOP_GLOVE = 10
-K_2HOP_MODEL = 5
+LCQUAD_DIR = './resources/data_set.json'
 MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 
 
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
+
 
 class Krantikari:
 
@@ -108,6 +107,12 @@ class Krantikari:
         :param _entities: a list of strings (each being a URI)
         :return: SPARQL/CoreChain/Answers (and or)
         """
+        # QA Specific Macros
+        self.K_1HOP_GLOVE = 20
+        self.K_1HOP_MODEL = 5
+        self.K_2HOP_GLOVE = 10
+        self.K_2HOP_MODEL = 5
+
         # Internalize args
         self.question = _question
         self.entities = _entities
@@ -223,10 +228,10 @@ class Krantikari:
             # WORD-EMBEDDING FILTERING
             right_properties_filter_indices = self.similar_predicates(_predicates=right_properties_sf,
                                                                       _return_indices=True,
-                                                                      _k=K_1HOP_GLOVE)
+                                                                      _k=self.K_1HOP_GLOVE)
             left_properties_filter_indices = self.similar_predicates(_predicates=left_properties_sf,
                                                                      _return_indices=True,
-                                                                     _k=K_1HOP_GLOVE)
+                                                                     _k=self.K_1HOP_GLOVE)
 
             # Impose these indices to generate filtered predicate list.
             right_properties_filtered = [right_properties_sf[i] for i in right_properties_filter_indices]
@@ -243,7 +248,7 @@ class Krantikari:
             hop1_indices, hop1_scores = self.model.rank(_v_q=v_q,
                                                         _v_ps=v_ps,
                                                         _return_only_indices=False,
-                                                        _k=K_1HOP_MODEL)
+                                                        _k=self.K_1HOP_MODEL)
 
             # Impose indices on the paths.
             ranked_paths_hop1 = [paths_sf[i] for i in hop1_indices]
@@ -339,16 +344,16 @@ class Krantikari:
             # WORD-EMBEDDING FILTERING
             e_in_in_to_e_in_filter_indices = self.similar_predicates(_predicates=e_in_in_to_e_in_sf,
                                                                      _return_indices=True,
-                                                                     _k=K_2HOP_GLOVE)
+                                                                     _k=self.K_2HOP_GLOVE)
             e_in_to_e_in_out_filter_indices = self.similar_predicates(_predicates=e_in_to_e_in_out_sf,
                                                                       _return_indices=True,
-                                                                      _k=K_2HOP_GLOVE)
+                                                                      _k=self.K_2HOP_GLOVE)
             e_out_to_e_out_out_filter_indices = self.similar_predicates(_predicates=e_out_to_e_out_out_sf,
                                                                         _return_indices=True,
-                                                                        _k=K_2HOP_GLOVE)
+                                                                        _k=self.K_2HOP_GLOVE)
             e_out_in_to_e_out_filter_indices = self.similar_predicates(_predicates=e_out_in_to_e_out_sf,
                                                                        _return_indices=True,
-                                                                       _k=K_2HOP_GLOVE)
+                                                                       _k=self.K_2HOP_GLOVE)
 
             # Impose these indices to generate filtered predicate list.
             e_in_in_to_e_in_filtered = [e_in_in_to_e_in_sf[i] for i in e_in_in_to_e_in_filter_indices]
@@ -456,7 +461,7 @@ class Krantikari:
             hop2_indices, hop2_scores = self.model.rank(_v_q=v_q,
                                                         _v_ps=v_ps,
                                                         _return_only_indices=False,
-                                                        _k=K_2HOP_MODEL)
+                                                        _k=self.K_2HOP_MODEL)
 
             # Impose indices
             ranked_paths_hop2 = [paths_sf[i] for i in hop2_indices]
@@ -478,25 +483,276 @@ def eval():
     pass
 
 
-if __name__ == "__main__":
+def get_triples(_sparql_query):
     """
-        TEST1 : Accuracy of similar_predicates
+        parses sparql query to return a set of triples
     """
-    _question = 'Who is the president of Nicaragua ?'
-    p = ['abstract', 'motto', 'population total', 'official language', 'legislature', 'lower house', 'president',
-         'leader', 'prime minister']
-    _entities = ['http://dbpedia.org/resource/Nicaragua']
 
-    # Create a DBpeida object.
+    parsed = _sparql_query.split("{")
+    parsed = [x.strip() for x in parsed]
+    triples = parsed[1][:-1].strip()
+    triples = triples.split(". ")
+    triples = [x.strip() for x in triples]
+    return triples
+
+
+def parse_lcquad(_data):
+    """
+        Function to append useful information to LCQuAD json
+
+    :param _data: JSON of LCQuAD
+    :return: JSON of LCQuAD on steroids.
+    """
+    if _data[u"sparql_template_id"] in [1, 301, 401, 101]:  # :
+        '''
+            {
+                u'_id': u'9a7523469c8c45b58ec65ed56af6e306',
+                u'corrected_question': u'What are the schools whose city is Reading, Berkshire?',
+                u'sparql_query': u' SELECT DISTINCT ?uri WHERE {?uri <http://dbpedia.org/ontology/city> <http://dbpedia.org/resource/Reading,_Berkshire> } ',
+                u'sparql_template_id': 1,
+                u'verbalized_question': u'What are the <schools> whose <city> is <Reading, Berkshire>?'
+            }
+        '''
+        data_node = _data
+        if ". }" not in _data[u'sparql_query']:
+            _data[u'sparql_query'] = _data[u'sparql_query'].replace("}", ". }")
+        triples = get_triples(_data[u'sparql_query'])
+        data_node[u'entity'] = []
+        data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+        data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
+        data_node[u'constraints'] = {}
+        if _data[u"sparql_template_id"] in [301, 401]:
+            data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[2][1:-1]}
+        if _data[u"sparql_template_id"] in [401, 101]:
+            data_node[u'constraints']['count'] = True
+        return data_node
+
+    elif _data[u"sparql_template_id"] in [2, 302, 402, 102]:
+        '''
+            {	u'_id': u'8216e5b6033a407191548689994aa32e',
+                u'corrected_question': u'Name the municipality of Roberto Clemente Bridge ?',
+                u'sparql_query': u' SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Roberto_Clemente_Bridge> <http://dbpedia.org/ontology/municipality> ?uri } ',
+                u'sparql_template_id': 2,
+                u'verbalized_question': u'What is the <municipality> of Roberto Clemente Bridge ?'
+            }
+        '''
+        # TODO: Verify the 302 template
+        data_node = _data
+        if ". }" not in _data[u'sparql_query']:
+            _data[u'sparql_query'] = _data[u'sparql_query'].replace("}", ". }")
+        triples = get_triples(_data[u'sparql_query'])
+        data_node[u'entity'] = []
+        data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
+        data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
+        data_node[u'constraints'] = {}
+        if _data[u"sparql_template_id"] in [302, 402]:
+            data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[2][1:-1]}
+        if _data[u"sparql_template_id"] in [402, 102]:
+            data_node[u'constraints']['count'] = True
+        return data_node
+
+    elif _data[u"sparql_template_id"] in [3, 303, 309, 9, 403, 409, 103, 109]:
+        '''
+            {    u'_id': u'dad51bf9d0294cac99d176aba17c0241',
+                 u'corrected_question': u'Name some leaders of the parent organisation of the Gestapo?',
+                 u'sparql_query': u'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Gestapo> <http://dbpedia.org/ontology/parentOrganisation> ?x . ?x <http://dbpedia.org/ontology/leader> ?uri  . }',
+                 u'sparql_template_id': 3,
+                 u'verbalized_question': u'What is the <leader> of the <government agency> which is the <parent organisation> of <Gestapo> ?'}
+        '''
+        # pprint(node)
+        data_node = _data
+        triples = get_triples(_data[u'sparql_query'])
+        data_node[u'entity'] = []
+        data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
+        rel2 = triples[1].split(" ")[1][1:-1]
+        rel1 = triples[0].split(" ")[1][1:-1]
+        data_node[u'path'] = ["+" + rel1, "+" + rel2]
+        data_node[u'constraints'] = {}
+        if _data[u"sparql_template_id"] in [303, 309, 403, 409]:
+            data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
+        if _data[u"sparql_template_id"] in [403, 409, 103, 109]:
+            data_node[u'constraints']['count'] = True
+        return data_node
+
+    elif _data[u"sparql_template_id"] in [5, 305, 405, 105, 111]:
+        '''
+            >Verify this !!
+            {
+                u'_id': u'00a3465694634edc903510572f23b487',
+                u'corrected_question': u'Which party has come in power in Mumbai North?',
+                u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/constituency> <http://dbpedia.org/resource/Mumbai_North_(Lok_Sabha_constituency)> . ?x <http://dbpedia.org/ontology/party> ?uri  . }',
+                u'sparql_template_id': 5,
+                u'verbalized_question': u'What is the <party> of the <office holders> whose <constituency> is <Mumbai North (Lok Sabha constituency)>?'
+            }
+        '''
+        # pprint(node)
+        data_node = _data
+        triples = get_triples(_data[u'sparql_query'])
+        rel1 = triples[0].split(" ")[1][1:-1]
+        rel2 = triples[1].split(" ")[1][1:-1]
+        data_node[u'entity'] = []
+        data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+        data_node[u'path'] = ["-" + rel1, "+" + rel2]
+        data_node[u'constraints'] = {}
+        if _data[u"sparql_template_id"] in [305, 405]:
+            data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
+        if _data[u"sparql_template_id"] in [105, 405, 111]:
+            data_node[u'constraints']['count'] = True
+        return data_node
+
+    elif _data[u'sparql_template_id'] in [6, 306, 406, 106]:
+        '''
+            {
+                u'_id': u'd3695db03a5e45ae8906a2527508e7c5',
+                u'corrected_question': u'Who have done their PhDs under a National Medal of Science winner?',
+                u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?x <http://dbpedia.org/property/prizes> <http://dbpedia.org/resource/National_Medal_of_Science> . ?uri <http://dbpedia.org/property/doctoralAdvisor> ?x  . }',
+                u'sparql_template_id': 6,
+                u'verbalized_question': u"What are the <scientists> whose <advisor>'s <prizes> is <National Medal of Science>?"
+            }
+        '''
+        # pprint(node)
+        data_node = _data
+        triples = get_triples(_data[u'sparql_query'])
+        rel1 = triples[0].split(" ")[1][1:-1]
+        rel2 = triples[1].split(" ")[1][1:-1]
+        data_node[u'entity'] = []
+        data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+        data_node[u'path'] = ["-" + rel1, "-" + rel2]
+        data_node[u'constraints'] = {}
+        if _data[u"sparql_template_id"] in [306, 406]:
+            data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
+        if _data[u"sparql_template_id"] in [406, 106]:
+            data_node[u'constraints']['count'] = True
+        return data_node
+
+    elif _data[u'sparql_template_id'] in [7, 8, 307, 308, 407, 408, 107, 108]:
+        '''
+            {
+                u'_id': u'6ff03a568e2e4105b491ab1c1411c1ab',
+                u'corrected_question': u'What tv series can be said to be related to the sarah jane adventure and dr who confidential?',
+                u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/The_Sarah_Jane_Adventures> . ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/Doctor_Who_Confidential> . }',
+                u'sparql_template_id': 7,
+                u'verbalized_question': u'What is the <television show> whose <relateds> are <The Sarah Jane Adventures> and <Doctor Who Confidential>?'
+             }
+        '''
+        # pprint(node)
+        data_node = _data
+        triples = get_triples(_data[u'sparql_query'])
+        rel1 = triples[0].split(" ")[1][1:-1]
+        rel2 = triples[1].split(" ")[1][1:-1]
+        data_node[u'entity'] = []
+        data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
+        data_node[u'entity'].append(triples[1].split(" ")[2][1:-1])
+        data_node[u'path'] = ["-" + rel1, "+" + rel2]
+        data_node[u'constraints'] = {}
+        if _data[u"sparql_template_id"] in [307, 407, 308, 408]:
+            data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
+        if _data[u"sparql_template_id"] in [407, 107, 408, 108]:
+            data_node[u'constraints']['count'] = True
+        return data_node
+
+    elif _data[u'sparql_template_id'] in [15, 16, 315, 316, 415, 416, 115, 116]:
+        '''
+            {
+                u'_id': u'6ff03a568e2e4105b491ab1c1411c1ab',
+                u'corrected_question': u'What tv series can be said to be related to the sarah jane adventure and dr who confidential?',
+                u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/The_Sarah_Jane_Adventures> . ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/Doctor_Who_Confidential> . }',
+                u'sparql_template_id': 7,
+                u'verbalized_question': u'What is the <television show> whose <relateds> are <The Sarah Jane Adventures> and <Doctor Who Confidential>?'
+             }
+        '''
+        data_node = _data
+        _data[u'sparql_query'] = _data[u'sparql_query'].replace('uri}', 'uri . }')
+        triples = get_triples(_data[u'sparql_query'])
+        rel1 = triples[0].split(" ")[1][1:-1]
+        rel2 = triples[1].split(" ")[1][1:-1]
+        data_node[u'entity'] = []
+        data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
+        data_node[u'entity'].append(triples[1].split(" ")[0][1:-1])
+        data_node[u'path'] = ["+" + rel1, "+" + rel2]
+        data_node[u'constraints'] = {}
+        if _data[u"sparql_template_id"] in [315, 415, 316, 416]:
+            data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
+        if _data[u"sparql_template_id"] in [415, 115, 416, 116]:
+            data_node[u'constraints']['count'] = True
+        return data_node
+
+
+def run_lcquad():
+    """
+        Function to run the entire script on LC-QuAD, the lord of all datasets.
+        - Load dataset
+        - Parse it
+        - Find length of all paths
+        - Give every question to Krantikari,
+        - Compare lengths.
+        - Store results in an array.
+
+    :return:
+    """
+    results = []
+
+    # Create a DBpedia object.
     dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
 
     # Create a model interpreter.
     model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
 
-    qa = Krantikari(_question, _entities,
-                    _dbpedia_interface=dbp,
-                    _model_interpreter=model,
-                    _return_core_chains=True,
-                    _return_answers=False)
+    # Load LC-QuAD
+    dataset = json.load(open(LCQUAD_DIR))
 
-    print qa.path_length
+    progbar = ProgressBar()
+    iterator = progbar(dataset[:10])
+
+    # Parse it
+    for x in iterator:
+        parsed_data = parse_lcquad(x)
+
+        if not parsed_data:
+            continue
+
+        # Get Needed data
+        q = parsed_data[u'corrected_question']
+        e = parsed_data[u'entity']
+
+        if len(e) > 1:
+            results.append(0)
+            continue
+
+        qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp)
+        if qa.path_length == len(parsed_data['path']):
+            results.append(1)
+        else:
+            results.append(-1)
+
+    print results
+
+
+
+if __name__ == "__main__":
+    # """
+    #     TEST1 : Accuracy of similar_predicates
+    # """
+    # _question = 'Who is the president of Nicaragua ?'
+    # p = ['abstract', 'motto', 'population total', 'official language', 'legislature', 'lower house', 'president',
+    #      'leader', 'prime minister']
+    # _entities = ['http://dbpedia.org/resource/Nicaragua']
+    #
+    # # Create a DBpedia object.
+    # dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+    #
+    # # Create a model interpreter.
+    # model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
+    #
+    # qa = Krantikari(_question, _entities,
+    #                 _dbpedia_interface=dbp,
+    #                 _model_interpreter=model,
+    #                 _return_core_chains=True,
+    #                 _return_answers=False)
+    #
+    # print(qa.path_length)
+
+    """
+        TEST 2 : Check LCQuAD Parser
+    """
+    run_lcquad()

@@ -75,6 +75,7 @@ import random
 import pickle
 import warnings
 import traceback
+import editdistance
 import numpy as np
 from pprint import pprint
 from progressbar import ProgressBar
@@ -88,6 +89,7 @@ from utils import natural_language_utilities as nlutils
 
 # Some MACROS
 DEBUG = True
+PATH_CHARS = ['+', '-', '/']
 LCQUAD_DIR = './resources/data_set.json'
 MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 
@@ -507,27 +509,75 @@ class Krantikari:
             self.best_path = ranked_paths_hop2_uri[np.argmax(hop2_scores)]
 
 
-if __name__ == '__main__':
-    def eval(_true, _predicted):
-        """
-           Fancier implementation of "are these corechains equal".
-           Logic:
-                Split the signs away from predicates in true paths
+def eval(_true, _predicted):
+    """
+       Fancier implementation of "are these corechains equal".
+       Logic:
+            Split the signs away from predicates in true paths
 
-        :return: int: -1/0/1
-        """
-        # If there are two or more entities, flail your arms around and run in circles
-        if len(_true['entity']) >= 2:
-            return 0
+        Tests -
+            - same path length?
+            - same path pattern?
+            - completely same path ?
+            - completely same path (after abstracting out ontology/property conundrum)?
+            - partially same path (entity, either predicate)?
 
-        # Parse the _true into something that resembles predicates
-        parsed_true = [_true['entity']]
-        for token in _true:
-            if token.strip()[0] in ['-', '+', '/']:
-                parsed_true.append(token.strip()[0])
-                parsed_true.append(token.strip()[1:])
-                continue
-            parsed_true.append(token.strip())
+    :return: Json object containing results of all the tests, including the true and predicted candidates for that test.
+    """
+    results = {}                               # Store different eval results here
+    # If there are two or more entities, flail your arms around and run in circles
+    if len(_true['entity']) >= 2:
+        return 0
+
+    # Parse the _true into something that resembles predicates
+    true_path_parsed = [_true['entity'][0]]
+    for token in _true['path']:
+        if token.strip()[0] in PATH_CHARS:
+            true_path_parsed.append(token.strip()[0])
+            true_path_parsed.append(token.strip()[1:])
+            continue
+        true_path_parsed.append(token.strip())
+
+    """
+        Test 1:
+            Check if the paths lengths is same or not
+    """
+    results['path-length'] = {'score': 1 if len(_predicted) == len(true_path_parsed) else 0,
+                              'pred': len(_predicted),
+                              'true': len(true_path_parsed)}
+
+    """
+        Test 2:
+            Check the path patterns (edit distance)
+    """
+    # Check patterns of the paths
+    true_path_pattern = ''.join(x for x in true_path_parsed if x in PATH_CHARS)
+    pred_path_pattern = ''.join(x for x in _predicted if x in PATH_CHARS)
+    results['path-pattern'] = {'score': editdistance.eval(true_path_pattern, pred_path_pattern),
+                               'true': true_path_pattern,
+                               'pred': pred_path_pattern}
+
+    """
+        Test 3:
+            Check if the paths are exactly the same or not
+    """
+    results['perfect-match'] = {'score': 1 if _predicted == true_path_parsed else 0,
+                                'pred': _predicted,
+                                'true': true_path_parsed}
+
+    """
+        Test 4:
+            Check if paths are the same after removing the prefixes.
+
+            @TODO: Tokens with
+    """
+    true_path_unprefixed = [x.strip().split('/')[-1] for x in true_path_parsed]
+    pred_path_unprefixed = [x.strip().split('/')[-1] for x in _predicted]
+    results['perfect-match-unprefixed'] = {'score': 1 if true_path_unprefixed == pred_path_unprefixed else 0,
+                                           'pred': pred_path_unprefixed,
+                                           'true': true_path_unprefixed}
+
+    print results
 
 
 def get_triples(_sparql_query):
@@ -767,10 +817,7 @@ def run_lcquad():
             continue
 
         qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp)
-        results.append([qa.path_length, len(parsed_data['path'])])
-
-    print results
-
+        eval(parsed_data, qa.best_path)
 
 
 if __name__ == "__main__":
@@ -800,3 +847,4 @@ if __name__ == "__main__":
         TEST 2 : Check LCQuAD Parser
     """
     run_lcquad()
+

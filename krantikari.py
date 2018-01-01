@@ -238,9 +238,16 @@ class Krantikari:
         # Vectorize question
         v_qt = np.mean(embeddings_interface.vectorize(qt), axis=0)\
 
-        # Vectorize predicates and compare
-        similarity_arr = np.asarray([np.dot(np.mean(embeddings_interface.vectorize(nlutils.tokenize(x)), axis=0),
-                                            np.transpose(v_qt)) for x in _predicates])
+        # Declare a similarity array
+        similarity_arr = np.zeros(len(_predicates))
+
+        # Fill similarity array
+        for i in range(len(_predicates)):
+            p = _predicates[i]
+            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p)), axis=0)
+
+            # Cos Product
+            similarity_arr[i] = np.dot(v_p, v_qt) / (np.linalg.norm(v_p) * np.linalg.norm(v_qt))
 
         # Find the best scoring values for every path
         # Sort ( best match score for each predicate) in descending order, and choose top k
@@ -289,18 +296,22 @@ class Krantikari:
                                                                      _k=self.K_1HOP_GLOVE)
 
             # Impose these indices to generate filtered predicate list.
-            right_properties_filtered = [right_properties_sf[i] for i in right_properties_filter_indices]
-            left_properties_filtered = [left_properties_sf[i] for i in left_properties_filter_indices]
+            right_properties_filtered_sf = [right_properties_sf[i] for i in right_properties_filter_indices]
+            left_properties_filtered_sf = [left_properties_sf[i] for i in left_properties_filter_indices]
+
+            # Generate their URI counterparts
+            right_properties_filtered_uri = [right_properties[i] for i in right_properties_filter_indices]
+            left_properties_filtered_uri = [left_properties_sf[i] for i in left_properties_filter_indices]
 
             # Generate 1-hop paths out of them
             paths_hop1_sf = [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p)
-                             for _p in right_properties_filtered]
+                             for _p in right_properties_filtered_sf]
             paths_hop1_sf += [nlutils.tokenize(entity_sf) + ['-'] + nlutils.tokenize(_p)
-                              for _p in left_properties_filtered]
+                              for _p in left_properties_filtered_sf]
 
             # Create their corresponding paths but with URI.
-            paths_hop1_uri = [[_entities[0], '+', _p] for _p in right_properties_filtered]
-            paths_hop1_uri += [[_entities[0], '-', _p] for _p in left_properties_filtered]
+            paths_hop1_uri = [[_entities[0], '+', _p] for _p in right_properties_filtered_uri]
+            paths_hop1_uri += [[_entities[0], '-', _p] for _p in left_properties_filtered_uri]
 
             # Vectorize these paths.
             v_ps = [embeddings_interface.vectorize(path) for path in paths_hop1_sf]
@@ -942,7 +953,7 @@ def run_qald():
     # Parse it
     for node in iterator:
         parsed_data = parse_qald(node)
-        print(parsed_data[u'corrected_question'])
+
         if not parsed_data:
             continue
 

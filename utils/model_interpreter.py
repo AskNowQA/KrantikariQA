@@ -64,6 +64,7 @@ class ModelInterpreter:
         padded_paths = np.zeros((len(_v_ps), self.path_len, self.embedding_dim))
         for i in range(len(_v_ps)):
             _v_p = _v_ps[i]
+            print(_v_p.shape)
             padded_paths[i, :_v_p.shape[0], :_v_p.shape[1]] = _v_p
 
         # Pad question
@@ -99,6 +100,6 @@ class ModelInterpreter:
 if __name__ == "__main__":
 
     model_interpreter = ModelInterpreter()
-    vq = np.random.rand(15,300)
+    vq = np.random.rand(15, 300)
     vps = [ np.random.rand(9, 300) for x in range(6)]
     model_interpreter.rank(vq, vps)

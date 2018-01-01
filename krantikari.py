@@ -246,6 +246,11 @@ class Krantikari:
             p = _predicates[i]
             v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p)), axis=0)
 
+            # If either of them is a zero vector, the cosine is 0.
+            if np.sum(v_p) == 0.0 and np.sum(v_qt) == 0.0:
+                similarity_arr[i] = np.float64(0.0)
+                continue
+
             # Cos Product
             similarity_arr[i] = np.dot(v_p, v_qt) / (np.linalg.norm(v_p) * np.linalg.norm(v_qt))
 

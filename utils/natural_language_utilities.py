@@ -165,6 +165,26 @@ def get_label_via_parsing(_uri, lower=False):
 def remove_stopwords(_tokens):
     return [x for x in _tokens if x.strip().lower() not in stopwords]
 
+def checker(uri,reverse=True,update=True):
+	'''
+		Checks if uri ends and starts with '>' and '<' respectively.
+		if update= True then also update the uri
+	'''
+	if uri[0] != '<':
+		if update:
+			uri = "<" + uri
+		else:
+			return False
+	if uri[-1] != '>':
+		if update:
+			uri =  uri + ">"
+		else:
+			return False
+	if reverse:
+		return uri[1:-1]
+	return uri
+
+
 if __name__ == "__main__":
     uris = ["http://dbpedia.org/ontology/Airport", "http://dbpedia.org/property/garrison",
             "<http://dbpedia.org/property/MohnishDubey"]

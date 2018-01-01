@@ -91,26 +91,31 @@ from utils import natural_language_utilities as nlutils
 DEBUG = True
 PATH_CHARS = ['+', '-', '/']
 LCQUAD_DIR = './resources/data_set.json'
+RESULTS_DIR = './resources/results.pickle'
 QALD_DIR = './resources/qald-7-train-multilingual.json'
 MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 
 
 short_forms = {
-	'dbo:' : 'http://dbpedia.org/ontology/',
-	'res:' : 'http://dbpedia.org/resource/',
-	'rdf:' : 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-	'dbp:' : 'http://dbpedia.org/property/'
+    'dbo:': 'http://dbpedia.org/ontology/',
+    'res:': 'http://dbpedia.org/resource/',
+    'rdf:': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+    'dbp:': 'http://dbpedia.org/property/'
 }
 
-#'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
 
-
-black_list = ['http://www.w3.org/2000/01/rdf-schema#seeAlso','http://purl.org/linguistics/gold/hypernym',
-              'http://www.w3.org/2000/01/rdf-schema#label',
-              'http://www.w3.org/2000/01/rdf-schema#comment','http://purl.org/voc/vrank#hasRank','http://xmlns.com/foaf/0.1/isPrimaryTopicOf',
-'http://xmlns.com/foaf/0.1/primaryTopic','http://dbpedia.org/ontology/abstract','http://dbpedia.org/ontology/thumbnail',
-'http://dbpedia.org/ontology/wikiPageExternalLink','http://dbpedia.org/ontology/wikiPageRevisionID','http://dbpedia.org/ontology/type']
-
+PREDICATE_BLACKLIST = ['http://www.w3.org/2000/01/rdf-schema#seeAlso',
+                       'http://purl.org/linguistics/gold/hypernym',
+                       'http://www.w3.org/2000/01/rdf-schema#label',
+                       'http://www.w3.org/2000/01/rdf-schema#comment',
+                       'http://purl.org/voc/vrank#hasRank',
+                       'http://xmlns.com/foaf/0.1/isPrimaryTopicOf',
+                       'http://xmlns.com/foaf/0.1/primaryTopic',
+                       'http://dbpedia.org/ontology/abstract',
+                       'http://dbpedia.org/ontology/thumbnail',
+                       'http://dbpedia.org/ontology/wikiPageExternalLink',
+                       'http://dbpedia.org/ontology/wikiPageRevisionID',
+                       'http://dbpedia.org/ontology/type']
 
 
 # Better warning formatting. Ignore.
@@ -120,7 +125,7 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 class Krantikari:
 
-    def __init__(self, _question, _entities, _dbpedia_interface, _model_interpreter, _return_core_chains=False, _return_answers=False):
+    def __init__(self, _question, _entities, _dbpedia_interface, _model_interpreter, _qald=False):
         """
             This function inputs one question, and topic entities, and returns a SPARQL query (or s'thing else)
 
@@ -137,18 +142,41 @@ class Krantikari:
         # Internalize args
         self.question = _question
         self.entities = _entities
-        self.return_core_chains = _return_core_chains
-        self.return_answers = _return_answers
+        self.qald = _qald
 
         # Useful objects
         self.dbp = _dbpedia_interface
         self.model = _model_interpreter
 
         # @TODO: Catch answers once it returns something.
-        self.runtime(self.question, self.entities, self.return_core_chains, self.return_answers)
+        self.runtime(self.question, self.entities, self.qald)
 
-    def convert_core_chain_to_sparql(self, _core_chain):  # @TODO
-        pass
+    @staticmethod
+    def filter_predicates(_predicates, _use_blacklist=True, _only_dbo=False):
+        """
+            Function used to filter out predicates based on some logic
+                - use a blacklist/whitelist @TODO: Make and plug one in.
+                - only use dbo predicates, even.
+
+        :param _predicates: A list of strings (uri of predicates)
+        :param _use_blacklist: bool
+        :param _only_dbo: bool
+        :return: A list of strings (uri)
+        """
+
+        if _use_blacklist:
+            _predicates = [x for x in _predicates
+                           if x not in PREDICATE_BLACKLIST]
+
+        if _only_dbo:
+            _predicates = [x for x in _predicates
+                           if x.startswith('http://dbpedia.org/ontology')
+                           or x.startswith('dbo:')]
+
+        # Filter out uniques
+        _predicates = list(set(_predicates))
+
+        return _predicates
 
     @staticmethod
     def choose_path_length(hop1_scores, hop2_scores):
@@ -168,7 +196,10 @@ class Krantikari:
         else:
             return 2
 
-    def get_hop2_subgraph(self,_entity, _predicate, _right=True):
+    def convert_core_chain_to_sparql(self, _core_chain):  # @TODO
+        pass
+
+    def get_hop2_subgraph(self, _entity, _predicate, _right=True):
         """
             Function fetches the 2hop subgraph around this entity, and following this predicate
         :param _entity: str: URI of the entity around which we need the subgraph
@@ -208,8 +239,8 @@ class Krantikari:
         v_qt = np.mean(embeddings_interface.vectorize(qt), axis=0)\
 
         # Vectorize predicates and compare
-        similarity_arr = np.asarray([ np.dot(np.mean(embeddings_interface.vectorize(nlutils.tokenize(x)), axis=0),
-                                             np.transpose(v_qt)) for x in _predicates])
+        similarity_arr = np.asarray([np.dot(np.mean(embeddings_interface.vectorize(nlutils.tokenize(x)), axis=0),
+                                            np.transpose(v_qt)) for x in _predicates])
 
         # Find the best scoring values for every path
         # Sort ( best match score for each predicate) in descending order, and choose top k
@@ -221,12 +252,13 @@ class Krantikari:
         # Use this to choose from _predicates and return
         return [_predicates[i] for i in argmaxes]
 
-    def runtime(self, _question, _entities, _return_core_chains=False, _return_answers=False):
+    def runtime(self, _question, _entities, _qald=False):
         """
             This function inputs one question, and topic entities, and returns a SPARQL query (or s'thing else)
 
         :param _question: a string of question
         :param _entities: a list of strings (each being a URI)
+        :param _qald: bool: Whether or not to use only dbo properties
         :return: SPARQL/CoreChain/Answers (and or)
         """
 
@@ -240,6 +272,8 @@ class Krantikari:
             right_properties, left_properties = self.dbp.get_properties(_uri=_entities[0], label=False)
 
             # @TODO: Use predicate whitelist/blacklist to trim this shit.
+            right_properties = self.filter_predicates(right_properties, _use_blacklist=True, _only_dbo=_qald)
+            left_properties = self.filter_predicates(left_properties, _use_blacklist=True, _only_dbo=_qald)
 
             # Get the surface forms of Entity and the predicates
             entity_sf = self.dbp.get_label(_resource_uri=_entities[0])
@@ -259,11 +293,17 @@ class Krantikari:
             left_properties_filtered = [left_properties_sf[i] for i in left_properties_filter_indices]
 
             # Generate 1-hop paths out of them
-            paths_sf = [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p) for _p in right_properties_filtered]
-            paths_sf += [nlutils.tokenize(entity_sf) + ['-'] + nlutils.tokenize(_p) for _p in left_properties_filtered]
+            paths_hop1_sf = [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p)
+                             for _p in right_properties_filtered]
+            paths_hop1_sf += [nlutils.tokenize(entity_sf) + ['-'] + nlutils.tokenize(_p)
+                              for _p in left_properties_filtered]
+
+            # Create their corresponding paths but with URI.
+            paths_hop1_uri = [[_entities[0], '+', _p] for _p in right_properties_filtered]
+            paths_hop1_uri += [[_entities[0], '-', _p] for _p in left_properties_filtered]
 
             # Vectorize these paths.
-            v_ps = [embeddings_interface.vectorize(path) for path in paths_sf]
+            v_ps = [embeddings_interface.vectorize(path) for path in paths_hop1_sf]
 
             # MODEL FILTERING
             hop1_indices, hop1_scores = self.model.rank(_v_q=v_q,
@@ -272,10 +312,12 @@ class Krantikari:
                                                         _k=self.K_1HOP_MODEL)
 
             # Impose indices on the paths.
-            ranked_paths_hop1 = [paths_sf[i] for i in hop1_indices]
+            ranked_paths_hop1_sf = [paths_hop1_sf[i] for i in hop1_indices]
+            ranked_paths_hop1_uri = [paths_hop1_uri[i] for i in hop1_indices]
 
-            if DEBUG:
-                pprint(ranked_paths_hop1)
+            # if DEBUG:
+            #     pprint(ranked_paths_hop1_sf)
+            #     pprint(ranked_paths_hop1_uri)
 
             # Collect URI of predicates so filtered (for 2nd hop)
             left_properties_filtered, right_properties_filtered = [], []
@@ -283,7 +325,7 @@ class Krantikari:
             # Gather all the left and right predicates (from paths selected by the model)
             for i in hop1_indices:
 
-                hop1_path = paths_sf[i]
+                hop1_path = paths_hop1_sf[i]
 
                 # See if it is from the left or right predicate set.
                 if '-' in hop1_path:
@@ -301,11 +343,6 @@ class Krantikari:
                     predicate = right_properties[right_properties_filter_indices[i]]
                     right_properties_filtered.append(predicate)
 
-            # if DEBUG:
-            #     print("Check URI of filtered paths. Left, then right.")
-            #     pprint(left_properties_filtered)
-            #     pprint(right_properties_filtered)
-
             """
                 2 - Hop COMMENCES
 
@@ -318,13 +355,13 @@ class Krantikari:
 
             for pred in right_properties_filtered:
                 temp_r, temp_l = self.get_hop2_subgraph(_entity=_entities[0], _predicate=pred, _right=True)
-                e_out_to_e_out_out[pred] = temp_r
-                e_out_in_to_e_out[pred] = temp_l
+                e_out_to_e_out_out[pred] = self.filter_predicates(temp_r, _use_blacklist=True, _only_dbo=_qald)
+                e_out_in_to_e_out[pred] = self.filter_predicates(temp_l, _use_blacklist=True, _only_dbo=_qald)
 
             for pred in left_properties_filtered:
                 temp_r, temp_l = self.get_hop2_subgraph(_entity=_entities[0], _predicate=pred, _right=False)
-                e_in_to_e_in_out[pred] = temp_r
-                e_in_in_to_e_in[pred] = temp_l
+                e_in_to_e_in_out[pred] = self.filter_predicates(temp_r, _use_blacklist=True, _only_dbo=_qald)
+                e_in_in_to_e_in[pred] = self.filter_predicates(temp_l, _use_blacklist=True, _only_dbo=_qald)
 
             # Get uniques
             # e_in_in_to_e_in = list(set(e_in_in_to_e_in))
@@ -444,60 +481,60 @@ class Krantikari:
                                     e_out_in_to_e_out_filtered_subgraph[hop1] = [uri]
 
             # Generate 2-hop paths out of them.
-            paths_log = []
-            paths_sf = []
-            paths_uri = []
+            paths_hop2_log = []
+            paths_hop2_sf = []
+            paths_hop2_uri = []
             for key in e_in_in_to_e_in_filtered_subgraph.keys():
                 for r2 in e_in_in_to_e_in_filtered_subgraph[key]:
 
                     path = nlutils.tokenize(entity_sf)                  \
                             + ['-'] + nlutils.tokenize(sf_vocab[key])   \
                             + ['-'] + nlutils.tokenize(sf_vocab[r2])
-                    paths_sf.append(path)
+                    paths_hop2_sf.append(path)
 
                     path_uri = [_entities[0], '-', key, '-', r2]
-                    paths_uri.append(path_uri)
+                    paths_hop2_uri.append(path_uri)
 
-            paths_log.append(len(paths_sf))
+            paths_hop2_log.append(len(paths_hop2_sf))
             for key in e_in_to_e_in_out_filtered_subgraph.keys():
                 for r2 in e_in_to_e_in_out_filtered_subgraph[key]:
 
                     path = nlutils.tokenize(entity_sf)                  \
                             + ['-'] + nlutils.tokenize(sf_vocab[key])   \
                             + ['+'] + nlutils.tokenize(sf_vocab[r2])
-                    paths_sf.append(path)
+                    paths_hop2_sf.append(path)
 
                     path_uri = [_entities[0], '-', key, '+', r2]
-                    paths_uri.append(path_uri)
+                    paths_hop2_uri.append(path_uri)
 
-            paths_log.append(len(paths_sf))
+            paths_hop2_log.append(len(paths_hop2_sf))
             for key in e_out_to_e_out_out_filtered_subgraph.keys():
                 for r2 in e_out_to_e_out_out_filtered_subgraph[key]:
 
                     path = nlutils.tokenize(entity_sf)                  \
                             + ['+'] + nlutils.tokenize(sf_vocab[key])   \
                             + ['+'] + nlutils.tokenize(sf_vocab[r2])
-                    paths_sf.append(path)
+                    paths_hop2_sf.append(path)
 
                     path_uri = [_entities[0], '+', key, '+', r2]
-                    paths_uri.append(path_uri)
+                    paths_hop2_uri.append(path_uri)
 
-            paths_log.append(len(paths_sf))
+            paths_hop2_log.append(len(paths_hop2_sf))
             for key in e_out_to_e_out_out_filtered_subgraph.keys():
                 for r2 in e_out_to_e_out_out_filtered_subgraph[key]:
 
                     path = nlutils.tokenize(entity_sf)                  \
                             + ['+'] + nlutils.tokenize(sf_vocab[key])   \
                             + ['-'] + nlutils.tokenize(sf_vocab[r2])
-                    paths_sf.append(path)
+                    paths_hop2_sf.append(path)
 
                     path_uri = [_entities[0], '+', key, '+', r2]
-                    paths_uri.append(path_uri)
+                    paths_hop2_uri.append(path_uri)
 
-            paths_log.append(len(paths_sf))
+            paths_hop2_log.append(len(paths_hop2_sf))
 
             # Vectorize these paths
-            v_ps = [embeddings_interface.vectorize(path) for path in paths_sf]
+            v_ps = [embeddings_interface.vectorize(path) for path in paths_hop2_sf]
 
             # MODEL FILTERING
             hop2_indices, hop2_scores = self.model.rank(_v_q=v_q,
@@ -506,16 +543,29 @@ class Krantikari:
                                                         _k=self.K_2HOP_MODEL)
 
             # Impose indices
-            ranked_paths_hop2 = [paths_sf[i] for i in hop2_indices]
-            ranked_paths_hop2_uri = [paths_uri[i] for i in hop2_indices]
+            ranked_paths_hop2_sf = [paths_hop2_sf[i] for i in hop2_indices]
+            ranked_paths_hop2_uri = [paths_hop2_uri[i] for i in hop2_indices]
 
             self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
 
+            # @TODO: Merge hop1 and hop2 into one list and then rank/shortlist.
+
         if len(_entities) >= 2:
+            self.best_path = 0  # @TODO: FIX THIS ONCE WE IMPLEMENT DIS!
             pass
 
+        # Paths have been generated and ranked.
 
-def eval(_true, _predicted):
+        self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+
+        # Choose best path
+        if self.path_length == 1:
+            self.best_path = ranked_paths_hop1_uri[np.argmax(hop1_scores)]
+        elif self.path_length == 2:
+            self.best_path = ranked_paths_hop2_uri[np.argmax(hop2_scores)]
+
+
+def evaluate(_true, _predicted):
     """
        Fancier implementation of "are these corechains equal".
        Logic:
@@ -583,7 +633,7 @@ def eval(_true, _predicted):
                                            'pred': pred_path_unprefixed,
                                            'true': true_path_unprefixed}
 
-    print results
+    return results
 
 
 def get_triples(_sparql_query):
@@ -844,7 +894,7 @@ def run_lcquad():
     dataset = json.load(open(LCQUAD_DIR))
 
     progbar = ProgressBar()
-    iterator = progbar(dataset[:10])
+    iterator = progbar(dataset)
 
     # Parse it
     for x in iterator:
@@ -862,9 +912,14 @@ def run_lcquad():
             continue
 
         qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp)
-        eval(parsed_data, qa.best_path)
+        results.append(evaluate(parsed_data, qa.best_path))
+
+    # I don't know what to do of results. So just pickle shit
+    pickle.dump(results, open(RESULTS_DIR, 'w+'))
+
 
 def run_qald():
+
     results = []
 
     # Create a DBpedia object.
@@ -876,17 +931,17 @@ def run_qald():
     # Load QALD
     dataset = json.load(open(QALD_DIR))
 
-    #Basic Pre-Processing
+    # Basic Pre-Processing
     dataset = dataset['questions']
-    for i in xrange(len(dataset)):
+    for i in range(len(dataset)):
         dataset[i]['query']['sparql'] = dataset[i]['query']['sparql'].replace('.\n', '. ')
 
     progbar = ProgressBar()
-    iterator = progbar(dataset)
+    iterator = progbar(dataset[:5])
 
     # Parse it
     for node in iterator:
-        parsed_data = parse_lcquad(node)
+        parsed_data = parse_qald(node)
 
         if not parsed_data:
             continue
@@ -899,8 +954,11 @@ def run_qald():
             results.append([0, 0])
             continue
 
-        qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp)
-        eval(parsed_data, qa.best_path)
+        qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _qald=True)
+        results.append(evaluate(parsed_data, qa.best_path))
+
+    # I don't know what to do of results. So just pickle shit
+    pickle.dump(results, open(RESULTS_DIR, 'w+'))
 
 
 if __name__ == "__main__":
@@ -929,5 +987,5 @@ if __name__ == "__main__":
     """
         TEST 2 : Check LCQuAD Parser
     """
-    run_lcquad()
+    run_qald()
 

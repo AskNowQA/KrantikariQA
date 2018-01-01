@@ -942,7 +942,7 @@ def run_qald():
     # Parse it
     for node in iterator:
         parsed_data = parse_qald(node)
-
+        print(parsed_data[u'corrected_question'])
         if not parsed_data:
             continue
 

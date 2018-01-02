@@ -111,14 +111,20 @@ class DBPedia:
             if caching_answer:
                 # print "@caching layer"
                 return json.loads(caching_answer)
+            else:
+                sparql = SPARQLWrapper(self.select_sparql_endpoint())
+                sparql.setQuery(_custom_query)
+                sparql.setReturnFormat(JSON)
+                sparql.setTimeout(0.1)
+                caching_answer = sparql.query().convert()
+                self.r.set(_custom_query, json.dumps(caching_answer))
+                return caching_answer
         else:
             sparql = SPARQLWrapper(self.select_sparql_endpoint())
             sparql.setQuery(_custom_query)
             sparql.setReturnFormat(JSON)
             sparql.setTimeout(0.1)
             caching_answer = sparql.query().convert()
-            if self.r:
-                self.r.set(_custom_query, json.dumps(caching_answer))
             return caching_answer
 
     def get_properties_on_resource(self, _resource_uri):

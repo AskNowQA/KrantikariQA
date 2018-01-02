@@ -28,9 +28,10 @@ import natural_language_utilities as nlutils
 import labels_mulitple_form
 
 # GLOBAL MACROS
-DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/', 'http://live.dbpedia.org/sparql/']
+# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/', 'http://live.dbpedia.org/sparql/']
 # DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
-# DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']
+DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']
+REDIS_HOSTNAME = ['sda-srv01.iai.uni-bonn.de']
 MAX_WAIT_TIME = 1.0
 
 # SPARQL Templates
@@ -76,7 +77,7 @@ class DBPedia:
         self.verbose = _verbose
         self.sparql_endpoint = DBPEDIA_ENDPOINTS[0]
         if caching:
-            self.r = redis.StrictRedis(host='localhost', port=6379, db=_db_name)
+            self.r = redis.StrictRedis(host=REDIS_HOSTNAME, port=6379, db=_db_name)
         else:
             self.r = False
         try:

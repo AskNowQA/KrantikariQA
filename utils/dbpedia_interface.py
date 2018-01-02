@@ -31,7 +31,7 @@ import labels_mulitple_form
 # DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/', 'http://live.dbpedia.org/sparql/']
 # DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
 DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']
-REDIS_HOSTNAME = ['sda-srv01.iai.uni-bonn.de']
+REDIS_HOSTNAME = 'sda-srv01.iai.uni-bonn.de'
 MAX_WAIT_TIME = 1.0
 
 # SPARQL Templates

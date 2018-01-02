@@ -115,7 +115,10 @@ PREDICATE_BLACKLIST = ['http://www.w3.org/2000/01/rdf-schema#seeAlso',
                        'http://dbpedia.org/ontology/thumbnail',
                        'http://dbpedia.org/ontology/wikiPageExternalLink',
                        'http://dbpedia.org/ontology/wikiPageRevisionID',
-                       'http://dbpedia.org/ontology/type']
+                       'http://dbpedia.org/ontology/type',
+                       'http://dbpedia.org/ontology/wikiPageWikiLink',
+                       'http://dbpedia.org/ontology/wikiPageID',
+                       ]
 
 
 # Better warning formatting. Ignore.
@@ -306,7 +309,7 @@ class Krantikari:
 
             # Generate their URI counterparts
             right_properties_filtered_uri = [right_properties[i] for i in right_properties_filter_indices]
-            left_properties_filtered_uri = [left_properties_sf[i] for i in left_properties_filter_indices]
+            left_properties_filtered_uri = [left_properties[i] for i in left_properties_filter_indices]
 
             # Generate 1-hop paths out of them
             paths_hop1_sf = [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p)

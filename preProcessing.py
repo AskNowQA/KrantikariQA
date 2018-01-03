@@ -531,6 +531,8 @@ def create_dataset(debug=True,time_limit=False):
                     }
                 '''
                 # pprint(node)
+                if node[u'sparql_template_id'] == 111:
+                    node[u'sparql_query'] = node[u'sparql_query'].replace("}", ". }")
                 data_node = node
                 triples = get_triples(node[u'sparql_query'])
                 rel1 = triples[0].split(" ")[1][1:-1]

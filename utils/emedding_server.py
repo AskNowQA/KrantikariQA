@@ -16,14 +16,14 @@ from bottle import post, get, put, delete, request, response
 
 word2vec_embeddings = None
 glove_embeddings = None
-DEFAULT_EMBEDDING = 'word2vec'
+DEFAULT_EMBEDDING = 'glove'
 DEBUG = True
 PORT = 6969
 glove_location = \
     {
         'dir': "./resources",
-        'raw': "glove.42B.300d.txt",
-        'parsed': "glove_parsedgit.pickle"
+        'raw': "glove.6B.300d.txt",
+        'parsed': "glove_parsed_small.pickle"
     }
 
 
@@ -99,7 +99,6 @@ def __congregate__(_vector_set, ignore=[]):
         return np.dot(np.transpose(_vector_set), ignore) / sum(ignore)
 
 
-# def __vectorize_(_tokens, _report_unks=False, _encode_special_chars=False, _embedding='glove'):
 def __vectorize__(data):
     """
         Function to embed a sentence and return it as a list of vectors.
@@ -109,7 +108,6 @@ def __vectorize__(data):
                     _tokens: List of Strings
                     _encode_special_chars: Bool if special chars are to be encoded as well (for paths)
                     __embedding: String-  either 'word2vec' or 'glove'
-        :param _report_unks: Whether or not return the out of vocab words
         :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.
     """
     # Parse args from the dict
@@ -155,18 +153,6 @@ def __vectorize__(data):
     return np.asarray(op)
 
 
-@post('/setembedding')
-def set_embedding():
-    """
-        Call this URL with embedding of choice if you wanna ensure that the mentioned embedding matrix is in the RAM
-
-    :return: None
-    """
-
-    print(request.json)
-    pass
-
-
 @get('/vectorize')
 def vectorize():
     """
@@ -200,6 +186,9 @@ def vectorize():
         return
 
     vectors = __vectorize__(data)
+
+    # Serialize the vectors
+    vectors = vectors.tolist()
 
     # Return 200 Success
     response.headers['Content-Type'] = 'application/json'

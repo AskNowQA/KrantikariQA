@@ -16,7 +16,7 @@ from bottle import post, get, put, delete, request, response
 
 word2vec_embeddings = None
 glove_embeddings = None
-DEFAULT_EMBEDDING = 'glove'
+DEFAULT_EMBEDDING = 'word2vec'
 DEBUG = True
 PORT = 6969
 glove_location = \
@@ -116,14 +116,15 @@ def __vectorize__(data):
     try: _encode_special_chars = data['_encode_special_chars']
     except KeyError: _encode_special_chars = False
 
-    try: _embedding = data['_embedding']
+    try:
+        _embedding = data['_embedding']
+        if _embedding not in ["glove", "word2vec"]: raise ValueError
     except KeyError: _embedding = DEFAULT_EMBEDDING
     except ValueError: _embedding = DEFAULT_EMBEDDING
 
     __check_prepared__(_embedding)
 
     op = []
-    unks = []
     for token in _tokens:
 
         # Small cap everything
@@ -192,7 +193,88 @@ def vectorize():
 
     # Return 200 Success
     response.headers['Content-Type'] = 'application/json'
-    return json.dumps({'vectors': vectors,
+    return json.dumps({'result': vectors,
+                       'request': data})
+
+
+# def __phrase_similarity__(_phrase_1, _phrase_2, embedding='word2vec'):
+def __phrase_similarity__(data):
+    # Parse Arguments from data
+    _phrase_1 = data["_phrase_1"]
+    _phrase_2 = data["_phrase_2"]
+
+    try:
+        embedding = data["embedding"]
+        if embedding not in ["glove", "word2vec"]: raise ValueError
+    except KeyError: embedding = DEFAULT_EMBEDDING
+    except ValueError: embedding = DEFAULT_EMBEDDING
+
+    __check_prepared__(embedding)
+
+    phrase_1 = _phrase_1.split(" ")
+    phrase_2 = _phrase_2.split(" ")
+    vw_phrase_1 = []
+    vw_phrase_2 = []
+    for phrase in phrase_1:
+        try:
+            # print phrase
+            vw_phrase_1.append(word2vec_embeddings.word_vec(phrase.lower()) if embedding == 'word2vec'
+                else glove_embeddings[phrase.lower()])
+        except:
+            # print traceback.print_exc()
+            continue
+    for phrase in phrase_2:
+        try:
+            vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower()) if embedding == 'word2vec'
+                else glove_embeddings[phrase.lower()])
+        except:
+            continue
+    if len(vw_phrase_1) == 0 or len(vw_phrase_2) == 0:
+        return 0
+    v_phrase_1 = __congregate__(vw_phrase_1)
+    v_phrase_2 = __congregate__(vw_phrase_2)
+    cosine_similarity = np.dot(v_phrase_1, v_phrase_2) / (np.linalg.norm(v_phrase_1) * np.linalg.norm(v_phrase_2))
+    return float(cosine_similarity)
+
+
+@get('/phrase_similarity')
+def phrase_similarity():
+    """
+            Function to compute cosine b/w two phrases
+        """
+    try:
+        # Gather input data
+        try:
+            data = request.json
+        except:
+            raise ValueError
+
+        if data is None:
+            raise ValueError
+
+        # Check if the data is a dict, with all necessary things
+        if type(data) == dict and \
+                {'_phrase_1', '_phrase_2', 'embedding'}.issuperset(set(data.keys())):
+            pass
+        else:
+            raise TypeError
+
+    except ValueError:
+        # No data at all, raise error.
+        response.status = 400
+        return
+
+    except TypeError:
+        # Invalid data. Raise Error.
+        response.status = 409
+        print data
+        return
+
+    similarity_score = __phrase_similarity__(data)      # Serializable data
+
+    # Return 200 Success
+    response.headers['Content-Type'] = 'application/json'
+    return json.dumps({'result': similarity_score,
                        'request': data})
 
 

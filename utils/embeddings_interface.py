@@ -22,7 +22,7 @@ glove_location = \
     {
         'dir': "./resources",
         'raw': "glove.42B.300d.txt",
-        'parsed': "glove_parsedgit.pickle"
+        'parsed': "glove_parsed.pickle"
     }
 
 

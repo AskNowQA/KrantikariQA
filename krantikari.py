@@ -97,22 +97,8 @@ short_forms = {
     'dbp:': 'http://dbpedia.org/property/'
 }
 
-
-PREDICATE_BLACKLIST = ['http://www.w3.org/2000/01/rdf-schema#seeAlso',
-                       'http://purl.org/linguistics/gold/hypernym',
-                       'http://www.w3.org/2000/01/rdf-schema#label',
-                       'http://www.w3.org/2000/01/rdf-schema#comment',
-                       'http://purl.org/voc/vrank#hasRank',
-                       'http://xmlns.com/foaf/0.1/isPrimaryTopicOf',
-                       'http://xmlns.com/foaf/0.1/primaryTopic',
-                       'http://dbpedia.org/ontology/abstract',
-                       'http://dbpedia.org/ontology/thumbnail',
-                       'http://dbpedia.org/ontology/wikiPageExternalLink',
-                       'http://dbpedia.org/ontology/wikiPageRevisionID',
-                       'http://dbpedia.org/ontology/type',
-                       'http://dbpedia.org/ontology/wikiPageWikiLink',
-                       'http://dbpedia.org/ontology/wikiPageID',
-                       'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']
+# Load a predicate blacklist from disk
+PREDICATE_BLACKLIST = open('./resources/predicate.blacklist').read().split()
 
 
 # Better warning formatting. Ignore.

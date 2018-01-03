@@ -5,10 +5,14 @@
 """
 
 import os
+import json
 import gensim
 import pickle
+import bottle
 import warnings
 import numpy as np
+
+from bottle import post, get, put, delete, request, response
 
 word2vec_embeddings = None
 glove_embeddings = None
@@ -18,7 +22,7 @@ glove_location = \
     {
         'dir': "./resources",
         'raw': "glove.42B.300d.txt",
-        'parsed': "glove_parsed_small.pickle"
+        'parsed': "glove_parsedgit.pickle"
     }
 
 
@@ -53,7 +57,7 @@ def __prepare__(_word2vec=True, _glove=False):
     if DEBUG: print("embeddings_interface: Loading Word Vector to Memory.")
 
     if _word2vec:
-        gensim.models.KeyedVectors.load_word2vec_format('resources/GoogleNews-vectors-negative300.bin', binary=True)
+        word2vec_embeddings = gensim.models.KeyedVectors.load_word2vec_format('resources/GoogleNews-vectors-negative300.bin', binary=True)
 
     if _glove:
         try:
@@ -79,7 +83,7 @@ def __prepare__(_word2vec=True, _glove=False):
             if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")
 
 
-def stupid_gaurav_function(_vector_set, ignore=[]):
+def __congregate__(_vector_set, ignore=[]):
     if len(ignore) == 0:
         return np.mean(_vector_set, axis = 0)
     else:
@@ -110,8 +114,8 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding='word2vec'):
             continue
     if len(vw_phrase_1) == 0 or len(vw_phrase_2) == 0:
         return 0
-    v_phrase_1 = stupid_gaurav_function(vw_phrase_1)
-    v_phrase_2 = stupid_gaurav_function(vw_phrase_2)
+    v_phrase_1 = __congregate__(vw_phrase_1)
+    v_phrase_2 = __congregate__(vw_phrase_2)
     cosine_similarity = np.dot(v_phrase_1, v_phrase_2) / (np.linalg.norm(v_phrase_1) * np.linalg.norm(v_phrase_2))
     return float(cosine_similarity)
 
@@ -139,7 +143,7 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
             if _embedding == "glove":
                 token_embedding = glove_embeddings[token]
             elif _embedding == 'word2vec':
-                token_embedding = word2vec_embeddings[token]
+                token_embedding = word2vec_embeddings.word_vec(token)
 
         except KeyError:
             if _report_unks: unks.append(token)
@@ -158,3 +162,42 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
             op += [token_embedding]
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
+
+#
+# @post('/names')
+# def vectorize():
+#     """
+#
+#     :return:
+#     """
+#
+#     # try:
+#     #     # parse input data
+#     #     try:
+#     #         data = request.json()
+#     #     except:
+#     #         raise ValueError
+#     #
+#     #     if data is None:
+#     #         raise ValueError
+#     #
+#     # except ValueError:
+#     #     # if bad request data, return 400 Bad Request
+#     #     response.status = 400
+#     #     return
+#     #
+#     # except KeyError:
+#     #     # if name already exists, return 409 Conflict
+#     #     response.status = 409
+#     #     return
+#     #
+#     # # add nam
+#
+#     # return 200 Success
+#     response.headers['Content-Type'] = 'application/json'
+#     return json.dumps({'name': 'name'})
+#
+# app = application = bottle.default_app()
+#
+# if __name__ == '__main__':
+#     bottle.run(server='gunicorn', host='127.0.0.1', port=8000)

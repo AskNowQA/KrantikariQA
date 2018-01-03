@@ -69,17 +69,11 @@
 """
 
 # Imports
-import os
 import json
-import random
 import pickle
-import warnings
-import traceback
 import editdistance
 import numpy as np
-from pprint import pprint
 from progressbar import ProgressBar
-from keras import backend as K
 
 # Local file imports
 from utils import model_interpreter
@@ -118,7 +112,7 @@ PREDICATE_BLACKLIST = ['http://www.w3.org/2000/01/rdf-schema#seeAlso',
                        'http://dbpedia.org/ontology/type',
                        'http://dbpedia.org/ontology/wikiPageWikiLink',
                        'http://dbpedia.org/ontology/wikiPageID',
-                       ]
+                       'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']
 
 
 # Better warning formatting. Ignore.
@@ -239,7 +233,7 @@ class Krantikari:
         qt = nlutils.tokenize(self.question, _remove_stopwords=False)
 
         # Vectorize question
-        v_qt = np.mean(embeddings_interface.vectorize(qt), axis=0)\
+        v_qt = np.mean(embeddings_interface.vectorize(qt, _embedding="word2vec"), axis=0)\
 
         # Declare a similarity array
         similarity_arr = np.zeros(len(_predicates))
@@ -247,7 +241,7 @@ class Krantikari:
         # Fill similarity array
         for i in range(len(_predicates)):
             p = _predicates[i]
-            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p)), axis=0)
+            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding="word2vec"), axis=0)
 
             # If either of them is a zero vector, the cosine is 0.
             if np.sum(v_p) == 0.0 and np.sum(v_qt) == 0.0:
@@ -278,7 +272,7 @@ class Krantikari:
         """
 
         # Vectorize the question
-        v_q = embeddings_interface.vectorize(nlutils.tokenize(_question))
+        v_q = embeddings_interface.vectorize(nlutils.tokenize(_question), _embedding="word2vec")
 
         # Algo differs based on whether there's one topic entity or two
         if len(_entities) == 1:
@@ -322,7 +316,7 @@ class Krantikari:
             paths_hop1_uri += [[_entities[0], '-', _p] for _p in left_properties_filtered_uri]
 
             # Vectorize these paths.
-            v_ps = [embeddings_interface.vectorize(path) for path in paths_hop1_sf]
+            v_ps = [embeddings_interface.vectorize(path, _embedding="word2vec") for path in paths_hop1_sf]
 
             # MODEL FILTERING
             hop1_indices, hop1_scores = self.model.rank(_v_q=v_q,
@@ -553,7 +547,7 @@ class Krantikari:
             paths_hop2_log.append(len(paths_hop2_sf))
 
             # Vectorize these paths
-            v_ps = [embeddings_interface.vectorize(path) for path in paths_hop2_sf]
+            v_ps = [embeddings_interface.vectorize(path, _embedding="word2vec") for path in paths_hop2_sf]
 
             # MODEL FILTERING
             hop2_indices, hop2_scores = self.model.rank(_v_q=v_q,
@@ -927,7 +921,7 @@ def run_lcquad():
         e = parsed_data[u'entity']
 
         if len(e) > 1:
-            results.append([0, 0])
+            # results.append([0, 0])
             continue
 
         qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp)

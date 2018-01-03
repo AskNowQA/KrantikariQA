@@ -27,7 +27,7 @@ K_HOP_2 = 5                                 # Selects the number of relations in
 K_HOP_1_u = 2                               # Selects the number of relations in second hop in the wrong direction
 K_HOP_2_u = 2                               # Selects the number of relations in second hop in the wrong direction
 PASSED = False
-WRITE_INTERVAL = 10                         # Interval for periodic write in a file
+WRITE_INTERVAL = 2                         # Interval for periodic write in a file
 OUTPUT_DIR = 'data/preprocesseddata_new_vfull'    # Place to store the files
 
 
@@ -49,11 +49,10 @@ except OSError:
     print("Folder already exists")
 
 
-def get_rank_rel(_relationsip_list, rel,_score=False):
+def get_rank_rel(_relationsip_list, rel, question=None, _score=False):
     """
         The objective is to rank the relationship using some trivial similarity measure wrt rel
         [[list of outgoing rels],[list of incoming rels]] (rel,True)  'http://dbpedia.org/ontology/childOrganisation'
-        Need to verify the function
     """
 
     # Transforming the list of items into a list of tuple
@@ -61,13 +60,19 @@ def get_rank_rel(_relationsip_list, rel,_score=False):
     new_rel_list = []
     outgoing_temp = []
     for rels in _relationsip_list[0]:
-        score.append((rels,sim.phrase_similarity(dbp.get_label(rel[0]),dbp.get_label(rels))))
+        if question:
+            score.append((rels, sim.phrase_similarity(question, dbp.get_label(rels))))
+        else:
+            score.append((rels,sim.phrase_similarity(dbp.get_label(rel[0]),dbp.get_label(rels))))
      # print sorted(score, key=lambda score: score[1], reverse=True)
     new_rel_list.append(sorted(score, key=lambda score: score[1],reverse=True))
 
     score = []
     for rels in _relationsip_list[1]:
-        score.append((rels,sim.phrase_similarity(dbp.get_label(rel[0]),dbp.get_label(rels))))
+        if question:
+            score.append((rels,sim.phrase_similarity(question,dbp.get_label(rels))))
+        else:
+            score.append((rels, sim.phrase_similarity(dbp.get_label(rel[0]), dbp.get_label(rels))))
     new_rel_list.append(sorted(score, key=lambda score: score[1],reverse=True))
 
     final_rel_list = []
@@ -202,7 +207,7 @@ def updated_get_relationship_hop(_entity, _relations):
     return [outgoing_relationships,incoming_relationships]
 
 
-def get_stochastic_relationship_hop(_entity, _relation):
+def get_stochastic_relationship_hop(_entity, _relation, _question=None):
     '''
         The objective is to find the outgoing and incoming relationships from the entity at _hop distance.
         :param _entity: the seed entity
@@ -211,7 +216,7 @@ def get_stochastic_relationship_hop(_entity, _relation):
     '''
     out,incoming =  dbp.get_properties(_entity,_relation[0][0],label=False)
 
-    rel_list = get_set_list(get_top_k(get_rank_rel([out,incoming],_relation[0]),_relation[0]))
+    rel_list = get_set_list(get_top_k(get_rank_rel([out,incoming],_relation[0],_question),_relation[0]))
     # print rel_list
     '''
         Now with each relation list find the next graph and stochastically prune it.
@@ -225,14 +230,14 @@ def get_stochastic_relationship_hop(_entity, _relation):
         # print updated_get_relationship_hop(_entity, [(rel, True)]), (rel, True)
         # print "******"
         temp[rel] = get_set_list(
-            get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, [(rel, True)]), (rel, True)), (rel, True),
+            get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, [(rel, True)]), (rel, True),_question), (rel, True),
                       hop=2))
         # temp[rel] = get_set_list(get_top_k(get_rank_rel(updated_get_relationship_hop(_entity,(rel,True)),(rel,True),hop=2)))
         outgoing_relationships.append(temp)
 
     for rel in rel_list[1]:
         temp = {}
-        temp[rel] = get_set_list(get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, [(rel, False)]),(rel,False)),(rel,False),hop=2))
+        temp[rel] = get_set_list(get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, [(rel, False)]),(rel,False),_question),(rel,False),hop=2))
         incoming_relationships.append(temp)
     return [outgoing_relationships,incoming_relationships]
 
@@ -326,7 +331,7 @@ def create_dataset(debug=True,time_limit=False):
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
                 #need to include things here.
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
-                    data_node[u'entity'][0], [(triples[0].split(" ")[1][1:-1], False), (triples[0].split(" ")[1][1:-1], True)])
+                    data_node[u'entity'][0], [(triples[0].split(" ")[1][1:-1], False), (triples[0].split(" ")[1][1:-1], True)],node['corrected_question'])
                 data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
                 data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] == 301 or node[u"sparql_template_id"] == 401:
@@ -382,7 +387,7 @@ def create_dataset(debug=True,time_limit=False):
                 data_node[u'training'][data_node[u'entity'][0]] = {}
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] =  [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
-                    data_node[u'entity'][0], [(triples[0].split(" ")[1][1:-1], True), (triples[0].split(" ")[1][1:-1], True)])
+                    data_node[u'entity'][0], [(triples[0].split(" ")[1][1:-1], True), (triples[0].split(" ")[1][1:-1], True)],node['corrected_question'])
                 data_node[u'path'] = ["+" + triples[0].split(" ")[1][1:-1]]
                 data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] == 302 or node[u"sparql_template_id"] == 402:
@@ -438,7 +443,7 @@ def create_dataset(debug=True,time_limit=False):
                 data_node[u'training'] = {}
                 data_node[u'training'][data_node[u'entity'][0]] = {}
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in list(dbp.get_properties(data_node[u'entity'][0],label=False))]
-                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0],[(rel1,True),(rel2,True)])
+                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0],[(rel1,True),(rel2,True)],node['corrected_question'])
                 data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [303,309,403,409]:
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
@@ -499,7 +504,7 @@ def create_dataset(debug=True,time_limit=False):
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
                                                                             list(dbp.get_properties(data_node[u'entity'][0],label=False))]
                 data_node[u'constraints'] = {}
-                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0], [(rel1, False), (rel2, True)])
+                data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0], [(rel1, False), (rel2, True)],node['corrected_question'])
                 if node[u"sparql_template_id"] in [305,405] :
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                 else:
@@ -563,7 +568,7 @@ def create_dataset(debug=True,time_limit=False):
                 data_node[u'training'][data_node[u'entity'][0]][u'rel1'] = [list(set(rel)) for rel in
                                                                             list(dbp.get_properties(data_node[u'entity'][0],label=False))]
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(
-                    data_node[u'entity'][0], [(rel1, False), (rel2, False)])
+                    data_node[u'entity'][0], [(rel1, False), (rel2, False)],node['corrected_question'])
                 data_node[u'constraints'] = {}
                 if node[u"sparql_template_id"] in [306,406]:
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}

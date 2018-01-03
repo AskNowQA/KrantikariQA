@@ -28,7 +28,7 @@ K_HOP_1_u = 4                               # Selects the number of relations in
 K_HOP_2_u = 20                               # Selects the number of relations in second hop in the wrong direction
 PASSED = False
 WRITE_INTERVAL = 2                         # Interval for periodic write in a file
-OUTPUT_DIR = 'data/preprocesseddata_new_vfull_v3'    # Place to store the files
+OUTPUT_DIR = 'data/preprocesseddata_new_vfull_v5'    # Place to store the files
 RELATION_STOP_WORD_DIR = 'resources/predicate.blacklist'
 STOP_WORD = True
 
@@ -36,7 +36,7 @@ STOP_WORD = True
     Global variables
 '''
 # Summon a dbpedia interface
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 skip = 0
 relations_stop_word = open(RELATION_STOP_WORD_DIR).read().split()
@@ -519,7 +519,7 @@ def create_dataset(debug=True,time_limit=False):
                         controller.append(data_node['sparql_template_id'])
                         # raw_input()
 
-            elif node[u"sparql_template_id"] in [5,305,405,105,111] and not PASSED:
+            elif node[u"sparql_template_id"] in [5,305,311,405,105,111] and not PASSED:
                 '''
                     >Verify this !!
                     {
@@ -546,7 +546,7 @@ def create_dataset(debug=True,time_limit=False):
                                                                             list(dbp.get_properties(data_node[u'entity'][0],label=False))]
                 data_node[u'constraints'] = {}
                 data_node[u'training'][data_node[u'entity'][0]][u'rel2'] = get_stochastic_relationship_hop(data_node[u'entity'][0], [(rel1, False), (rel2, True)],node['corrected_question'])
-                if node[u"sparql_template_id"] in [305,405] :
+                if node[u"sparql_template_id"] in [305,405,311] :
                     data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
                 else:
                     data_node[u'constraints'] = {}
@@ -562,7 +562,7 @@ def create_dataset(debug=True,time_limit=False):
                                                     constraint='', count=True)
                     data_node[u'training']['x'] = value[1]
                     data_node[u'training']['uri'] = value[0]
-                if node[u"sparql_template_id"] == 305:
+                if node[u"sparql_template_id"] in [305,311]:
                     value = get_rdf_type_candidates(node[u'sparql_query'], rdf_type=True,
                                                     constraint=triples[2].split(" ")[2][1:-1], count=False)
                     data_node[u'training']['x'] = value[1]

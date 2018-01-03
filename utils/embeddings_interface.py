@@ -90,7 +90,7 @@ def __congregate__(_vector_set, ignore=[]):
         return np.dot(np.transpose(_vector_set), ignore) / sum(ignore)
 
 
-def phrase_similarity(_phrase_1, _phrase_2, embedding='word2vec'):
+def phrase_similarity(_phrase_1, _phrase_2, embedding='glove'):
 
     __check_prepared__(embedding)
 
@@ -101,15 +101,15 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding='word2vec'):
     for phrase in phrase_1:
         try:
             # print phrase
-            vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower() if embedding == 'word2vec'
-                else glove_embeddings[phrase.lower()]))
+            vw_phrase_1.append(word2vec_embeddings.word_vec(phrase.lower()) if embedding == 'word2vec'
+                else glove_embeddings[phrase.lower()])
         except:
             # print traceback.print_exc()
             continue
     for phrase in phrase_2:
         try:
-            vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower() if embedding == 'word2vec'
-                else glove_embeddings[phrase.lower()]))
+            vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower()) if embedding == 'word2vec'
+                else glove_embeddings[phrase.lower()])
         except:
             continue
     if len(vw_phrase_1) == 0 or len(vw_phrase_2) == 0:
@@ -162,7 +162,6 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
             op += [token_embedding]
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
-
 #
 # @post('/names')
 # def vectorize():

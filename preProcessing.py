@@ -22,14 +22,15 @@ import utils.embeddings_interface as sim
 '''
     MACROS
 '''
-K_HOP_1 = 5                                 # Selects the number of relations in the first hop in the right direction
-K_HOP_2 = 5                                 # Selects the number of relations in second hop in the right direction
-K_HOP_1_u = 2                               # Selects the number of relations in second hop in the wrong direction
-K_HOP_2_u = 2                               # Selects the number of relations in second hop in the wrong direction
+K_HOP_1 = 8                                 # Selects the number of relations in the first hop in the right direction
+K_HOP_2 = 20                                 # Selects the number of relations in second hop in the right direction
+K_HOP_1_u = 4                               # Selects the number of relations in second hop in the wrong direction
+K_HOP_2_u = 20                               # Selects the number of relations in second hop in the wrong direction
 PASSED = False
 WRITE_INTERVAL = 2                         # Interval for periodic write in a file
-OUTPUT_DIR = 'data/preprocesseddata_new_vfull'    # Place to store the files
-
+OUTPUT_DIR = 'data/preprocesseddata_new_vfull_v3'    # Place to store the files
+RELATION_STOP_WORD_DIR = 'resources/predicate.blacklist'
+STOP_WORD = True
 
 '''
     Global variables
@@ -38,7 +39,7 @@ OUTPUT_DIR = 'data/preprocesseddata_new_vfull'    # Place to store the files
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
 
 skip = 0
-relations_stop_word = []
+relations_stop_word = open(RELATION_STOP_WORD_DIR).read().split()
 final_answer_dataset = []                   # Used in create_simple_dataset()
 
 
@@ -199,7 +200,15 @@ def updated_get_relationship_hop(_entity, _relations):
     outgoing_relationships = []
     incoming_relationships = []
     for ent in entities:
-        rel = dbp.get_properties(ent,label=False)
+
+        if STOP_WORD:
+            rel = []
+            a = dbp.get_properties(ent,label=False)
+            for _rel in a:
+                if _rel not in relations_stop_word:
+                    rel.append(_rel)
+        else:
+            rel = dbp.get_properties(ent,label=False)
         outgoing_relationships =  outgoing_relationships + list(set(rel[0]))
         incoming_relationships = incoming_relationships + list(set(rel[1]))
     outgoing_relationships = list(set(outgoing_relationships))
@@ -207,14 +216,24 @@ def updated_get_relationship_hop(_entity, _relations):
     return [outgoing_relationships,incoming_relationships]
 
 
-def get_stochastic_relationship_hop(_entity, _relation, _question=None):
+def get_stochastic_relationship_hop(_entity, _relation, _question=None,STOP_WORD=True):
     '''
         The objective is to find the outgoing and incoming relationships from the entity at _hop distance.
         :param _entity: the seed entity
         :param _relation: A chain of relation [(rel1,True),(rel2,False)] - True represents a outgoing property while False an incoming property.
         :return: [[set(incoming property)],[set(outgoing property]]
     '''
-    out,incoming =  dbp.get_properties(_entity,_relation[0][0],label=False)
+    temp_out,temp_incoming =  dbp.get_properties(_entity,_relation[0][0],label=False)
+    out, incoming = [],[]
+    if STOP_WORD:
+        for rel in temp_out:
+            if rel not in relations_stop_word:
+                out.append(rel)
+        for rel in temp_incoming:
+            if rel not in relations_stop_word:
+                incoming.append(rel)
+    else:
+        out, incoming = temp_out,temp_incoming
 
     rel_list = get_set_list(get_top_k(get_rank_rel([out,incoming],_relation[0],_question),_relation[0]))
     # print rel_list
@@ -229,7 +248,18 @@ def get_stochastic_relationship_hop(_entity, _relation, _question=None):
         # get_set_list(get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, (rel, True)),(rel,True)),(rel,True),hop=2))
         # print updated_get_relationship_hop(_entity, [(rel, True)]), (rel, True)
         # print "******"
-        temp[rel] = get_set_list(
+        if STOP_WORD:
+            #do something
+            interm = []
+            a = get_set_list(
+            get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, [(rel, True)]), (rel, True),_question), (rel, True),
+                      hop=2))
+            for _rel in a:
+                if _rel not in relations_stop_word:
+                    interm.append(_rel)
+            temp[rel] = interm
+        else:
+            temp[rel] = get_set_list(
             get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, [(rel, True)]), (rel, True),_question), (rel, True),
                       hop=2))
         # temp[rel] = get_set_list(get_top_k(get_rank_rel(updated_get_relationship_hop(_entity,(rel,True)),(rel,True),hop=2)))
@@ -237,7 +267,16 @@ def get_stochastic_relationship_hop(_entity, _relation, _question=None):
 
     for rel in rel_list[1]:
         temp = {}
-        temp[rel] = get_set_list(get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, [(rel, False)]),(rel,False),_question),(rel,False),hop=2))
+        if STOP_WORD:
+            #dosomething
+            interm = []
+            a = get_set_list(get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, [(rel, False)]),(rel,False),_question),(rel,False),hop=2))
+            for _rel in a:
+                if _rel not in relations_stop_word:
+                    interm.append(_rel)
+            temp[rel] = interm
+        else:
+            temp[rel] = get_set_list(get_top_k(get_rank_rel(updated_get_relationship_hop(_entity, [(rel, False)]),(rel,False),_question),(rel,False),hop=2))
         incoming_relationships.append(temp)
     return [outgoing_relationships,incoming_relationships]
 

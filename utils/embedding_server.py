@@ -16,7 +16,7 @@ from bottle import post, get, put, delete, request, response
 
 word2vec_embeddings = None
 glove_embeddings = None
-DEFAULT_EMBEDDING = 'word2vec'
+DEFAULT_EMBEDDING = 'glove'
 DEBUG = True
 PORT = 6969
 glove_location = \

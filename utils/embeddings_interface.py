@@ -1,11 +1,20 @@
 """
     Script does all the magic with word embeddings including lazy loading them in the RAM and all that.
 
-    @TODO: Check how well is this performing
+    NOTE: Embedding parameter is ignored. Right off the bat. (Not removed for compatibility reasons)
 """
 import os
 import json
+import warnings
 import requests
+import numpy as np
+from utils import embedding_server
+
+URL = "http://127.0.0.1:6969/"
+FALLBACK_SIMILARITY_VAL = 0.0
+FALLBACK_EMBEDDING_VAL = np.zeros(300, dtype=np.float32)
+DEBUG = True
+
 
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
@@ -14,32 +23,45 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 def phrase_similarity(_phrase_1, _phrase_2, embedding='word2vec'):
 
-    # Convert the params into
+    url = URL + 'phrase_similarity'
 
-    phrase_1 = _phrase_1.split(" ")
-    phrase_2 = _phrase_2.split(" ")
-    vw_phrase_1 = []
-    vw_phrase_2 = []
-    for phrase in phrase_1:
-        try:
-            # print phrase
-            vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower() if embedding == 'word2vec'
-                else glove_embeddings[phrase.lower()]))
-        except:
-            # print traceback.print_exc()
-            continue
-    for phrase in phrase_2:
-        try:
-            vw_phrase_2.append(word2vec_embeddings.word_vec(phrase.lower() if embedding == 'word2vec'
-                else glove_embeddings[phrase.lower()]))
-        except:
-            continue
-    if len(vw_phrase_1) == 0 or len(vw_phrase_2) == 0:
-        return 0
-    v_phrase_1 = __congregate__(vw_phrase_1)
-    v_phrase_2 = __congregate__(vw_phrase_2)
-    cosine_similarity = np.dot(v_phrase_1, v_phrase_2) / (np.linalg.norm(v_phrase_1) * np.linalg.norm(v_phrase_2))
-    return float(cosine_similarity)
+    # Convert the params into a dict
+    data = {'_phrase_1': _phrase_1,
+            '_phrase_2': _phrase_2}
+
+    try:
+
+        output = requests.get(url=url, json=data)
+
+        # Ensure the server shat out the right stuff
+        if not output.status_code == 200:
+            raise ValueError
+
+        # Parse the result.
+        result = json.loads(output.text)
+
+        # Return stuff
+        return result["result"]
+
+    except requests.ConnectionError:
+
+        # The server is down. Start it up.
+        warnings.warn("The server is down. Start it up.")
+        return FALLBACK_SIMILARITY_VAL
+
+    except ValueError:
+
+        # Unexpected Status Code from the server.
+        warnings.warn("Invalid Status Code. Returning default value for phrase: \n\t %(p1)s \n\t %(p2)s"
+                      % {'p1': _phrase_1, 'p2': _phrase_2})
+        return FALLBACK_SIMILARITY_VAL
+
+    except KeyError:
+
+        # This should not happen. We should not be here.
+        warnings.warn("Cannot find \"result\" in the server output. This should not have happened. " +
+                      "Scream and run around in circles")
+        return FALLBACK_SIMILARITY_VAL
 
 
 def vectorize():
@@ -47,7 +69,7 @@ def vectorize():
 
     :return:
     """
-
+    pass
     # try:
     #     # parse input data
     #     try:
@@ -71,5 +93,9 @@ def vectorize():
     # # add nam
 
     # return 200 Success
-    response.headers['Content-Type'] = 'application/json'
-    return json.dumps({'name': 'name'})
+    # response.headers['Content-Type'] = 'application/json'
+    # return json.dumps({'name': 'name'})
+
+
+if __name__ == "__main__":
+    print phrase_similarity("Obama", "Potato")

@@ -226,12 +226,15 @@ def parse(_raw):
     return v_question, v_true_path, v_false_paths, v_y_true
 
 
-def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/training/pairwise/'):
+def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/training/pairwise/',
+        _phase_i_dir='resources/data_embedded_phase_i.pickle'):
     """
     Get the show on the road.
 
     :param _readfiledir:   the filename (directory info included) to read the JSONs that need parsing
-    :param _writefilename:  the file to which the parsed (embedded+padded) data is to be written to
+    :param _writefilename: the file to which the parsed (embedded+padded) data is to be written to
+    :param _phase_i_dir:   the filename (directory info included) where the script would read/write the intermediate \
+                                pickles
 
     :return: zilch
     """
@@ -239,7 +242,7 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
     try:
 
         # If the phase one is already done and then the code quit (errors/s'thing else), resume for efficiency's sake.
-        data_embedded = pickle.load(open('resources/data_embedded_phase_i.pickle'))
+        data_embedded = pickle.load(open(_phase_i_dir))
         embedding_dim = data_embedded[0][0].shape[1]
 
         if DEBUG:
@@ -306,7 +309,7 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
             Collect the vectorized things in a variable.
             """)
 
-        f = open('resources/data_embedded_phase_i.pickle', 'w+')
+        f = open(_phase_i_dir, 'w+')
         pickle.dump(data_embedded, f)
         f.close()
 
@@ -339,191 +342,6 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
     Q = np.zeros((max_false_paths * len(data_embedded), max_ques_length, embedding_dim))
     tP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
     fP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
-
-    paths_so_far = 0
-
-    if DEBUG:
-        print("Q: ", Q.shape, "tP: ", tP.shape, "fP: ", fP.shape)
-
-    # Create an iterable to loop
-    iterable = range(len(data_embedded))
-
-    if DEBUG:
-        prog_bar = ProgressBar()
-        iterable = prog_bar(iterable)
-
-    # Fun Time
-    for i in iterable:
-
-        datum = data_embedded[i]
-        num_false_paths = len(datum[2])
-
-        # Pad Question
-        padded_question = np.zeros((max_ques_length, embedding_dim))  # Create an zeros mat with max dims
-        padded_question[:datum[0].shape[0], :datum[0].shape[1]] = datum[0]  # Pad the zeros mat with actual mat
-
-        # Store Question
-        Q[max_false_paths*i: max_false_paths*i + num_false_paths] = np.repeat(      # For 0-20/20-40.. in a zeros mat
-            a=padded_question[np.newaxis, :, :],                            # transform v_q to have new axis
-            repeats=num_false_paths,                                        # and repeat it on ze axis 20 times
-            axis=0)                                                         # and voila!
-
-        # Pad true path
-        padded_tp = np.zeros((max_path_length, embedding_dim))
-        padded_tp[:datum[1].shape[0], :datum[1].shape[1]] = datum[1]
-
-        # Pad false path
-        padded_fps = np.zeros((max_false_paths, max_path_length, embedding_dim))
-        for j in range(max_false_paths):
-            try:
-                false_path = datum[2][j]
-            except IndexError:
-                false_path = datum[2][-1]
-            padded_fp = np.zeros((max_path_length, embedding_dim))
-            padded_fp[:false_path.shape[0], :false_path.shape[1]] = false_path
-
-            fP[(max_false_paths * i) + j] = padded_fp
-            tP[(max_false_paths * i) + j] = padded_tp
-
-    # Check if the folder exists
-    try:
-        os.mkdir(_writefilename)
-    except OSError:
-        # Folder exists.
-        pass
-
-    # Print these things to file.
-    np.save(open(os.path.join(_writefilename, 'Q.npz'), 'w+'), Q)
-    np.save(open(os.path.join(_writefilename, 'tP.npz'), 'w+'), tP)
-    np.save(open(os.path.join(_writefilename, 'fP.npz'), 'w+'), fP)
-
-    print("""
-            Phase II - Padding and Final Matrices
-
-        Find the max question length; max path length, total paths etc
-        Put the data in the following manner:
-            v_q | v_tp _ v_fp1 | [0 1]
-            v_q | v_tp _ v_fp1 | [0 1]
-        Pad everything.
-    """)
-
-
-def run_30M(_readfiledir='data/30MQA/', _writefilename='data/training/pairwise/'):
-    """
-    Get the show on the road.
-
-    :param _readfiledir:   the filename (directory info included) to read the JSONs that need parsing
-    :param _writefilename:  the file to which the parsed (embedded+padded) data is to be written to
-
-    :return: zilch
-    """
-
-    try:
-
-        # If the phase one is already done and then the code quit (errors/s'thing else), resume for efficiency's sake.
-        data_embedded = pickle.load(open('resources/data_embedded_phase_i_30M.pickle'))
-        embedding_dim = data_embedded[0][0].shape[1]
-
-        if DEBUG:
-            print("Phase I State save found and loaded. Program will now end much faster.")
-
-    except:
-
-        # If here, we didn't resume the thing mid way but start afresh
-        if DEBUG:
-            warnings.warn("Phase I state save not found on disk. Go brew your coffee now.")
-
-        '''
-            Phase I - Embedding
-
-            Read JSONs from every file.
-            Parse every JSON (vectorized question, true and false paths)
-            Collect the vectorized things in a variable.
-        '''
-
-        # Create vars to keep ze data @TODO: think of datatype here
-        data_embedded = []
-
-        # Pull all filenames from datafolder
-        iterable = [x for x in os.listdir(_readfiledir) if 'pickle' in x]
-
-        # Shuffle Shuffle
-        random.shuffle(iterable)
-
-        if DEBUG:
-            prog_bar = ProgressBar()
-            iterable = prog_bar(iterable)
-            print("parser: phase I: Started reading JSONs from disk.")
-
-        # Read JSON files.
-        for filename in iterable:
-            data = pickle.load(open(os.path.join(_readfiledir, filename)))
-
-            # Shuffle data too
-            random.shuffle(data)
-            print data
-            raw_input("wait for moi")
-            # Each file has multiple datapoints (questions).
-            for question in data:
-
-                # Collect the repsonse
-                v_q, v_tp, v_fps, v_y = parse(question)
-
-                if DEBUG:
-                    if np.max([fp.shape[0] for fp in v_fps]) >= 23:
-                        warnings.warn("Phase I: Encountered huge question. Filename: %(fn)s. ID: %(id)s" % {
-                            'fn': filename,
-                            'id': question['_id']
-                        })
-
-                # Collect data for each question
-                data_embedded.append([v_q, v_tp, v_fps, v_y])
-
-        embedding_dim = v_q.shape[1]
-        if DEBUG:
-            print("""
-                Phase I - Embedding DONE
-
-            Read JSONs from every file.
-            Parse every JSON (vectorized question, true and false paths)
-            Collect the vectorized things in a variable.
-            """)
-
-        f = open('resources/data_embedded_phase_i_30M.pickle', 'w+')
-        pickle.dump(data_embedded, f)
-        f.close()
-
-    '''
-        Phase II - Padding and Final Matrices
-
-        Find the max question length; max path length, total paths etc
-        Put the data in the following manner:
-            v_q | v_tp _ v_fp1 | [0 1]
-            v_q | v_tp _ v_fp1 | [0 1]
-        Pad everything.
-    '''
-
-    # Find the embedding dimension (typically 300)
-    # embedding_dim = 300
-
-    # Some info needed for padding
-    max_ques_length = np.max([datum[0].shape[0] for datum in data_embedded])
-    max_path_length = np.max([datum[1].shape[0] for datum in data_embedded])  # Only pos paths are calculated here.
-    max_false_paths = np.max([len(datum[2]) for datum in data_embedded])    # Find total false paths paths
-
-    # Find max path length, including false paths
-    for datum in data_embedded:
-        max_path_length = max(
-            np.max([fp.shape[0] for fp in datum[2]]),   # Find the largest false path
-            max_path_length                             # amongst the 20 for this question.
-        )
-
-    # Matrices which will store the data.
-    Q = np.zeros((max_false_paths * len(data_embedded), max_ques_length, embedding_dim))
-    tP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
-    fP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
-
-    paths_so_far = 0
 
     if DEBUG:
         print("Q: ", Q.shape, "tP: ", tP.shape, "fP: ", fP.shape)
@@ -665,6 +483,4 @@ def test():
 
 
 if __name__ == "__main__":
-    run()
-
-
+    run(_phase_i_dir='resources/14420.pickle')

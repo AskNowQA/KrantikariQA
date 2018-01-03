@@ -226,12 +226,15 @@ def parse(_raw):
     return v_question, v_true_path, v_false_paths, v_y_true
 
 
-def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/training/pairwise/'):
+def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/training/pairwise/',
+        _phase_i_dir='resources/data_embedded_phase_i.pickle'):
     """
     Get the show on the road.
 
     :param _readfiledir:   the filename (directory info included) to read the JSONs that need parsing
-    :param _writefilename:  the file to which the parsed (embedded+padded) data is to be written to
+    :param _writefilename: the file to which the parsed (embedded+padded) data is to be written to
+    :param _phase_i_dir:   the filename (directory info included) where the script would read/write the intermediate \
+                                pickles
 
     :return: zilch
     """
@@ -239,7 +242,7 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
     try:
 
         # If the phase one is already done and then the code quit (errors/s'thing else), resume for efficiency's sake.
-        data_embedded = pickle.load(open('resources/data_embedded_phase_i.pickle'))
+        data_embedded = pickle.load(open(_phase_i_dir))
         embedding_dim = data_embedded[0][0].shape[1]
 
         if DEBUG:
@@ -306,7 +309,7 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
             Collect the vectorized things in a variable.
             """)
 
-        f = open('resources/data_embedded_phase_i.pickle', 'w+')
+        f = open(_phase_i_dir, 'w+')
         pickle.dump(data_embedded, f)
         f.close()
 
@@ -339,8 +342,6 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
     Q = np.zeros((max_false_paths * len(data_embedded), max_ques_length, embedding_dim))
     tP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
     fP = np.zeros((max_false_paths * len(data_embedded), max_path_length, embedding_dim))
-
-    paths_so_far = 0
 
     if DEBUG:
         print("Q: ", Q.shape, "tP: ", tP.shape, "fP: ", fP.shape)
@@ -482,6 +483,4 @@ def test():
 
 
 if __name__ == "__main__":
-    run()
-
-
+    run(_phase_i_dir='resources/14420.pickle')

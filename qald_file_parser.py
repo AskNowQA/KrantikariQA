@@ -1,4 +1,5 @@
 import json
+import pickle
 from pprint import pprint
 import utils.dbpedia_interface as db_interface
 import utils.natural_language_utilities as nlutils
@@ -24,11 +25,12 @@ DEBUG = True
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
 
 File = 'resources/qald-7-train-multilingual.json'
-
+UNPROCESSED_TWO_TRIPLE = 'data/manual_qald.pickle'
 data = json.load(open(File))
 data = data['questions']
 
 data_triple = [] #This is a list of list having [question,[topic_entity],[relation],id]
+unprocessed_two_triple = pickle.load(open(UNPROCESSED_TWO_TRIPLE))
 
 def get_triples(_sparql_query):
     '''
@@ -140,7 +142,7 @@ for node in data:
 		#Handel rdf type contraints her
 		# pprint(triples)
 		temp_core_chains = [chain.split(' ') for chain in triples]
-		if temp_core_chains[0][1] in ['rdf:type','<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>']:
+		if temp_core_chains[0][1] in ['rdf:type','<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>','a']:
 				parsed_response[u'constraints'][temp_core_chains[0][0]] = temp_core_chains[0][2]
 				if temp_core_chains[1][0].find("?"):
 					# implies that the first position is a variable
@@ -151,9 +153,9 @@ for node in data:
 					parsed_response[u'entity'] = [nlutils.checker(temp_core_chains[1][0])]
 					parsed_response[u'path'] = ['+' + nlutils.checker(temp_core_chains[1][1])]
 				processed_data.append(parsed_response)
-				pprint(parsed_response)
-				raw_input()
-		elif temp_core_chains[1][1] in ['rdf:type','<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>']:
+				# pprint(parsed_response)
+				# raw_input()
+		elif temp_core_chains[1][1] in ['rdf:type','<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>','a']:
 				parsed_response[u'constraints'][temp_core_chains[1][0]] = temp_core_chains[1][2]
 				if "?" in temp_core_chains[0][0]:
 					# implies that the first position is a variable
@@ -165,8 +167,27 @@ for node in data:
 					parsed_response[u'entity'] = [nlutils.checker(temp_core_chains[0][0])]
 					parsed_response[u'path'] = ['+' + nlutils.checker(temp_core_chains[0][1])]
 				processed_data.append(parsed_response)
-				pprint(parsed_response)
-				raw_input()
+				# pprint(parsed_response)
+				# raw_input()
+		else:
+			for value in unprocessed_two_triple:
+				if value[3] == parsed_response[u'sparql_query'] and value[2] == True:
+					parsed_response[u'path'] = [value[0] + temp_core_chains[0][1], value[1] + temp_core_chains[1][1]]
+					parsed_response[u'entity'] = []
+					if temp_core_chains[0][0].find('?'):
+						if not temp_core_chains[0][2].find('?'):
+							parsed_response[u'entity'].append(temp_core_chains[0][2])
+					elif temp_core_chains[0][2].find('?'):
+						if not temp_core_chains[0][0].find('?'):
+							parsed_response[u'entity'].append(temp_core_chains[0][0])
+					if temp_core_chains[1][0].find('?'):
+						if not temp_core_chains[1][2].find('?'):
+							parsed_response[u'entity'].append(temp_core_chains[1][2])
+					elif temp_core_chains[1][2].find('?'):
+						if not temp_core_chains[1][0].find('?'):
+							parsed_response[u'entity'].append(temp_core_chains[1][0])
+					pprint(parsed_response)
+					processed_data.append(parsed_response)
 	else:
 		continue
 '''
@@ -227,11 +248,16 @@ Out[9]: 0.21818181818181817
 
 '''
 			the core chains looks good. Now need some sort of a dynamic template fitting algorithm !!
+
+'''
+
+'''
+			pprint(triples)
 			user_response = []
 			for chain in temp_core_chains:
 				pprint(chain[1])
 				response = raw_input("+ or a -:")
-				if response in ["+","-"]:
+				if response in ["+", "-"]:
 					user_response.append(response)
 			user_response.append(raw_input('correctness:'))
 			user_response.append(node['query']['sparql'])

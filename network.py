@@ -44,7 +44,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 DEBUG = True
 DATA_DIR = './data/training/pairwise'
 EPOCHS = 250
-BATCH_SIZE = 200 # Around 11 splits for full training dataset
+BATCH_SIZE = 3000 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
 NEGATIVE_SAMPLES = 100
@@ -189,7 +189,6 @@ def custom_loss(y_true, y_pred):
 
 
 def rank_precision(model, test_questions, test_pos_paths, test_neg_paths):
-    NEGATIVE_SAMPLES = 20
     only_questions = test_questions[range(0, test_questions.shape[0], NEGATIVE_SAMPLES)]
     only_pos_paths = test_pos_paths[range(0, test_pos_paths.shape[0], NEGATIVE_SAMPLES)]
 
@@ -244,33 +243,29 @@ test_pos_paths = test_split(pos_paths)
 test_neg_paths = test_split(neg_paths)
 test_questions = test_split(questions)
 
-
+neg_paths_per_epoch = 20
 dummy_y_train = np.zeros(len(train_questions))
-dummy_y_test = np.zeros(len(test_questions)*20)
+dummy_y_test = np.zeros(len(test_questions)*neg_paths_per_epoch)
 
 class IdBasedDataGenerator(Sequence):
-    def __init__(self, questions, pos_paths, neg_paths, max_length, batch_size):
+    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
         self.dummy_y = np.zeros(batch_size)
         self.firstDone = False
-
-        self.questions = questions
-
-        self.pos_paths = pos_paths
-
-
-
+        self.max_length = max_length
+        self.neg_paths_per_epoch = neg_paths_per_epoch
+        self.questions = np.repeat(questions, neg_paths_per_epoch, axis=0)
+        self.pos_paths = np.repeat(pos_paths, neg_paths_per_epoch, axis=0)
         self.neg_paths = neg_paths
-
         self.batch_size = batch_size
 
     def __len__(self):
-        return math.ceil(len(self.questions) / self.batch_size)
+        return math.ceil(len(self.questions)*self.neg_paths_per_epoch / self.batch_size)
 
     def __getitem__(self, idx):
         index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
         batch_questions = index(self.questions)
         batch_pos_paths = index(self.pos_paths)
-        batch_neg_paths = np.reshape(index(self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES), :]), (self.batch_size, -1))
+        batch_neg_paths = index(np.reshape(self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :], (-1, self.max_length)))
 
         # if self.firstDone == False:
         #     batch_neg_paths = index(self.neg_paths)
@@ -309,10 +304,9 @@ class DataGenerator(Sequence):
         self.firstDone = not self.firstDone
 
 def rank_precision_metric(y_true, y_pred):
-    NEGATIVE_SAMPLES = 20
     pos_outputs, neg_outputs = y_pred[:,0], y_pred[:,1]
-    pos_outputs = K.gather(pos_outputs, K.arange(0, K.shape(y_pred)[0], NEGATIVE_SAMPLES))
-    neg_outputs = K.reshape(neg_outputs, [K.shape(pos_outputs)[0], NEGATIVE_SAMPLES])
+    pos_outputs = K.gather(pos_outputs, K.arange(0, K.shape(y_pred)[0], neg_paths_per_epoch))
+    neg_outputs = K.reshape(neg_outputs, [K.shape(pos_outputs)[0], neg_paths_per_epoch])
     all_outputs = K.concatenate([K.reshape(pos_outputs, (-1,1)), neg_outputs], axis=1)
     hits = K.cast(K.shape(K.tf.where(K.tf.equal(K.tf.argmax(all_outputs, axis=1),0)))[0], 'float32')
     precision = hits/K.cast(K.shape(all_outputs)[0], 'float32')
@@ -529,13 +523,17 @@ with K.tf.device('/gpu:' + gpu):
 
     # Prepare training data
     training_input = [train_questions, train_pos_paths, train_neg_paths]
-    test_questions = np.repeat(test_questions, 20, axis=0)
-    test_pos_paths = np.repeat(test_pos_paths, 20, axis=0)
-    test_neg_paths = np.reshape(test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, 20), :], (-1, max_length))
+
+    def validation_generator():
+        questions = np.repeat(test_questions, neg_paths_per_epoch, axis=0)
+        pos_paths = np.repeat(test_pos_paths, neg_paths_per_epoch, axis=0)
+        while True:
+            neg_paths = np.reshape(test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :], (-1, max_length))
+            yield (questions, pos_paths, neg_paths), dummy_y_test
 
 
-    model.fit_generator(IdBasedDataGenerator(train_questions, train_pos_paths, train_neg_paths, 50, BATCH_SIZE), epochs=EPOCHS,
-        validation_data=[[test_questions, test_pos_paths, test_neg_paths], dummy_y_test])
+    model.fit_generator(IdBasedDataGenerator(train_questions, train_pos_paths, train_neg_paths, 50, neg_paths_per_epoch, BATCH_SIZE), epochs=EPOCHS,
+        validation_data=validation_generator())
         # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
 # ])
 

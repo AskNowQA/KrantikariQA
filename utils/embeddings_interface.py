@@ -23,7 +23,7 @@ glove_location = \
     {
         'dir': "./resources",
         'raw': "glove.42B.300d.txt",
-        'parsed': "glove_parsed.pickle",
+        'parsed': "glove_parsed.npy",
         'vocab': "glove_vocab.pickle"
     }
 
@@ -45,7 +45,7 @@ def __check_prepared__(_embedding, _only_vocab=False):
     if _embedding == 'glove':
         if glove_vocab is None:
             __prepare__(_word2vec=False, _glove=True, _only_vocab=_only_vocab)
-        elif _only_vocab is False and glove_embeddings is False:
+        elif _only_vocab is False and glove_embeddings is None:
             __prepare__(_word2vec=False, _glove=True, _only_vocab=_only_vocab)
 
 
@@ -112,7 +112,7 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
         try:
 
             # Let's try to load the embeddings now.
-            glove_embeddings = pickle.load(open(os.path.join(glove_location['dir'], glove_location['parsed'])))
+            glove_embeddings = np.load(open(os.path.join(glove_location['dir'], glove_location['parsed'])))
 
         except IOError:
             # Glove is not parsed and stored. Do it.

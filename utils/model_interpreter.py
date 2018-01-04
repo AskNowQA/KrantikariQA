@@ -61,10 +61,15 @@ class ModelInterpreter:
         :return: indices, or path vectors
         """
         # Pad paths
-        padded_paths = pad_sequences(_id_ps, maxlen=self.max_path_len, padding="post", dtype=_id_ps.dtype)
+        padded_paths = pad_sequences(_id_ps, maxlen=self.max_path_len, padding="post", dtype=_id_ps[0].dtype)
+
+        # Repeat the question.
+        repeated_ques = np.repeat(a=_id_q[np.newaxis, :],
+                                  repeats=len(_id_ps),
+                                  axis=0)
 
         # Pad question
-        padded_ques = pad_sequences(_id_q, maxlen=self.max_ques_len, padding="post", dtype=_id_q.dtype)
+        padded_ques = pad_sequences(repeated_ques, maxlen=self.max_ques_len, padding="post", dtype=_id_q[0].dtype)
 
         # Create a dummy set of paths for the sake of model arg: input3
         dummy_paths = np.zeros((len(_id_ps), self.max_path_len))

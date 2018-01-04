@@ -70,34 +70,39 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 - read the file for vocabs,
                 - if needed (param), read the file again for corresponding embeddings.
         """
-        try:
-            glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab'])))
-        except (IOError, EOFError) as e:
-            if DEBUG: warnings.warn(" GloVe vocabulary is not parsed and stored. This will take some time.")
 
-            glove_vocab = {}
+        # Forgo loading vocab if it is already in memory.
 
-            # Push Special chars artificially.
-            glove_vocab['UNK'] = 0
-            glove_vocab['+'] = 1
-            glove_vocab['-'] = 2
-            glove_vocab['/'] = 3
+        if glove_vocab is None:
 
-            f = open(os.path.join(glove_location['dir'], glove_location['raw']))
-            counter = 4
-            for line in f:
-                values = line.split()
-                word = values[0]
-                if word in ['UNK', '+', '-', '/']:
-                    continue
-                glove_vocab[word] = counter
-                counter += 1
-            f.close()
+            try:
+                glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab'])))
+            except (IOError, EOFError) as e:
+                if DEBUG: warnings.warn(" GloVe vocabulary is not parsed and stored. This will take some time.")
 
-            # Now store this object
-            pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))
+                glove_vocab = {}
 
-            if DEBUG: print("GloVe vocab successfully parsed and stored. This won't happen again.")
+                # Push Special chars artificially.
+                glove_vocab['UNK'] = 0
+                glove_vocab['+'] = 1
+                glove_vocab['-'] = 2
+                glove_vocab['/'] = 3
+
+                f = open(os.path.join(glove_location['dir'], glove_location['raw']))
+                counter = 4
+                for line in f:
+                    values = line.split()
+                    word = values[0]
+                    if word in ['UNK', '+', '-', '/']:
+                        continue
+                    glove_vocab[word] = counter
+                    counter += 1
+                f.close()
+
+                # Now store this object
+                pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))
+
+                if DEBUG: print("GloVe vocab successfully parsed and stored. This won't happen again.")
 
         if _only_vocab: return None
 
@@ -113,7 +118,7 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
             # Glove is not parsed and stored. Do it.
             if DEBUG: warnings.warn(" GloVe embeddings are not parsed and stored. This will take some time.")
     
-            glove_embeddings = np.zeros((counter, 300))
+            glove_embeddings = np.zeros((len(glove_vocab.keys()), 300))
             f = open(os.path.join(glove_location['dir'], glove_location['raw']))
 
             for line in f:

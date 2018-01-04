@@ -121,6 +121,7 @@ class Krantikari:
         self.K_1HOP_MODEL = 5
         self.K_2HOP_GLOVE = 10
         self.K_2HOP_MODEL = 5
+        self.EMBEDDING = "glove"
 
         # Internalize args
         self.question = _question
@@ -219,7 +220,7 @@ class Krantikari:
         qt = nlutils.tokenize(self.question, _remove_stopwords=False)
 
         # Vectorize question
-        v_qt = np.mean(embeddings_interface.vectorize(qt, _embedding="word2vec"), axis=0)\
+        v_qt = np.mean(embeddings_interface.vectorize(qt, _embedding=self.EMBEDDING), axis=0)\
 
         # Declare a similarity array
         similarity_arr = np.zeros(len(_predicates))
@@ -227,7 +228,7 @@ class Krantikari:
         # Fill similarity array
         for i in range(len(_predicates)):
             p = _predicates[i]
-            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding="word2vec"), axis=0)
+            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding=self.EMBEDDING ), axis=0)
 
             # If either of them is a zero vector, the cosine is 0.
             if np.sum(v_p) == 0.0 and np.sum(v_qt) == 0.0:
@@ -258,7 +259,7 @@ class Krantikari:
         """
 
         # Vectorize the question
-        v_q = embeddings_interface.vectorize(nlutils.tokenize(_question), _embedding="word2vec")
+        id_q = embeddings_interface.vocabularize(nlutils.tokenize(_question), _embedding=self.EMBEDDING )
 
         # Algo differs based on whether there's one topic entity or two
         if len(_entities) == 1:
@@ -302,11 +303,11 @@ class Krantikari:
             paths_hop1_uri += [[_entities[0], '-', _p] for _p in left_properties_filtered_uri]
 
             # Vectorize these paths.
-            v_ps = [embeddings_interface.vectorize(path, _embedding="word2vec") for path in paths_hop1_sf]
+            id_ps = [embeddings_interface.vectorize(path, _embedding=self.EMBEDDING) for path in paths_hop1_sf]
 
             # MODEL FILTERING
-            hop1_indices, hop1_scores = self.model.rank(_v_q=v_q,
-                                                        _v_ps=v_ps,
+            hop1_indices, hop1_scores = self.model.rank(_id_q=id_q,
+                                                        _id_ps=id_ps,
                                                         _return_only_indices=False,
                                                         _k=self.K_1HOP_MODEL)
 
@@ -533,11 +534,11 @@ class Krantikari:
             paths_hop2_log.append(len(paths_hop2_sf))
 
             # Vectorize these paths
-            v_ps = [embeddings_interface.vectorize(path, _embedding="word2vec") for path in paths_hop2_sf]
+            id_ps = [embeddings_interface.vectorize(path, _embedding=self.EMBEDDING) for path in paths_hop2_sf]
 
             # MODEL FILTERING
-            hop2_indices, hop2_scores = self.model.rank(_v_q=v_q,
-                                                        _v_ps=v_ps,
+            hop2_indices, hop2_scores = self.model.rank(_id_q=id_q,
+                                                        _id_ps=id_ps,
                                                         _return_only_indices=False,
                                                         _k=self.K_2HOP_MODEL)
 
@@ -893,7 +894,7 @@ def run_lcquad():
     dataset = json.load(open(LCQUAD_DIR))
 
     progbar = ProgressBar()
-    iterator = progbar(dataset)
+    iterator = progbar(dataset[:10])
 
     # Parse it
     for x in iterator:
@@ -986,5 +987,5 @@ if __name__ == "__main__":
     """
         TEST 2 : Check LCQuAD Parser
     """
-    run_qald()
+    run_lcquad()
 

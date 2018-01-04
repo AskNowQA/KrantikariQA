@@ -7,11 +7,10 @@
 import os
 import json
 import gensim
-import pickle
+import cPickle as pickle
 import bottle
 import warnings
 import numpy as np
-
 from bottle import post, get, put, delete, request, response
 
 word2vec_embeddings = None
@@ -24,8 +23,8 @@ DEBUG = True
 glove_location = \
     {
         'dir': "./resources",
-        'raw': "glove.6B.300d.txt",
-        'parsed': "glove_parsed.pickle",
+        'raw': "glove.42B.300d.txt",
+        'parsed': "glove_parsed.npy",
         'vocab': "glove_vocab.pickle"
     }
 
@@ -65,7 +64,7 @@ def __prepare__(_word2vec=True, _glove=False):
 
     if _glove:
         try:
-            glove_embeddings = pickle.load(open(os.path.join(glove_location['dir'], glove_location['parsed'])))
+            glove_embeddings = np.load(os.path.join(glove_location['dir'], glove_location['parsed']))
             glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab'])))
         except(IOError, EOFError):
             # Glove is not parsed and stored. Do it.
@@ -105,7 +104,7 @@ def __prepare__(_word2vec=True, _glove=False):
             glove_embeddings = np.asarray(glove_embeddings)
 
             # Now store them to disk
-            pickle.dump(glove_embeddings, open(os.path.join(glove_location['dir'], glove_location['parsed']), 'w+'))
+            np.save(os.path.join(glove_location['dir'], glove_location['parsed']), glove_embeddings)
             pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))
 
             if DEBUG: print("GloVe successfully parsed and stored. This won't happen again.")

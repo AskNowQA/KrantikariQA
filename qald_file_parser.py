@@ -3,7 +3,7 @@ from pprint import pprint
 import utils.dbpedia_interface as db_interface
 import utils.natural_language_utilities as nlutils
 import utils.embeddings_interface as sim
-
+from termcolor import colored
 short_forms = {
 	'dbo:' : 'http://dbpedia.org/ontology/',
 	'res:' : 'http://dbpedia.org/resource/',
@@ -95,6 +95,8 @@ def top_k_relation(entity,question,relations,k=20,method=1):
 
 for i in xrange(len(data)):
 	data[i]['query']['sparql'] = data[i]['query']['sparql'].replace('.\n','. ')
+
+final_response = []
 for node in data:
 	sparql_query = node['query']['sparql']	#The sparql query of the question
 	triples = get_triples(sparql_query) #this will return the all the triples present in the SPARQL query
@@ -105,7 +107,7 @@ for node in data:
 			#it has literal. Need to be handeled differently
 			continue
 		else:
-			try:	
+			try:
 				core_chains = triples[0].split(' ')	#split by space to get individual element of chain
 				core_chains =[i.strip() for i in core_chains]		#clean up the extra space
 				for i in xrange(len(core_chains)):	#replace dbo: with http://dbpedia.org/ontology/ so on and so forth
@@ -115,19 +117,33 @@ for node in data:
 				if "?" in core_chains[0]:
 					# implies that the first position is a variable
 					# check for '<', '>'
-					data_triple.append([node['question'][0]['string'],checker(core_chains[2]),checker(core_chains[1]),id])
+					data_triple.append([node['question'][0]['string'],checker(core_chains[2]),"-" + checker(core_chains[1]),id])
 				else:
 					#implies third position is a variable
-					data_triple.append([node['question'][0]['string'],checker(core_chains[0]),checker(core_chains[1]),id])
+					data_triple.append([node['question'][0]['string'],checker(core_chains[0]),"+" + checker(core_chains[1]),id])
 			except:
 				print "haaga"
 				continue				
 	elif len(triples) == 2:
+		#Handel rdf type contraints her
 		pprint(triples)
 		temp_core_chains = [chain.split(' ') for chain in triples]
-		
+		pprint(temp_core_chains)
+		raw_input()
+		# ['rdf:type','<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>']
+		#the core chains looks good. Now need some sort of a dynamic template fitting algorithm !!
+		#Number of topic entites, Sign of relations, correctness or
+		# user_response = []
+		# for chain in temp_core_chains:
+		# 	pprint(chain[1])
+		# 	response = raw_input("+ or a -:")
+		# 	if response in ["+","-"]:
+		# 		user_response.append(response)
+		# user_response.append(raw_input('correctness:'))
+		# user_response.append(node['query']['sparql'])
+		# final_response.append(user_response)
 	else:
-		continue	
+		continue
 '''
 	One of the program structure could be - assuming just single entity and single relations (factoid)
 	>Take the question

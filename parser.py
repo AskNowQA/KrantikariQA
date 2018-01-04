@@ -147,6 +147,11 @@ def parse(_raw):
             # In case there isn't no rel2 in the subgraph, just go with 1 hop paths.
             pass
 
+        except AttributeError:
+
+            pprint(_raw)
+            raw_input("Press Enter to continue")
+
         # From all these paths, randomly choose some.
         false_paths = np.random.choice(false_paths, MAX_FALSE_PATHS)
 

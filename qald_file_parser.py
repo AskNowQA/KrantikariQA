@@ -171,7 +171,7 @@ for node in data:
 				# raw_input()
 		else:
 			for value in unprocessed_two_triple:
-				if value[3] == parsed_response[u'sparql_query'] and value[2] == True:
+				if value[3] == parsed_response[u'sparql_query'] and value[2] == 'true':
 					parsed_response[u'path'] = [value[0] + temp_core_chains[0][1], value[1] + temp_core_chains[1][1]]
 					parsed_response[u'entity'] = []
 					if temp_core_chains[0][0].find('?'):

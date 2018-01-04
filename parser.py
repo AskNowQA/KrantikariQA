@@ -72,159 +72,163 @@ def parse(_raw):
 
     @TODO: Generalize this for more than one topic entity.
     """
+    if len(_raw[u'entity']) > 1:
 
-    # Get the question
-    question = _raw[u'corrected_question']
+        # Get the question
+        question = _raw[u'corrected_question']
 
-    # Tokenize the question
-    question = nlutils.tokenize(question)
+        # Tokenize the question
+        question = nlutils.tokenize(question)
 
-    # Now, embed the question.
-    id_question = embeddings_interface.vocabularize(question, _report_unks=False)
+        # Now, embed the question.
+        id_question = embeddings_interface.vocabularize(question, _report_unks=False)
 
-    # Make the correct path
-    entity = _raw[u'entity'][0]
-    entity_sf = nlutils.tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: multi-entity alert
-    path_sf = []
-    for x in _raw[u'path']:
-        path_sf.append(x[0])
-        path_sf.append(dbp.get_label(x[1:]))
-    true_path = entity_sf + path_sf
+        # Make the correct path
+        entity = _raw[u'entity'][0]
+        entity_sf = nlutils.tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: multi-entity alert
+        path_sf = []
+        for x in _raw[u'path']:
+            path_sf.append(x[0])
+            path_sf.append(dbp.get_label(x[1:]))
+        true_path = entity_sf + path_sf
 
-    """
-        Create all possible paths.
-        Then choose some of them.
-    """
-    false_paths = []
+        """
+            Create all possible paths.
+            Then choose some of them.
+        """
+        false_paths = []
 
-    # Collect 1st hop ones.
-    for pospath in _raw[u'training'][entity][u'rel1'][0]:
-        new_fp = entity_sf + ['+'] + nlutils.tokenize(dbp.get_label(pospath))
-        false_paths.append(new_fp)
+        # Collect 1st hop ones.
+        for pospath in _raw[u'training'][entity][u'rel1'][0]:
+            new_fp = entity_sf + ['+'] + nlutils.tokenize(dbp.get_label(pospath))
+            false_paths.append(new_fp)
 
-    for negpath in _raw[u'training'][entity][u'rel1'][1]:
-        new_fp = entity_sf + ['-'] + nlutils.tokenize(dbp.get_label(negpath))
-        false_paths.append(new_fp)
+        for negpath in _raw[u'training'][entity][u'rel1'][1]:
+            new_fp = entity_sf + ['-'] + nlutils.tokenize(dbp.get_label(negpath))
+            false_paths.append(new_fp)
 
-    # Collect 2nd hop ones
-    try:
+        # Collect 2nd hop ones
+        try:
 
-        # Access first element inside rel0 (for paths in direction + )
-        for poshop1 in _raw[u'training'][entity][u'rel2'][0]:
-            new_fp = entity_sf + ['+']
+            # Access first element inside rel0 (for paths in direction + )
+            for poshop1 in _raw[u'training'][entity][u'rel2'][0]:
+                new_fp = entity_sf + ['+']
 
-            hop1 = poshop1.keys()[0]
-            hop1sf = dbp.get_label(hop1.replace(",", ""))
-            new_fp += nlutils.tokenize(hop1sf)
+                hop1 = poshop1.keys()[0]
+                hop1sf = dbp.get_label(hop1.replace(",", ""))
+                new_fp += nlutils.tokenize(hop1sf)
 
-            for poshop2 in poshop1[hop1][0]:
-                temp_fp = new_fp[:] + ['+'] + nlutils.tokenize(dbp.get_label(poshop2))
-                false_paths.append(temp_fp)
+                for poshop2 in poshop1[hop1][0]:
+                    temp_fp = new_fp[:] + ['+'] + nlutils.tokenize(dbp.get_label(poshop2))
+                    false_paths.append(temp_fp)
 
-            for neghop2 in poshop1[hop1][1]:
-                temp_fp = new_fp[:] + ['-'] + nlutils.tokenize(dbp.get_label(neghop2))
-                false_paths.append(temp_fp)
+                for neghop2 in poshop1[hop1][1]:
+                    temp_fp = new_fp[:] + ['-'] + nlutils.tokenize(dbp.get_label(neghop2))
+                    false_paths.append(temp_fp)
 
-        # Access second element inside rel0 (for paths in direction - )
-        for neghop1 in _raw[u'training'][entity][u'rel2'][1]:
-            new_fp = entity_sf + ['-']
+            # Access second element inside rel0 (for paths in direction - )
+            for neghop1 in _raw[u'training'][entity][u'rel2'][1]:
+                new_fp = entity_sf + ['-']
 
-            hop1 = neghop1.keys()[0]
-            hop1sf = dbp.get_label(hop1.replace(",", ""))
-            new_fp += nlutils.tokenize(hop1sf)
+                hop1 = neghop1.keys()[0]
+                hop1sf = dbp.get_label(hop1.replace(",", ""))
+                new_fp += nlutils.tokenize(hop1sf)
 
-            for poshop2 in neghop1[hop1][0]:
-                temp_fp = new_fp[:] + ['+'] + nlutils.tokenize(dbp.get_label(poshop2))
-                false_paths.append(temp_fp)
+                for poshop2 in neghop1[hop1][0]:
+                    temp_fp = new_fp[:] + ['+'] + nlutils.tokenize(dbp.get_label(poshop2))
+                    false_paths.append(temp_fp)
 
-            for neghop2 in neghop1[hop1][1]:
-                temp_fp = new_fp[:] + ['-'] + nlutils.tokenize(dbp.get_label(neghop2))
-                false_paths.append(temp_fp)
+                for neghop2 in neghop1[hop1][1]:
+                    temp_fp = new_fp[:] + ['-'] + nlutils.tokenize(dbp.get_label(neghop2))
+                    false_paths.append(temp_fp)
 
-    except KeyError:
+        except KeyError:
 
-        # In case there isn't no rel2 in the subgraph, just go with 1 hop paths.
-        pass
+            # In case there isn't no rel2 in the subgraph, just go with 1 hop paths.
+            pass
 
-    # From all these paths, randomly choose some.
-    false_paths = np.random.choice(false_paths, MAX_FALSE_PATHS)
+        # From all these paths, randomly choose some.
+        false_paths = np.random.choice(false_paths, MAX_FALSE_PATHS)
 
-    """
-        **rdf-type constraints:**
+        """
+            **rdf-type constraints:**
 
-        !!NOTE!! Parser does not care which variable has the type constraint.
+            !!NOTE!! Parser does not care which variable has the type constraint.
 
-        Decisions:
-            - For true path, everytime you find rdf type constraint, add to true paths
-            - Add the original true path to false paths
-                        @TODO @nilesh-c shall I remove s'thing from false paths, then?
+            Decisions:
+                - For true path, everytime you find rdf type constraint, add to true paths
+                - Add the original true path to false paths
+                            @TODO @nilesh-c shall I remove s'thing from false paths, then?
 
-            - For false paths:
-                - collect all false classes for both uri and x;
-                - for every false path (post random selection)
-                    - randomly choose whether or not to add false class (p = 0.3)
-                - @TODO: @nilesh-c: shall we add true_path + incorrect_classes in false paths too?
-    """
-    true_class = None
-    if '?uri' in _raw[u'constraints'].keys() or '?x' in _raw[u'constraints'].keys():
-        # Question has type constraints
+                - For false paths:
+                    - collect all false classes for both uri and x;
+                    - for every false path (post random selection)
+                        - randomly choose whether or not to add false class (p = 0.3)
+                    - @TODO: @nilesh-c: shall we add true_path + incorrect_classes in false paths too?
+        """
+        true_class = None
+        if '?uri' in _raw[u'constraints'].keys() or '?x' in _raw[u'constraints'].keys():
+            # Question has type constraints
 
-        if '?uri' in _raw[u'constraints'].keys():
-            # Have a type constraint on the answer.
-            true_class = _raw[u'constraints'][u'?uri']
+            if '?uri' in _raw[u'constraints'].keys():
+                # Have a type constraint on the answer.
+                true_class = _raw[u'constraints'][u'?uri']
 
-        elif '?x' in _raw[u'constraints'].keys():
-            # Have a type constraint on the intermediary variable.
-            true_class = _raw[u'constraints'][u'?x']
+            elif '?x' in _raw[u'constraints'].keys():
+                # Have a type constraint on the intermediary variable.
+                true_class = _raw[u'constraints'][u'?x']
 
-        # Add the path (without type constraint) in false paths.
-        false_paths = [true_path] + false_paths.tolist()[1:]    # NOTE: Removing first false path.
+            # Add the path (without type constraint) in false paths.
+            false_paths = [true_path] + false_paths.tolist()[1:]    # NOTE: Removing first false path.
 
-        true_path += ['/']
-        true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=True)
+            true_path += ['/']
+            true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=True)
 
-    try:
-        if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
+        try:
+            if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
 
-            # Find all false classes
-            f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
+                # Find all false classes
+                f_classes = list(set(_raw[u'training'][u'uri'] + _raw[u'training'][u'x']))
 
-            # Remove correct ones.
-            if true_class in f_classes:
-                f_classes.remove(true_class)
+                # Remove correct ones.
+                if true_class in f_classes:
+                    f_classes.remove(true_class)
 
-            # Get surface form, tokenize.
-            f_classes = [nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
+                # Get surface form, tokenize.
+                f_classes = [nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
 
-            for i in range(len(false_paths)):
+                for i in range(len(false_paths)):
 
-                # Stochastically decide if we want type restrictions there
-                if random.random() < pADDTYPE:
+                    # Stochastically decide if we want type restrictions there
+                    if random.random() < pADDTYPE:
 
-                    # If here, choose a random class, add to path
-                    path = false_paths[i]
-                    path += ['/']
-                    path += random.choice(f_classes)
+                        # If here, choose a random class, add to path
+                        path = false_paths[i]
+                        path += ['/']
+                        path += random.choice(f_classes)
 
-                    # Append path back to list
-                    false_paths[i] = path
+                        # Append path back to list
+                        false_paths[i] = path
 
-    except KeyError:
+        except KeyError:
 
-        if DEBUG:
-            print("KeyError while parsing rdf:type (False). Datafile: ")
-            pprint(_raw)
+            if DEBUG:
+                print("KeyError while parsing rdf:type (False). Datafile: ")
+                pprint(_raw)
 
-    # Vectorize paths
-    id_true_path = embeddings_interface.vocabularize(true_path)
-    id_false_paths = [embeddings_interface.vocabularize(x) for x in false_paths]
+        # Vectorize paths
+        id_true_path = embeddings_interface.vocabularize(true_path)
+        id_false_paths = [embeddings_interface.vocabularize(x) for x in false_paths]
 
-    # Corresponding to all these, compute the true labels
-    v_y_true = compute_true_labels(question, true_path, false_paths)
+        # Corresponding to all these, compute the true labels
+        v_y_true = compute_true_labels(question, true_path, false_paths)
 
-    # Throw it out.
-    return id_question, id_true_path, id_false_paths, v_y_true
+        # Throw it out.
+        return id_question, id_true_path, id_false_paths, v_y_true
 
+    else:
+
+        return -1
 
 def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/training/pairwise/',
         _phase_i_dir='resources/data_embedded_phase_i.pickle'):
@@ -287,7 +291,12 @@ def run(_readfiledir='data/preprocesseddata_new_v2/', _writefilename='data/train
             for question in data:
 
                 # Collect the response
-                id_q, id_tp, id_fps, v_y = parse(question)
+                ops = parse(question)
+
+                if ops == -1:
+                    continue
+
+                id_q, id_tp, id_fps, v_y = ops
 
                 # Collect data for each question
                 data_embedded.append([id_q, id_tp, id_fps, v_y])

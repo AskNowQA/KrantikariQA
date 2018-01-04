@@ -97,14 +97,22 @@ for i in xrange(len(data)):
 	data[i]['query']['sparql'] = data[i]['query']['sparql'].replace('.\n','. ')
 
 final_response = []
+log = []
+processed_data = []
 for node in data:
+	parsed_response = {}
 	sparql_query = node['query']['sparql']	#The sparql query of the question
+	parsed_response[u'sparql_query'] = node['query']['sparql']
+	parsed_response[u'corrected_question'] = node['question'][0]['string']
 	triples = get_triples(sparql_query) #this will return the all the triples present in the SPARQL query
-	triples = [chain.replace(' .','').strip() for chain in triples]	#remove the . from each line of the SPARQL query 
+	triples = [chain.replace(' .','').strip() for chain in triples]	#remove the . from each line of the SPARQL query
+	parsed_response[u'triples'] = triples
+	parsed_response[u'constraints'] = {}
 	if len(triples) == 1:
 		id = 1 #represents a single triple query
 		if "@en" in triples[0]:
 			#it has literal. Need to be handeled differently
+			log.append(node)
 			continue
 		else:
 			try:
@@ -117,31 +125,48 @@ for node in data:
 				if "?" in core_chains[0]:
 					# implies that the first position is a variable
 					# check for '<', '>'
-					data_triple.append([node['question'][0]['string'],checker(core_chains[2]),"-" + checker(core_chains[1]),id])
+					parsed_response[u'entity'] = [nlutils.checker(core_chains[2])]
+					parsed_response[u'path'] = ['-' + nlutils.checker(core_chains[1])]
 				else:
 					#implies third position is a variable
-					data_triple.append([node['question'][0]['string'],checker(core_chains[0]),"+" + checker(core_chains[1]),id])
+					parsed_response[u'entity'] = [nlutils.checker(core_chains[0])]
+					parsed_response[u'path'] = ['+' + nlutils.checker(core_chains[1])]
+				processed_data.append(parsed_response)
 			except:
 				print "haaga"
-				continue				
+				log.append(node)
+				continue
 	elif len(triples) == 2:
 		#Handel rdf type contraints her
-		pprint(triples)
+		# pprint(triples)
 		temp_core_chains = [chain.split(' ') for chain in triples]
-		pprint(temp_core_chains)
-		raw_input()
-		# ['rdf:type','<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>']
-		#the core chains looks good. Now need some sort of a dynamic template fitting algorithm !!
-		#Number of topic entites, Sign of relations, correctness or
-		# user_response = []
-		# for chain in temp_core_chains:
-		# 	pprint(chain[1])
-		# 	response = raw_input("+ or a -:")
-		# 	if response in ["+","-"]:
-		# 		user_response.append(response)
-		# user_response.append(raw_input('correctness:'))
-		# user_response.append(node['query']['sparql'])
-		# final_response.append(user_response)
+		if temp_core_chains[0][1] in ['rdf:type','<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>']:
+				parsed_response[u'constraints'][temp_core_chains[0][0]] = temp_core_chains[0][2]
+				if temp_core_chains[1][0].find("?"):
+					# implies that the first position is a variable
+					# check for '<', '>'
+					parsed_response[u'entity'] = [nlutils.checker(temp_core_chains[1][2])]
+					parsed_response[u'path'] = ['-' + nlutils.checker(temp_core_chains[1][1])]
+				else:
+					parsed_response[u'entity'] = [nlutils.checker(temp_core_chains[1][0])]
+					parsed_response[u'path'] = ['+' + nlutils.checker(temp_core_chains[1][1])]
+				processed_data.append(parsed_response)
+				pprint(parsed_response)
+				raw_input()
+		elif temp_core_chains[1][1] in ['rdf:type','<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>']:
+				parsed_response[u'constraints'][temp_core_chains[1][0]] = temp_core_chains[1][2]
+				if "?" in temp_core_chains[0][0]:
+					# implies that the first position is a variable
+					# check for '<', '>'
+					parsed_response[u'entity'] = [nlutils.checker(temp_core_chains[0][2])]
+					parsed_response[u'path'] = ['-' + nlutils.checker(temp_core_chains[0][1])]
+				else:
+					#implies third position is a variable
+					parsed_response[u'entity'] = [nlutils.checker(temp_core_chains[0][0])]
+					parsed_response[u'path'] = ['+' + nlutils.checker(temp_core_chains[0][1])]
+				processed_data.append(parsed_response)
+				pprint(parsed_response)
+				raw_input()
 	else:
 		continue
 '''
@@ -198,4 +223,17 @@ Out[9]: 0.21818181818181817
 	Run 3 
 	49 -- extended run with rdf#type not being part of the black list
 
+'''
+
+'''
+			the core chains looks good. Now need some sort of a dynamic template fitting algorithm !!
+			user_response = []
+			for chain in temp_core_chains:
+				pprint(chain[1])
+				response = raw_input("+ or a -:")
+				if response in ["+","-"]:
+					user_response.append(response)
+			user_response.append(raw_input('correctness:'))
+			user_response.append(node['query']['sparql'])
+			final_response.append(user_response)
 '''

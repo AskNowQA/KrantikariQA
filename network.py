@@ -472,14 +472,14 @@ def main():
         """
             Model Time!
         """
-        max_length = 50
+        max_length = train_questions.shape[1]
         # Define input to the models
         x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
         x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
         x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
         vectors = get_glove_embeddings()
-
+        neg_paths_per_epoch = 20
         embedding_dims = vectors.shape[1]
         nr_hidden = 64
 
@@ -498,7 +498,7 @@ def main():
         x_neg_path_encoded = encode(x_neg_path_embedded)
 
         def getScore(path_encoded):
-            attention = attend(ques_encoded, x_pos_path_encoded)
+            attention = attend(ques_encoded, path_encoded)
 
             align_ques = align(path_encoded, attention)
             align_path = align(ques_encoded, attention, transpose=True)

@@ -303,7 +303,7 @@ class Krantikari:
             paths_hop1_uri += [[_entities[0], '-', _p] for _p in left_properties_filtered_uri]
 
             # Vectorize these paths.
-            id_ps = [embeddings_interface.vectorize(path, _embedding=self.EMBEDDING) for path in paths_hop1_sf]
+            id_ps = [embeddings_interface.vocabularize(path, _embedding=self.EMBEDDING) for path in paths_hop1_sf]
 
             # MODEL FILTERING
             hop1_indices, hop1_scores = self.model.rank(_id_q=id_q,

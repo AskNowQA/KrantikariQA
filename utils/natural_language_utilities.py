@@ -39,7 +39,7 @@ def tokenize(_input, _ignore_brackets=False, _remove_stopwords=False):
         :param _ignore_brackets: bool
         :return: list of tokens
     """
-    cleaner_input = _input.replace("?", "").replace(",", "").strip()
+    cleaner_input = _input.replace("?", "").replace(",", " ").replace("_"," ").strip()
     if _ignore_brackets:
         # If there's some text b/w brackets, remove it. @TODO: NESTED parenthesis not covered.
         pattern = r'\([^\)]*\)'
@@ -51,6 +51,8 @@ def tokenize(_input, _ignore_brackets=False, _remove_stopwords=False):
             cleaner_input = cleaner_input[:cleaner_input.index(substring)] + cleaner_input[
                                                                              cleaner_input.index(substring) + len(
                                                                                  substring):]
+    else:
+        cleaner_input = cleaner_input.replace("(", " ").replace(")", " ")
 
     return cleaner_input.strip().split() if not _remove_stopwords else remove_stopwords(cleaner_input.strip().split())
 

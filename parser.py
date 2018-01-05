@@ -85,7 +85,7 @@ def parse(_raw):
 
         # Make the correct path
         entity = _raw[u'entity'][0]
-        entity_sf = nlutils.tokenize(dbp.get_label(entity), _ignore_brackets=True)  # @TODO: multi-entity alert
+        entity_sf = nlutils.tokenize(dbp.get_label(entity), _ignore_brackets=False)  # @TODO: multi-entity alert
         path_sf = []
         for x in _raw[u'path']:
             path_sf.append(x[0])
@@ -187,7 +187,7 @@ def parse(_raw):
             false_paths = [true_path[:]] + false_paths.tolist()[1:]    # NOTE: Removing first false path.
 
             true_path += ['/']
-            true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=True)
+            true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=False)
 
         try:
             if _raw[u'training'][u'uri'] or _raw[u'training'][u'x']:
@@ -200,7 +200,7 @@ def parse(_raw):
                     f_classes.remove(true_class)
 
                 # Get surface form, tokenize.
-                f_classes = [nlutils.tokenize(dbp.get_label(x), _ignore_brackets=True) for x in f_classes]
+                f_classes = [nlutils.tokenize(dbp.get_label(x), _ignore_brackets=False) for x in f_classes]
 
                 for i in range(len(false_paths)):
 

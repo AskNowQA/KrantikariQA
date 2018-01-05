@@ -26,7 +26,7 @@ from utils import natural_language_utilities as nlutils
 DEBUG = True
 pADDTYPE = 0.35
 EMBEDDING_DIM = 300
-MAX_FALSE_PATHS = 20
+MAX_FALSE_PATHS = 100
 
 # Set a seed for deterministic randomness
 random.seed(42)
@@ -41,7 +41,7 @@ if DEBUG:
     warnings.warn(" DEBUG macro is enabled. Expect cluttered console!")
 
 # Initialize DBpedia
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 
 def compute_true_labels(_question, _truepath, _falsepaths):
@@ -72,7 +72,7 @@ def parse(_raw):
 
     @TODO: Generalize this for more than one topic entity.
     """
-    if len(_raw[u'entity']) > 1:
+    if len(_raw[u'entity']) == 1:
 
         # Get the question
         question = _raw[u'corrected_question']

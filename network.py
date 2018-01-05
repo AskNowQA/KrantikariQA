@@ -37,8 +37,6 @@ from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.layers import Merge
 
-gpu = sys.argv[1]
-os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
 # Some Macros
 DEBUG = True
@@ -49,7 +47,6 @@ LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
 NEGATIVE_SAMPLES = 100
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
-
 
 '''
     F1 measure functions
@@ -201,51 +198,6 @@ def rank_precision(model, test_questions, test_pos_paths, test_neg_paths):
     precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
     return precision
 
-"""
-    Data Time!
-"""
-# Pull the data up from disk
-max_length = 50
-with open(DATA_DIR + "/data_embedded_phase_i.pickle") as fp:
-    dataset = pickle.load(fp)
-questions = [i[0] for i in dataset]
-questions = pad_sequences(questions, maxlen=max_length, padding='post')
-pos_paths = [i[1] for i in dataset]
-pos_paths = pad_sequences(pos_paths, maxlen=max_length, padding='post')
-neg_paths = [i[2] for i in dataset]
-neg_paths = [path for paths in neg_paths for path in paths]
-neg_paths = pad_sequences(neg_paths, maxlen=max_length, padding='post')
-neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_length))
-# pad_till = abs(pos_paths.shape[1] - questions.shape[1])
-# pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
-# if pos_paths.shape[1] < questions.shape[1]:
-#     pos_paths = pad(pos_paths)
-#     neg_paths = pad(neg_paths)
-# else:
-#     questions = pad(questions)
-
-# Shuffle these matrices together @TODO this!
-np.random.seed(0) # Random train/test splits stay the same between runs
-
-# Divide the data into diff blocks
-split_point = lambda x: int(len(x) * .80)
-
-def train_split(x):
-    return x[:split_point(x)]
-def test_split(x):
-    return x[split_point(x):]
-
-train_pos_paths = train_split(pos_paths)
-train_neg_paths = train_split(neg_paths)
-train_questions = train_split(questions)
-
-test_pos_paths = test_split(pos_paths)
-test_neg_paths = test_split(neg_paths)
-test_questions = test_split(questions)
-
-neg_paths_per_epoch = 20
-dummy_y_train = np.zeros(len(train_questions))
-dummy_y_test = np.zeros(len(test_questions)*neg_paths_per_epoch)
 
 class IdBasedDataGenerator(Sequence):
     def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
@@ -459,93 +411,148 @@ def get_glove_embeddings():
     from utils.embeddings_interface import glove_embeddings
     return glove_embeddings
 
+def main():
 
-print train_questions.shape
-print train_pos_paths.shape
-print train_neg_paths.shape
+    gpu = sys.argv[1]
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
-with K.tf.device('/gpu:' + gpu):
-    K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+
     """
-        Model Time!
+        Data Time!
     """
+    # Pull the data up from disk
     max_length = 50
-    # Define input to the models
-    x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
-    x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
-    x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
+    with open(DATA_DIR + "/data_embedded_phase_i.pickle") as fp:
+        dataset = pickle.load(fp)
+    questions = [i[0] for i in dataset]
+    questions = pad_sequences(questions, maxlen=max_length, padding='post')
+    pos_paths = [i[1] for i in dataset]
+    pos_paths = pad_sequences(pos_paths, maxlen=max_length, padding='post')
+    neg_paths = [i[2] for i in dataset]
+    neg_paths = [path for paths in neg_paths for path in paths]
+    neg_paths = pad_sequences(neg_paths, maxlen=max_length, padding='post')
+    neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_length))
+    # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
+    # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
+    # if pos_paths.shape[1] < questions.shape[1]:
+    #     pos_paths = pad(pos_paths)
+    #     neg_paths = pad(neg_paths)
+    # else:
+    #     questions = pad(questions)
 
-    vectors = get_glove_embeddings()
+    # Shuffle these matrices together @TODO this!
+    np.random.seed(0) # Random train/test splits stay the same between runs
 
-    embedding_dims = vectors.shape[1]
-    nr_hidden = 64
+    # Divide the data into diff blocks
+    split_point = lambda x: int(len(x) * .80)
 
-    embed = _StaticEmbedding(vectors, max_length, embedding_dims)
-    encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.5)
-    attend = _Attention(max_length, nr_hidden, dropout=0.5, L2=0.01)
-    align = _SoftAlignment(max_length, nr_hidden)
-    compare = _Comparison(max_length, nr_hidden, dropout=0.5, L2=0.01)
+    def train_split(x):
+        return x[:split_point(x)]
+    def test_split(x):
+        return x[split_point(x):]
 
-    x_ques_embedded = embed(x_ques)
-    x_pos_path_embedded = embed(x_pos_path)
-    x_neg_path_embedded = embed(x_neg_path)
+    train_pos_paths = train_split(pos_paths)
+    train_neg_paths = train_split(neg_paths)
+    train_questions = train_split(questions)
 
-    ques_encoded = encode(x_ques_embedded)
-    x_pos_path_encoded = encode(x_pos_path_embedded)
-    x_neg_path_encoded = encode(x_neg_path_embedded)
+    test_pos_paths = test_split(pos_paths)
+    test_neg_paths = test_split(neg_paths)
+    test_questions = test_split(questions)
 
-    def getScore(path_encoded):
-        attention = attend(ques_encoded, x_pos_path_encoded)
+    neg_paths_per_epoch = 20
+    dummy_y_train = np.zeros(len(train_questions))
+    dummy_y_test = np.zeros(len(test_questions)*neg_paths_per_epoch)
 
-        align_ques = align(path_encoded, attention)
-        align_path = align(ques_encoded, attention, transpose=True)
+    print train_questions.shape
+    print train_pos_paths.shape
+    print train_neg_paths.shape
 
-        feats_ques = compare(ques_encoded, align_ques)
-        feats_path = compare(path_encoded, align_path)
+    with K.tf.device('/gpu:' + gpu):
+        K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+        """
+            Model Time!
+        """
+        max_length = 50
+        # Define input to the models
+        x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
+        x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
+        x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
-        return dot([feats_ques, feats_path], axes=-1)
+        vectors = get_glove_embeddings()
 
-    pos_score = getScore(x_pos_path_encoded)
-    neg_score = getScore(x_neg_path_encoded)
+        embedding_dims = vectors.shape[1]
+        nr_hidden = 64
 
-    loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
+        embed = _StaticEmbedding(vectors, max_length, embedding_dims)
+        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.5)
+        attend = _Attention(max_length, nr_hidden, dropout=0.5, L2=0.01)
+        align = _SoftAlignment(max_length, nr_hidden)
+        compare = _Comparison(max_length, nr_hidden, dropout=0.5, L2=0.01)
 
-    output = concatenate([pos_score, neg_score, loss], axis=-1)
+        x_ques_embedded = embed(x_ques)
+        x_pos_path_embedded = embed(x_pos_path)
+        x_neg_path_embedded = embed(x_neg_path)
 
-    # Model time!
-    model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
-        outputs=[output])
+        ques_encoded = encode(x_ques_embedded)
+        x_pos_path_encoded = encode(x_pos_path_embedded)
+        x_neg_path_encoded = encode(x_neg_path_embedded)
 
-    print(model.summary())
+        def getScore(path_encoded):
+            attention = attend(ques_encoded, x_pos_path_encoded)
 
-    model.compile(optimizer=OPTIMIZER,
-                  loss=custom_loss, metrics=[rank_precision_metric])
+            align_ques = align(path_encoded, attention)
+            align_path = align(ques_encoded, attention, transpose=True)
 
-    # Prepare training data
-    training_input = [train_questions, train_pos_paths, train_neg_paths]
+            feats_ques = compare(ques_encoded, align_ques)
+            feats_path = compare(path_encoded, align_path)
 
-    def validation_generator():
-        questions = np.repeat(test_questions, neg_paths_per_epoch, axis=0)
-        pos_paths = np.repeat(test_pos_paths, neg_paths_per_epoch, axis=0)
-        while True:
-            neg_paths = np.reshape(test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :], (-1, max_length))
-            yield (questions, pos_paths, neg_paths), dummy_y_test
+            return dot([feats_ques, feats_path], axes=-1)
+
+        pos_score = getScore(x_pos_path_encoded)
+        neg_score = getScore(x_neg_path_encoded)
+
+        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
+
+        output = concatenate([pos_score, neg_score, loss], axis=-1)
+
+        # Model time!
+        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+            outputs=[output])
+
+        print(model.summary())
+
+        model.compile(optimizer=OPTIMIZER,
+                      loss=custom_loss, metrics=[rank_precision_metric])
+
+        # Prepare training data
+        training_input = [train_questions, train_pos_paths, train_neg_paths]
+
+        def validation_generator():
+            questions = np.repeat(test_questions, neg_paths_per_epoch, axis=0)
+            pos_paths = np.repeat(test_pos_paths, neg_paths_per_epoch, axis=0)
+            while True:
+                neg_paths = np.reshape(test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :], (-1, max_length))
+                yield (questions, pos_paths, neg_paths), dummy_y_test
 
 
-    model.fit_generator(IdBasedDataGenerator(train_questions, train_pos_paths, train_neg_paths, 50, neg_paths_per_epoch, BATCH_SIZE), epochs=EPOCHS,
-        validation_data=validation_generator())
-        # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
-# ])
+        model.fit_generator(IdBasedDataGenerator(train_questions, train_pos_paths, train_neg_paths, 50, neg_paths_per_epoch, BATCH_SIZE), epochs=EPOCHS,
+            validation_data=validation_generator())
+            # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
+    # ])
 
-    smart_save_model(model)
+        smart_save_model(model)
 
-    # Prepare test data
+        # Prepare test data
 
-    print "Precision (hits@1) = ", rank_precision(model, test_questions, test_pos_paths, test_neg_paths)
+        print "Precision (hits@1) = ", rank_precision(model, test_questions, test_pos_paths, test_neg_paths)
 
-# print "Evaluation Complete"
-# print "Loss     = ", results[0]
-# print "F1 Score = ", results[1]
-# print "Accuracy = ", results[2]
+    # print "Evaluation Complete"
+    # print "Loss     = ", results[0]
+    # print "F1 Score = ", results[1]
+    # print "Accuracy = ", results[2]
 
 
+
+
+if __name__ == "__main__":
+    main()

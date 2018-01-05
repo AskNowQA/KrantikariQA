@@ -534,7 +534,7 @@ class Krantikari:
             paths_hop2_log.append(len(paths_hop2_sf))
 
             # Vectorize these paths
-            id_ps = [embeddings_interface.vectorize(path, _embedding=self.EMBEDDING) for path in paths_hop2_sf]
+            id_ps = [embeddings_interface.vocabularize(path, _embedding=self.EMBEDDING) for path in paths_hop2_sf]
 
             # MODEL FILTERING
             hop2_indices, hop2_scores = self.model.rank(_id_q=id_q,

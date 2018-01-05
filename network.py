@@ -205,8 +205,8 @@ class IdBasedDataGenerator(Sequence):
         self.firstDone = False
         self.max_length = max_length
         self.neg_paths_per_epoch = neg_paths_per_epoch
-        self.questions = np.repeat(questions, neg_paths_per_epoch, axis=0)
-        self.pos_paths = np.repeat(pos_paths, neg_paths_per_epoch, axis=0)
+        self.questions = np.repeat(questions, self.neg_paths_per_epoch, axis=0)
+        self.pos_paths = np.repeat(pos_paths, self.neg_paths_per_epoch, axis=0)
         self.neg_paths = neg_paths
         self.batch_size = batch_size
 
@@ -255,15 +255,17 @@ class DataGenerator(Sequence):
     def on_epoch_end(self):
         self.firstDone = not self.firstDone
 
-def rank_precision_metric(y_true, y_pred):
-    pos_outputs, neg_outputs = y_pred[:,0], y_pred[:,1]
-    pos_outputs = K.gather(pos_outputs, K.arange(0, K.shape(y_pred)[0], neg_paths_per_epoch))
-    neg_outputs = K.reshape(neg_outputs, [K.shape(pos_outputs)[0], neg_paths_per_epoch])
-    all_outputs = K.concatenate([K.reshape(pos_outputs, (-1,1)), neg_outputs], axis=1)
-    hits = K.cast(K.shape(K.tf.where(K.tf.equal(K.tf.argmax(all_outputs, axis=1),0)))[0], 'float32')
-    precision = hits/K.cast(K.shape(all_outputs)[0], 'float32')
-    # precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
-    return precision
+def rank_precision_metric(neg_paths_per_epoch):
+    def metric(y_true, y_pred):
+        pos_outputs, neg_outputs = y_pred[:,0], y_pred[:,1]
+        pos_outputs = K.gather(pos_outputs, K.arange(0, K.shape(y_pred)[0], neg_paths_per_epoch))
+        neg_outputs = K.reshape(neg_outputs, [K.shape(pos_outputs)[0], neg_paths_per_epoch])
+        all_outputs = K.concatenate([K.reshape(pos_outputs, (-1,1)), neg_outputs], axis=1)
+        hits = K.cast(K.shape(K.tf.where(K.tf.equal(K.tf.argmax(all_outputs, axis=1),0)))[0], 'float32')
+        precision = hits/K.cast(K.shape(all_outputs)[0], 'float32')
+        # precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
+        return precision
+    return metric
 
 class _Attention(object):
     def __init__(self, max_length, nr_hidden, dropout=0.0, L2=0.0, activation='relu'):
@@ -522,7 +524,7 @@ def main():
         print(model.summary())
 
         model.compile(optimizer=OPTIMIZER,
-                      loss=custom_loss, metrics=[rank_precision_metric])
+                      loss=custom_loss, metrics=[rank_precision_metric(neg_paths_per_epoch)])
 
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]

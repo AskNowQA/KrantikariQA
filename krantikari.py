@@ -560,8 +560,9 @@ class Krantikari:
 
                 # No paths generated at all.
                 if DEBUG:
-                    warnings.warn('No paths generated at the second hop. Question is \"%s\" %'
-                                  % _question)
+                    warnings.warn('No paths generated at the second hop. Question is \"%s\"' % _question)
+                    warnings.warn('1-hop paths are: \n')
+                    print(paths_hop1_sf)
 
                 NO_PATHS_HOP2 = True
 

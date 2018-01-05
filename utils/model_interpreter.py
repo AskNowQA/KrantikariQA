@@ -75,13 +75,13 @@ class ModelInterpreter:
         dummy_paths = np.zeros((len(_id_ps), self.max_path_len))
 
         # Pass to model.
-        similarities = self.model.predict([padded_ques, padded_paths, dummy_paths])[0]
+        similarities = self.model.predict([padded_ques, padded_paths, dummy_paths])
 
         # Reshape from an array of n arrays of 1 element [[i],[j],[k]] -> [i,j,k]
-        similarities = np.transpose(similarities)
+        similarities = np.transpose(similarities)[0]
 
         # Reshape it to a 1D array
-        similarities = similarities.reshape(similarities.shape[1])
+        # similarities = similarities.reshape(similarities.shape[1])
 
         # Rank
         rank = np.argsort(similarities)[::-1]

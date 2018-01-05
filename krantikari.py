@@ -69,6 +69,7 @@
 """
 
 # Imports
+import sys
 import json
 import pickle
 import warnings
@@ -897,7 +898,7 @@ def parse_qald(_data):
     return  parsed_response
 
 
-def run_lcquad():
+def run_lcquad(_target_gpu):
     """
         Function to run the entire script on LC-QuAD, the lord of all datasets.
         - Load dataset
@@ -915,7 +916,7 @@ def run_lcquad():
     dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
 
     # Create a model interpreter.
-    model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
+    model = model_interpreter.ModelInterpreter(_gpu=_target_gpu)  # Model interpreter to be used for ranking
 
     # Load LC-QuAD
     dataset = json.load(open(LCQUAD_DIR))
@@ -1011,8 +1012,14 @@ if __name__ == "__main__":
     #
     # print(qa.path_length)
 
+    try:
+        gpu = sys.argv[1]
+    except IndexError:
+        # No arguments given. Take from user
+        gpu = raw_input("Specify the GPU you wanna use boi:\t")
+
     """
         TEST 2 : Check LCQuAD Parser
     """
-    run_lcquad()
+    run_lcquad(gpu)
 

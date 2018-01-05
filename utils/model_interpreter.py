@@ -5,8 +5,9 @@
 """
 import os
 import numpy as np
-from keras.preprocessing.sequence import pad_sequences
+import keras.backend as K
 from keras.models import load_model
+from keras.preprocessing.sequence import pad_sequences
 
 from network import custom_loss as loss_fn
 from network import rank_precision_metric
@@ -16,7 +17,7 @@ DEFAULT_MODEL_DIR = 'data/training/pairwise/model_47'
 
 class ModelInterpreter:
 
-    def __init__(self, _model_dir=DEFAULT_MODEL_DIR):
+    def __init__(self, _gpu, _model_dir=DEFAULT_MODEL_DIR):
         """
             Use this object for anything that has to do with the trained model.
             @TODO: Describe most major functions here.
@@ -24,9 +25,11 @@ class ModelInterpreter:
         """
 
         # Find and load the model from disk.
-        self.model = load_model(os.path.join(_model_dir, 'model.h5'), custom_objects={'custom_loss': loss_fn,
-                                                                                      'rank_precision_metric':
-                                                                                          rank_precision_metric})
+        with K.tf.device('/gpu:' + _gpu):
+            K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+            self.model = load_model(os.path.join(_model_dir, 'model.h5'), custom_objects={'custom_loss': loss_fn,
+                                                                                          'rank_precision_metric':
+                                                                                              rank_precision_metric})
         self._parse_model_inputs()
 
     def _parse_model_inputs(self):

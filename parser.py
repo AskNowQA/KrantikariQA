@@ -184,7 +184,7 @@ def parse(_raw):
                 true_class = _raw[u'constraints'][u'?x']
 
             # Add the path (without type constraint) in false paths.
-            false_paths = [true_path] + false_paths.tolist()[1:]    # NOTE: Removing first false path.
+            false_paths = [true_path[:]] + false_paths.tolist()[1:]    # NOTE: Removing first false path.
 
             true_path += ['/']
             true_path += nlutils.tokenize(dbp.get_label(true_class), _ignore_brackets=True)

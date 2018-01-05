@@ -71,6 +71,7 @@
 # Imports
 import json
 import pickle
+import warnings
 import editdistance
 import numpy as np
 from progressbar import ProgressBar
@@ -231,7 +232,7 @@ class Krantikari:
             v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding=self.EMBEDDING ), axis=0)
 
             # If either of them is a zero vector, the cosine is 0.
-            if np.sum(v_p) == 0.0 and np.sum(v_qt) == 0.0:
+            if np.sum(v_p) == 0.0 or np.sum(v_qt) == 0.0:
                 similarity_arr[i] = np.float64(0.0)
                 continue
 
@@ -257,6 +258,9 @@ class Krantikari:
         :param _qald: bool: Whether or not to use only dbo properties
         :return: SPARQL/CoreChain/Answers (and or)
         """
+        # Two state fail macros
+        NO_PATHS = False
+        NO_PATHS_HOP2 = False
 
         # Vectorize the question
         id_q = embeddings_interface.vocabularize(nlutils.tokenize(_question), _embedding=self.EMBEDDING )
@@ -536,27 +540,49 @@ class Krantikari:
             # Vectorize these paths
             id_ps = [embeddings_interface.vocabularize(path, _embedding=self.EMBEDDING) for path in paths_hop2_sf]
 
-            # MODEL FILTERING
-            hop2_indices, hop2_scores = self.model.rank(_id_q=id_q,
-                                                        _id_ps=id_ps,
-                                                        _return_only_indices=False,
-                                                        _k=self.K_2HOP_MODEL)
+            if not len(id_ps) == 0:
 
-            # Impose indices
-            ranked_paths_hop2_sf = [paths_hop2_sf[i] for i in hop2_indices]
-            ranked_paths_hop2_uri = [paths_hop2_uri[i] for i in hop2_indices]
+                # MODEL FILTERING
+                hop2_indices, hop2_scores = self.model.rank(_id_q=id_q,
+                                                            _id_ps=id_ps,
+                                                            _return_only_indices=False,
+                                                            _k=self.K_2HOP_MODEL)
 
-            self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+                # Impose indices
+                ranked_paths_hop2_sf = [paths_hop2_sf[i] for i in hop2_indices]
+                ranked_paths_hop2_uri = [paths_hop2_uri[i] for i in hop2_indices]
 
-            # @TODO: Merge hop1 and hop2 into one list and then rank/shortlist.
+                self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+
+                # @TODO: Merge hop1 and hop2 into one list and then rank/shortlist.
+
+            else:
+
+                # No paths generated at all.
+                if DEBUG:
+                    warnings.warn('No paths generated at the second hop. Question is \"%s\" %'
+                                  % _question)
+
+                NO_PATHS_HOP2 = True
+
+            # Choose the best path length (1hop/2hop)
+            if NO_PATHS_HOP2 is False: self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+            else: self.path_length = 1
 
         if len(_entities) >= 2:
             self.best_path = 0  # @TODO: FIX THIS ONCE WE IMPLEMENT DIS!
+            NO_PATHS = True
             pass
 
+        # ###########
         # Paths have been generated and ranked.
+        #   Now verify the state fail variables and decide what to do
+        # ###########
 
-        self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+        # If no paths generated, set best path to none
+        if NO_PATHS:
+            self.best_path = None
+            return None
 
         # Choose best path
         if self.path_length == 1:

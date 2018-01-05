@@ -9,8 +9,9 @@ from keras.preprocessing.sequence import pad_sequences
 from keras.models import load_model
 
 from network import custom_loss as loss_fn
+from network import rank_precision_metric
 
-DEFAULT_MODEL_DIR = 'data/training/pairwise/model_28'
+DEFAULT_MODEL_DIR = 'data/training/pairwise/model_47'
 
 
 class ModelInterpreter:
@@ -23,7 +24,9 @@ class ModelInterpreter:
         """
 
         # Find and load the model from disk.
-        self.model = load_model(os.path.join(_model_dir, 'model.h5'), custom_objects={'custom_loss': loss_fn})
+        self.model = load_model(os.path.join(_model_dir, 'model.h5'), custom_objects={'custom_loss': loss_fn,
+                                                                                      'rank_precision_metric':
+                                                                                          rank_precision_metric})
         self._parse_model_inputs()
 
     def _parse_model_inputs(self):

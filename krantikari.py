@@ -885,7 +885,7 @@ def run_lcquad():
     results = []
 
     # Create a DBpedia object.
-    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
 
     # Create a model interpreter.
     model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
@@ -894,7 +894,7 @@ def run_lcquad():
     dataset = json.load(open(LCQUAD_DIR))
 
     progbar = ProgressBar()
-    iterator = progbar(dataset[:10])
+    iterator = progbar(dataset)
 
     # Parse it
     for x in iterator:
@@ -923,7 +923,7 @@ def run_qald():
     results = []
 
     # Create a DBpedia object.
-    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
 
     # Create a model interpreter.
     model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
@@ -971,7 +971,7 @@ if __name__ == "__main__":
     # _entities = ['http://dbpedia.org/resource/Nicaragua']
     #
     # # Create a DBpedia object.
-    # dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+    # dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
     #
     # # Create a model interpreter.
     # model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking

@@ -22,7 +22,7 @@ black_list = ['http://www.w3.org/2000/01/rdf-schema#seeAlso','http://purl.org/li
 'http://dbpedia.org/ontology/wikiPageExternalLink','http://dbpedia.org/ontology/wikiPageRevisionID','http://dbpedia.org/ontology/type']
 
 DEBUG = True
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 File = 'resources/qald-7-train-multilingual.json'
 UNPROCESSED_TWO_TRIPLE = 'data/manual_qald.pickle'

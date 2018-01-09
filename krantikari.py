@@ -73,6 +73,7 @@ import sys
 import json
 import pickle
 import warnings
+import traceback
 import editdistance
 import numpy as np
 from progressbar import ProgressBar
@@ -232,13 +233,16 @@ class Krantikari:
             p = _predicates[i]
             v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding=self.EMBEDDING ), axis=0)
 
-            # If either of them is a zero vector, the cosine is 0.
-            if np.sum(v_p) == 0.0 or np.sum(v_qt) == 0.0:
+            # If either of them is a zero vector, the cosine is 0.\
+            if np.sum(v_p) == 0.0 or np.sum(v_qt) == 0.0 or p.strip() == "":
                 similarity_arr[i] = np.float64(0.0)
                 continue
+            try:
+                # Cos Product
+                similarity_arr[i] = np.dot(v_p, v_qt) / (np.linalg.norm(v_p) * np.linalg.norm(v_qt))
+            except:
+                traceback.print_exc()
 
-            # Cos Product
-            similarity_arr[i] = np.dot(v_p, v_qt) / (np.linalg.norm(v_p) * np.linalg.norm(v_qt))
 
         # Find the best scoring values for every path
         # Sort ( best match score for each predicate) in descending order, and choose top k

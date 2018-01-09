@@ -8,8 +8,8 @@ import math
 from keras.preprocessing.sequence import pad_sequences
 import numpy as np
 import keras.backend.tensorflow_backend as K
-from keras.layers.core import Layer  
-from keras import initializers, regularizers, constraints  
+from keras.layers.core import Layer
+from keras import initializers, regularizers, constraints
 # from keras import backend as K
 from keras.models import Model, Sequential
 from keras.layers import Input, Layer, Lambda
@@ -42,7 +42,7 @@ from keras.layers import Merge
 DEBUG = True
 DATA_DIR = './data/training/pairwise'
 EPOCHS = 250
-BATCH_SIZE = 3000 # Around 11 splits for full training dataset
+BATCH_SIZE = 220 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
 NEGATIVE_SAMPLES = 100
@@ -205,19 +205,19 @@ class IdBasedDataGenerator(Sequence):
         self.firstDone = False
         self.max_length = max_length
         self.neg_paths_per_epoch = neg_paths_per_epoch
-        self.questions = np.repeat(questions, neg_paths_per_epoch, axis=0)
-        self.pos_paths = np.repeat(pos_paths, neg_paths_per_epoch, axis=0)
+        self.questions = questions
+        self.pos_paths = pos_paths
         self.neg_paths = neg_paths
         self.batch_size = batch_size
 
     def __len__(self):
-        return math.ceil(len(self.questions)*self.neg_paths_per_epoch / self.batch_size)
+        return math.ceil(len(self.questions) / self.batch_size)
 
     def __getitem__(self, idx):
         index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
         batch_questions = index(self.questions)
         batch_pos_paths = index(self.pos_paths)
-        batch_neg_paths = index(np.reshape(self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :], (-1, self.max_length)))
+        batch_neg_paths = index(np.reshape(self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES), :], (-1, self.max_length)))
 
         # if self.firstDone == False:
         #     batch_neg_paths = index(self.neg_paths)
@@ -255,15 +255,15 @@ class DataGenerator(Sequence):
     def on_epoch_end(self):
         self.firstDone = not self.firstDone
 
-def rank_precision_metric(y_true, y_pred):
-    pos_outputs, neg_outputs = y_pred[:,0], y_pred[:,1]
-    pos_outputs = K.gather(pos_outputs, K.arange(0, K.shape(y_pred)[0], neg_paths_per_epoch))
-    neg_outputs = K.reshape(neg_outputs, [K.shape(pos_outputs)[0], neg_paths_per_epoch])
-    all_outputs = K.concatenate([K.reshape(pos_outputs, (-1,1)), neg_outputs], axis=1)
-    hits = K.cast(K.shape(K.tf.where(K.tf.equal(K.tf.argmax(all_outputs, axis=1),0)))[0], 'float32')
-    precision = hits/K.cast(K.shape(all_outputs)[0], 'float32')
-    # precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
-    return precision
+def rank_precision_metric(neg_paths_per_epoch):
+    def metric(y_true, y_pred):
+        scores = y_pred[:, 0]
+        scores = K.reshape(scores, (-1, neg_paths_per_epoch+1))
+        hits = K.cast(K.shape(K.tf.where(K.tf.equal(K.tf.argmax(scores, axis=1),0)))[0], 'float32')
+        precision = hits/K.cast(K.shape(scores)[0], 'float32')
+        # precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
+        return precision
+    return metric
 
 class _Attention(object):
     def __init__(self, max_length, nr_hidden, dropout=0.0, L2=0.0, activation='relu'):
@@ -422,7 +422,7 @@ def main():
     """
     # Pull the data up from disk
     max_length = 50
-    with open(DATA_DIR + "/data_embedded_phase_i.pickle") as fp:
+    with open(DATA_DIR + "/latest.pickle") as fp:
         dataset = pickle.load(fp)
     questions = [i[0] for i in dataset]
     questions = pad_sequences(questions, maxlen=max_length, padding='post')
@@ -459,27 +459,31 @@ def main():
     test_neg_paths = test_split(neg_paths)
     test_questions = test_split(questions)
 
-    neg_paths_per_epoch = 20
+    neg_paths_per_epoch = 10
     dummy_y_train = np.zeros(len(train_questions))
-    dummy_y_test = np.zeros(len(test_questions)*neg_paths_per_epoch)
+    dummy_y_test = np.zeros(len(test_questions)*(neg_paths_per_epoch+1))
 
     print train_questions.shape
     print train_pos_paths.shape
     print train_neg_paths.shape
+
+    print test_questions.shape
+    print test_pos_paths.shape
+    print test_neg_paths.shape
 
     with K.tf.device('/gpu:' + gpu):
         K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
         """
             Model Time!
         """
-        max_length = 50
+        max_length = train_questions.shape[1]
         # Define input to the models
         x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
         x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
         x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
         vectors = get_glove_embeddings()
-
+        neg_paths_per_epoch = 10
         embedding_dims = vectors.shape[1]
         nr_hidden = 64
 
@@ -498,7 +502,7 @@ def main():
         x_neg_path_encoded = encode(x_neg_path_embedded)
 
         def getScore(path_encoded):
-            attention = attend(ques_encoded, x_pos_path_encoded)
+            attention = attend(ques_encoded, path_encoded)
 
             align_ques = align(path_encoded, attention)
             align_path = align(ques_encoded, attention, transpose=True)
@@ -522,21 +526,28 @@ def main():
         print(model.summary())
 
         model.compile(optimizer=OPTIMIZER,
-                      loss=custom_loss, metrics=[rank_precision_metric])
+                      loss=custom_loss, metrics=[rank_precision_metric(neg_paths_per_epoch)])
 
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
 
         def validation_generator():
-            questions = np.repeat(test_questions, neg_paths_per_epoch, axis=0)
-            pos_paths = np.repeat(test_pos_paths, neg_paths_per_epoch, axis=0)
+            questions = np.reshape(np.repeat(np.reshape(test_questions,
+                                            (test_questions.shape[0], 1, test_questions.shape[1])),
+                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
+
+            pos_paths = np.reshape(test_pos_paths,
+                                            (test_pos_paths.shape[0], 1, test_pos_paths.shape[1]))
+
+
             while True:
-                neg_paths = np.reshape(test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :], (-1, max_length))
-                yield (questions, pos_paths, neg_paths), dummy_y_test
+                neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
+                all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
+                yield [questions, all_paths, np.zeros_like(all_paths)], dummy_y_test
 
 
         model.fit_generator(IdBasedDataGenerator(train_questions, train_pos_paths, train_neg_paths, 50, neg_paths_per_epoch, BATCH_SIZE), epochs=EPOCHS,
-            validation_data=validation_generator())
+            validation_data=validation_generator(), validation_steps=1)
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
     # ])
 

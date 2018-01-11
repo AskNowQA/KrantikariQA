@@ -111,7 +111,7 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 class Krantikari:
 
-    def __init__(self, _question, _entities, _dbpedia_interface, _model_interpreter, _qald=False):
+    def __init__(self, _question, _entities, _dbpedia_interface, _model_interpreter, _qald=False, _training = False):
         """
             This function inputs one question, and topic entities, and returns a SPARQL query (or s'thing else)
 
@@ -120,11 +120,15 @@ class Krantikari:
         :return: SPARQL/CoreChain/Answers (and or)
         """
         # QA Specific Macros
-        self.K_1HOP_GLOVE = 20
+        self.K_1HOP_GLOVE = 100 if _training else 20
         self.K_1HOP_MODEL = 5
-        self.K_2HOP_GLOVE = 10
+        self.K_2HOP_GLOVE = 200 if _training else 10
         self.K_2HOP_MODEL = 5
         self.EMBEDDING = "glove"
+        self.TRAINING = _training
+
+        # Training matrix
+        self.training_paths = []
 
         # Internalize args
         self.question = _question
@@ -307,51 +311,60 @@ class Krantikari:
             paths_hop1_sf += [nlutils.tokenize(entity_sf) + ['-'] + nlutils.tokenize(_p)
                               for _p in left_properties_filtered_sf]
 
+            # Appending the hop 1 paths to the training data (surface forms used)
+            self.training_paths += paths_hop1_sf
+
             # Create their corresponding paths but with URI.
             paths_hop1_uri = [[_entities[0], '+', _p] for _p in right_properties_filtered_uri]
             paths_hop1_uri += [[_entities[0], '-', _p] for _p in left_properties_filtered_uri]
 
-            # Vectorize these paths.
-            id_ps = [embeddings_interface.vocabularize(path, _embedding=self.EMBEDDING) for path in paths_hop1_sf]
 
-            # MODEL FILTERING
-            hop1_indices, hop1_scores = self.model.rank(_id_q=id_q,
-                                                        _id_ps=id_ps,
-                                                        _return_only_indices=False,
-                                                        _k=self.K_1HOP_MODEL)
+            if not self.TRAINING:
+                # Vectorize these paths.
+                id_ps = [embeddings_interface.vocabularize(path, _embedding=self.EMBEDDING) for path in paths_hop1_sf]
 
-            # Impose indices on the paths.
-            ranked_paths_hop1_sf = [paths_hop1_sf[i] for i in hop1_indices]
-            ranked_paths_hop1_uri = [paths_hop1_uri[i] for i in hop1_indices]
+                # MODEL FILTERING
+                hop1_indices, hop1_scores = self.model.rank(_id_q=id_q,
+                                                            _id_ps=id_ps,
+                                                            _return_only_indices=False,
+                                                            _k=self.K_1HOP_MODEL)
 
-            # if DEBUG:
-            #     pprint(ranked_paths_hop1_sf)
-            #     pprint(ranked_paths_hop1_uri)
+                # Impose indices on the paths.
+                ranked_paths_hop1_sf = [paths_hop1_sf[i] for i in hop1_indices]
+                ranked_paths_hop1_uri = [paths_hop1_uri[i] for i in hop1_indices]
 
-            # Collect URI of predicates so filtered (for 2nd hop)
-            left_properties_filtered, right_properties_filtered = [], []
+                # if DEBUG:
+                #     pprint(ranked_paths_hop1_sf)
+                #     pprint(ranked_paths_hop1_uri)
 
-            # Gather all the left and right predicates (from paths selected by the model)
-            for i in hop1_indices:
+                # Collect URI of predicates so filtered (for 2nd hop)
+                left_properties_filtered, right_properties_filtered = [], []
 
-                hop1_path = paths_hop1_sf[i]
+                # Gather all the left and right predicates (from paths selected by the model)
+                for i in hop1_indices:
 
-                # See if it is from the left or right predicate set.
-                if '-' in hop1_path:
-                    # This belongs to the left pred list.
-                    # Offset index to match to left_properties_filter_indices index.
+                    hop1_path = paths_hop1_sf[i]
 
-                    i -= len(right_properties_filter_indices)
-                    predicate = left_properties[left_properties_filter_indices[i]]
-                    left_properties_filtered.append(predicate)
+                    # See if it is from the left or right predicate set.
+                    if '-' in hop1_path:
+                        # This belongs to the left pred list.
+                        # Offset index to match to left_properties_filter_indices index.
 
-                else:
-                    # This belongs to the right pred list.
-                    # No offset needed
+                        i -= len(right_properties_filter_indices)
+                        predicate = left_properties[left_properties_filter_indices[i]]
+                        left_properties_filtered.append(predicate)
 
-                    predicate = right_properties[right_properties_filter_indices[i]]
-                    right_properties_filtered.append(predicate)
+                    else:
+                        # This belongs to the right pred list.
+                        # No offset needed
 
+                        predicate = right_properties[right_properties_filter_indices[i]]
+                        right_properties_filtered.append(predicate)
+
+            else:
+                # Create right/left_properties_filtered for training time
+                # Collect URI of predicates so filtered (for 2nd hop)
+                left_properties_filtered, right_properties_filtered = left_properties_filtered_uri, right_properties_filtered_uri
             """
                 2 - Hop COMMENCES
 
@@ -542,37 +555,43 @@ class Krantikari:
 
             paths_hop2_log.append(len(paths_hop2_sf))
 
-            # Vectorize these paths
-            id_ps = [embeddings_interface.vocabularize(path, _embedding=self.EMBEDDING) for path in paths_hop2_sf]
+            # Adding second hop paths to the training set (surface forms)
+            self.training_paths += paths_hop2_sf
 
-            if not len(id_ps) == 0:
+            # Run this only if we're not training
+            if not self.TRAINING:
 
-                # MODEL FILTERING
-                hop2_indices, hop2_scores = self.model.rank(_id_q=id_q,
-                                                            _id_ps=id_ps,
-                                                            _return_only_indices=False,
-                                                            _k=self.K_2HOP_MODEL)
+                # Vectorize these paths
+                id_ps = [embeddings_interface.vocabularize(path, _embedding=self.EMBEDDING) for path in paths_hop2_sf]
 
-                # Impose indices
-                ranked_paths_hop2_sf = [paths_hop2_sf[i] for i in hop2_indices]
-                ranked_paths_hop2_uri = [paths_hop2_uri[i] for i in hop2_indices]
+                if not len(id_ps) == 0:
 
-                self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+                    # MODEL FILTERING
+                    hop2_indices, hop2_scores = self.model.rank(_id_q=id_q,
+                                                                _id_ps=id_ps,
+                                                                _return_only_indices=False,
+                                                                _k=self.K_2HOP_MODEL)
 
-                # @TODO: Merge hop1 and hop2 into one list and then rank/shortlist.
+                    # Impose indices
+                    ranked_paths_hop2_sf = [paths_hop2_sf[i] for i in hop2_indices]
+                    ranked_paths_hop2_uri = [paths_hop2_uri[i] for i in hop2_indices]
 
-            else:
+                    self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
 
-                # No paths generated at all.
-                if DEBUG:
-                    warnings.warn('No paths generated at the second hop. Question is \"%s\"' % _question)
-                    warnings.warn('1-hop paths are: \n')
-                    print(paths_hop1_sf)
+                    # @TODO: Merge hop1 and hop2 into one list and then rank/shortlist.
 
-                NO_PATHS_HOP2 = True
+                else:
 
-            # Choose the best path length (1hop/2hop)
-            if NO_PATHS_HOP2 is False: self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+                    # No paths generated at all.
+                    if DEBUG:
+                        warnings.warn('No paths generated at the second hop. Question is \"%s\"' % _question)
+                        warnings.warn('1-hop paths are: \n')
+                        print(paths_hop1_sf)
+
+                    NO_PATHS_HOP2 = True
+
+                # Choose the best path length (1hop/2hop)
+                if NO_PATHS_HOP2 is False: self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
             else: self.path_length = 1
 
         if len(_entities) >= 2:
@@ -590,11 +609,16 @@ class Krantikari:
             self.best_path = None
             return None
 
-        # Choose best path
-        if self.path_length == 1:
-            self.best_path = ranked_paths_hop1_uri[np.argmax(hop1_scores)]
-        elif self.path_length == 2:
-            self.best_path = ranked_paths_hop2_uri[np.argmax(hop2_scores)]
+        if not self.TRAINING:
+
+            # Choose best path
+            if self.path_length == 1:
+                self.best_path = ranked_paths_hop1_uri[np.argmax(hop1_scores)]
+            elif self.path_length == 2:
+                self.best_path = ranked_paths_hop2_uri[np.argmax(hop2_scores)]
+
+        else:
+            self.best_path = np.random.choice(self.training_paths)
 
 
 def evaluate(_true, _predicted):
@@ -993,6 +1017,86 @@ def run_qald():
     pickle.dump(results, open(RESULTS_DIR, 'w+'))
 
 
+def generate_training_data():
+    """
+        Function to hack Krantikari to generate model training data.
+            - Parse LCQuAD
+            - Give it to Kranitkari
+            - Collect training paths
+            - See if the correct path is not there
+            - Append rdf:type constraints to it stochastically # @TODO: This
+            - Id-fy the entire thing
+            - Make neat matrices (model friendly)
+            - Store 'em
+
+    :return:
+    """
+    data = []
+    bad_path_logs = []
+
+    # Create a DBpedia object.
+    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+
+    # Create a model interpreter.
+    model = model_interpreter.ModelInterpreter(_gpu="0")  # Model interpreter to be used for ranking
+
+    # Load LC-QuAD
+    dataset = json.load(open(LCQUAD_DIR))
+
+    progbar = ProgressBar()
+    iterator = progbar(dataset)
+
+    # Parse it
+    for x in iterator:
+        parsed_data = parse_lcquad(x)
+
+        if not parsed_data:
+            continue
+
+        # Get Needed data
+        q = parsed_data[u'corrected_question']
+        e = parsed_data[u'entity']
+
+        # Find the correct path
+        entity_sf = nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True)  # @TODO: multi-entity alert
+        path_sf = []
+        for x in parsed_data[u'path']:
+            path_sf.append(x[0])
+            path_sf.append(dbp.get_label(x[1:]))
+        tp = entity_sf + path_sf
+
+        if len(e) > 1:
+            # results.append([0, 0])
+            continue
+
+        qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True)
+        fps = qa.training_paths
+
+
+        # See if the correct path is there
+        try:
+            fps = fps.remove(tp)
+        except ValueError:
+
+            # The true path was not in the paths generated from Krantikari. Log this son of a bitch.
+            if DEBUG:
+                print("True path not in false path")
+
+            bad_path_logs += [q, e, tp, fps]
+
+        # Id-fy the entire thing
+        id_q = embeddings_interface.vocabularize(nlutils.tokenize(q), _embedding="glove")
+        id_tp = embeddings_interface.vocabularize(tp)
+        id_fps = [embeddings_interface.vocabularize(x) for x in fps]
+
+        # Make neat matrices.
+        data.append([id_q, id_tp, id_fps, np.zeros((20,1))])
+
+        # results.append(evaluate(parsed_data, qa.best_path))
+
+    # I don't know what to do of results. So just pickle shit
+    pickle.dump(data, open(RESULTS_DIR, 'w+'))
+
 if __name__ == "__main__":
     # """
     #     TEST1 : Accuracy of similar_predicates
@@ -1023,7 +1127,7 @@ if __name__ == "__main__":
         gpu = raw_input("Specify the GPU you wanna use boi:\t")
 
     """
-        TEST 2 : Check LCQuAD Parser
+        TEST 3 : Check generate training data
     """
-    run_lcquad(gpu)
+    generate_training_data()
 

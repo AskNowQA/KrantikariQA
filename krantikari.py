@@ -542,21 +542,23 @@ class Krantikari:
                     paths_hop2_uri.append(path_uri)
 
             paths_hop2_log.append(len(paths_hop2_sf))
-            for key in e_out_to_e_out_out_filtered_subgraph.keys():
-                for r2 in e_out_to_e_out_out_filtered_subgraph[key]:
+            for key in e_out_in_to_e_out_filtered_subgraph.keys():
+                for r2 in e_out_in_to_e_out_filtered_subgraph[key]:
 
                     path = nlutils.tokenize(entity_sf)                  \
                             + ['+'] + nlutils.tokenize(sf_vocab[key])   \
                             + ['-'] + nlutils.tokenize(sf_vocab[r2])
                     paths_hop2_sf.append(path)
 
-                    path_uri = [_entities[0], '+', key, '+', r2]
+                    path_uri = [_entities[0], '+', key, '-', r2]
                     paths_hop2_uri.append(path_uri)
 
             paths_hop2_log.append(len(paths_hop2_sf))
 
             # Adding second hop paths to the training set (surface forms)
-            self.training_paths += paths_hop2_sf
+            for path in paths_hop2_sf:
+                if not path in self.training_paths:
+                    self.training_paths.append(path)
 
             # Run this only if we're not training
             if not self.TRAINING:
@@ -1035,13 +1037,13 @@ def generate_training_data():
     bad_path_logs = []
 
     # Create a DBpedia object.
-    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
 
     # Create a model interpreter.
     model = model_interpreter.ModelInterpreter(_gpu="0")  # Model interpreter to be used for ranking
 
     # Load LC-QuAD
-    dataset = json.load(open(LCQUAD_DIR))
+    dataset = json.load(open(LCQUAD_DIR))[:10]
 
     progbar = ProgressBar()
     iterator = progbar(dataset)
@@ -1061,8 +1063,8 @@ def generate_training_data():
         entity_sf = nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True)  # @TODO: multi-entity alert
         path_sf = []
         for x in parsed_data[u'path']:
-            path_sf.append(x[0])
-            path_sf.append(dbp.get_label(x[1:]))
+            path_sf.append(str(x[0]))
+            path_sf += nlutils.tokenize(dbp.get_label(x[1:]))
         tp = entity_sf + path_sf
 
         if len(e) > 1:
@@ -1075,7 +1077,7 @@ def generate_training_data():
 
         # See if the correct path is there
         try:
-            fps = fps.remove(tp)
+            fps.remove(tp)
         except ValueError:
 
             # The true path was not in the paths generated from Krantikari. Log this son of a bitch.
@@ -1090,7 +1092,7 @@ def generate_training_data():
         id_fps = [embeddings_interface.vocabularize(x) for x in fps]
 
         # Make neat matrices.
-        data.append([id_q, id_tp, id_fps, np.zeros((20,1))])
+        data.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
 
         # results.append(evaluate(parsed_data, qa.best_path))
 

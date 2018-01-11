@@ -283,7 +283,7 @@ class DBPedia:
 
         # First try finding it in file
         try:
-            label = np.random.choice(self.labels[_resource_uri[1:-1]])
+            label = self.labels[_resource_uri[1:-1]][0]
             # print "Label for %s found in cache." % _resource_uri
             return label
 
@@ -301,7 +301,7 @@ class DBPedia:
                     p = results[0]  # Should raise exception
                 self.fresh_labels += 1
 
-                if self.fresh_labels >= 100:
+                if self.fresh_labels >= 10:
                     f = open('resources/labels.pickle', 'w+')
                     pickle.dump(self.labels, f)
                     f.close()

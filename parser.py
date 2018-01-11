@@ -41,7 +41,7 @@ if DEBUG:
     warnings.warn(" DEBUG macro is enabled. Expect cluttered console!")
 
 # Initialize DBpedia
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 
 def compute_true_labels(_question, _truepath, _falsepaths):

@@ -22,7 +22,7 @@ SPARQL = '''SELECT DISTINCT ?entity ?label WHERE { ?entity owl:sameAs %(target_r
 
 
 fname = 'resources/30MQA_1/fqFiltered.txt'
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 
 try:

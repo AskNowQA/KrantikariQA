@@ -69,8 +69,11 @@
 """
 
 # Imports
+import sys
 import json
 import pickle
+import warnings
+import traceback
 import editdistance
 import numpy as np
 from progressbar import ProgressBar
@@ -121,6 +124,7 @@ class Krantikari:
         self.K_1HOP_MODEL = 5
         self.K_2HOP_GLOVE = 10
         self.K_2HOP_MODEL = 5
+        self.EMBEDDING = "glove"
 
         # Internalize args
         self.question = _question
@@ -219,7 +223,7 @@ class Krantikari:
         qt = nlutils.tokenize(self.question, _remove_stopwords=False)
 
         # Vectorize question
-        v_qt = np.mean(embeddings_interface.vectorize(qt, _embedding="word2vec"), axis=0)\
+        v_qt = np.mean(embeddings_interface.vectorize(qt, _embedding=self.EMBEDDING), axis=0)\
 
         # Declare a similarity array
         similarity_arr = np.zeros(len(_predicates))
@@ -227,15 +231,18 @@ class Krantikari:
         # Fill similarity array
         for i in range(len(_predicates)):
             p = _predicates[i]
-            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding="word2vec"), axis=0)
+            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding=self.EMBEDDING ), axis=0)
 
-            # If either of them is a zero vector, the cosine is 0.
-            if np.sum(v_p) == 0.0 and np.sum(v_qt) == 0.0:
+            # If either of them is a zero vector, the cosine is 0.\
+            if np.sum(v_p) == 0.0 or np.sum(v_qt) == 0.0 or p.strip() == "":
                 similarity_arr[i] = np.float64(0.0)
                 continue
+            try:
+                # Cos Product
+                similarity_arr[i] = np.dot(v_p, v_qt) / (np.linalg.norm(v_p) * np.linalg.norm(v_qt))
+            except:
+                traceback.print_exc()
 
-            # Cos Product
-            similarity_arr[i] = np.dot(v_p, v_qt) / (np.linalg.norm(v_p) * np.linalg.norm(v_qt))
 
         # Find the best scoring values for every path
         # Sort ( best match score for each predicate) in descending order, and choose top k
@@ -256,9 +263,12 @@ class Krantikari:
         :param _qald: bool: Whether or not to use only dbo properties
         :return: SPARQL/CoreChain/Answers (and or)
         """
+        # Two state fail macros
+        NO_PATHS = False
+        NO_PATHS_HOP2 = False
 
         # Vectorize the question
-        v_q = embeddings_interface.vectorize(nlutils.tokenize(_question), _embedding="word2vec")
+        id_q = embeddings_interface.vocabularize(nlutils.tokenize(_question), _embedding=self.EMBEDDING )
 
         # Algo differs based on whether there's one topic entity or two
         if len(_entities) == 1:
@@ -302,11 +312,11 @@ class Krantikari:
             paths_hop1_uri += [[_entities[0], '-', _p] for _p in left_properties_filtered_uri]
 
             # Vectorize these paths.
-            v_ps = [embeddings_interface.vectorize(path, _embedding="word2vec") for path in paths_hop1_sf]
+            id_ps = [embeddings_interface.vocabularize(path, _embedding=self.EMBEDDING) for path in paths_hop1_sf]
 
             # MODEL FILTERING
-            hop1_indices, hop1_scores = self.model.rank(_v_q=v_q,
-                                                        _v_ps=v_ps,
+            hop1_indices, hop1_scores = self.model.rank(_id_q=id_q,
+                                                        _id_ps=id_ps,
                                                         _return_only_indices=False,
                                                         _k=self.K_1HOP_MODEL)
 
@@ -533,29 +543,52 @@ class Krantikari:
             paths_hop2_log.append(len(paths_hop2_sf))
 
             # Vectorize these paths
-            v_ps = [embeddings_interface.vectorize(path, _embedding="word2vec") for path in paths_hop2_sf]
+            id_ps = [embeddings_interface.vocabularize(path, _embedding=self.EMBEDDING) for path in paths_hop2_sf]
 
-            # MODEL FILTERING
-            hop2_indices, hop2_scores = self.model.rank(_v_q=v_q,
-                                                        _v_ps=v_ps,
-                                                        _return_only_indices=False,
-                                                        _k=self.K_2HOP_MODEL)
+            if not len(id_ps) == 0:
 
-            # Impose indices
-            ranked_paths_hop2_sf = [paths_hop2_sf[i] for i in hop2_indices]
-            ranked_paths_hop2_uri = [paths_hop2_uri[i] for i in hop2_indices]
+                # MODEL FILTERING
+                hop2_indices, hop2_scores = self.model.rank(_id_q=id_q,
+                                                            _id_ps=id_ps,
+                                                            _return_only_indices=False,
+                                                            _k=self.K_2HOP_MODEL)
 
-            self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+                # Impose indices
+                ranked_paths_hop2_sf = [paths_hop2_sf[i] for i in hop2_indices]
+                ranked_paths_hop2_uri = [paths_hop2_uri[i] for i in hop2_indices]
 
-            # @TODO: Merge hop1 and hop2 into one list and then rank/shortlist.
+                self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+
+                # @TODO: Merge hop1 and hop2 into one list and then rank/shortlist.
+
+            else:
+
+                # No paths generated at all.
+                if DEBUG:
+                    warnings.warn('No paths generated at the second hop. Question is \"%s\"' % _question)
+                    warnings.warn('1-hop paths are: \n')
+                    print(paths_hop1_sf)
+
+                NO_PATHS_HOP2 = True
+
+            # Choose the best path length (1hop/2hop)
+            if NO_PATHS_HOP2 is False: self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+            else: self.path_length = 1
 
         if len(_entities) >= 2:
             self.best_path = 0  # @TODO: FIX THIS ONCE WE IMPLEMENT DIS!
+            NO_PATHS = True
             pass
 
+        # ###########
         # Paths have been generated and ranked.
+        #   Now verify the state fail variables and decide what to do
+        # ###########
 
-        self.path_length = self.choose_path_length(hop1_scores, hop2_scores)
+        # If no paths generated, set best path to none
+        if NO_PATHS:
+            self.best_path = None
+            return None
 
         # Choose best path
         if self.path_length == 1:
@@ -869,7 +902,7 @@ def parse_qald(_data):
     return  parsed_response
 
 
-def run_lcquad():
+def run_lcquad(_target_gpu):
     """
         Function to run the entire script on LC-QuAD, the lord of all datasets.
         - Load dataset
@@ -884,10 +917,10 @@ def run_lcquad():
     results = []
 
     # Create a DBpedia object.
-    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
 
     # Create a model interpreter.
-    model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
+    model = model_interpreter.ModelInterpreter(_gpu=_target_gpu)  # Model interpreter to be used for ranking
 
     # Load LC-QuAD
     dataset = json.load(open(LCQUAD_DIR))
@@ -922,7 +955,7 @@ def run_qald():
     results = []
 
     # Create a DBpedia object.
-    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
 
     # Create a model interpreter.
     model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
@@ -970,7 +1003,7 @@ if __name__ == "__main__":
     # _entities = ['http://dbpedia.org/resource/Nicaragua']
     #
     # # Create a DBpedia object.
-    # dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+    # dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
     #
     # # Create a model interpreter.
     # model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking
@@ -983,8 +1016,14 @@ if __name__ == "__main__":
     #
     # print(qa.path_length)
 
+    try:
+        gpu = sys.argv[1]
+    except IndexError:
+        # No arguments given. Take from user
+        gpu = raw_input("Specify the GPU you wanna use boi:\t")
+
     """
         TEST 2 : Check LCQuAD Parser
     """
-    run_qald()
+    run_lcquad(gpu)
 

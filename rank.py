@@ -7,7 +7,7 @@ from pprint import pprint
 
 # TODO: Add stopword relation list here.
 def get_properties(_uri, _right=True, _left=True):
-	dbp = db_interface.DBPedia(_verbose=True,caching=False)
+	dbp = db_interface.DBPedia(_verbose=True,caching=True)
 	if _right:
 		right_properties = list(set(dbp.get_properties_of_resource(_resource_uri = _uri)))
 		right_properties = [nlutils.get_label_via_parsing(rel) for rel in right_properties]

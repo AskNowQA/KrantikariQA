@@ -6,7 +6,7 @@ import preProcessing
 import utils.dbpedia_interface as db_interface
 from pprint import pprint
 
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 
 def test(_entity, _relation):

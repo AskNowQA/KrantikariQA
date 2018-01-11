@@ -36,7 +36,7 @@ WRITE_INTERVAL = 10                         # Interval for periodic write in a f
     Global variables
 '''
 # Summon a dbpedia interface
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 skip = 0
 relations_stop_word = []

@@ -16,3 +16,10 @@ http://www.w3.org/1999/02/22-rdf-syntax-ns#type
 http://xmlns.com/foaf/0.1/primaryTopic
 http://dbpedia.org/ontology/wikiPageDisambiguates
 http://dbpedia.org/ontology/wikiPageRedirects
+http://www.w3.org/ns/prov#wasDerivedFrom
+http://dbpedia.org/ontology/wikiPageLength
+http://xmlns.com/foaf/0.1/depiction
+http://dbpedia.org/property/id
+http://xmlns.com/foaf/0.1/homepage
+http://dbpedia.org/ontology/wikiPageOutDegree
+http://xmlns.com/foaf/0.1/name

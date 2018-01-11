@@ -1043,7 +1043,7 @@ def generate_training_data():
     model = model_interpreter.ModelInterpreter(_gpu="0")  # Model interpreter to be used for ranking
 
     # Load LC-QuAD
-    dataset = json.load(open(LCQUAD_DIR))[:10]
+    dataset = json.load(open(LCQUAD_DIR))
 
     progbar = ProgressBar()
     iterator = progbar(dataset)

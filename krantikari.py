@@ -89,8 +89,10 @@ DEBUG = True
 PATH_CHARS = ['+', '-', '/']
 LCQUAD_DIR = './resources/data_set.json'
 RESULTS_DIR = './resources/results.pickle'
+LENGTH_DIR = './resources/lengths.pickle'
 QALD_DIR = './resources/qald-7-train-multilingual.json'
 MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
+MAX_FALSE_PATHS = 800
 
 
 short_forms = {
@@ -1035,6 +1037,7 @@ def generate_training_data():
     """
     data = []
     bad_path_logs = []
+    actual_length_false_path = []
 
     # Create a DBpedia object.
     dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
@@ -1091,6 +1094,11 @@ def generate_training_data():
         id_tp = embeddings_interface.vocabularize(tp)
         id_fps = [embeddings_interface.vocabularize(x) for x in fps]
 
+        # Actual length of False Paths
+        actual_length_false_path.append(len(id_fps))
+
+        # Makes the number of Negative Samples constant
+        id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
         # Make neat matrices.
         data.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
 
@@ -1098,6 +1106,7 @@ def generate_training_data():
 
     # I don't know what to do of results. So just pickle shit
     pickle.dump(data, open(RESULTS_DIR, 'w+'))
+    pickle.dump(actual_length_false_path,open(LENGTH_DIR,'w+'))
 
 if __name__ == "__main__":
     # """

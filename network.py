@@ -9,8 +9,7 @@ from keras.preprocessing.sequence import pad_sequences
 import numpy as np
 import keras.backend.tensorflow_backend as K
 from keras.layers.core import Layer  
-from keras import initializers, regularizers, constraints  
-# from keras import backend as K
+from keras import initializers, regularizers, constraints
 from keras.models import Model, Sequential
 from keras.layers import Input, Layer, Lambda
 from keras.layers import Dense, BatchNormalization
@@ -29,19 +28,19 @@ from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
 from keras.layers import Bidirectional, GRU, LSTM
 from keras.layers.noise import GaussianNoise
 from keras.layers.advanced_activations import ELU
-import keras.backend as K
 from keras.models import Sequential, Model, model_from_json
 from keras.regularizers import l2
 from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.layers import Merge
+from sklearn.utils import shuffle
 
 
 # Some Macros
 DEBUG = True
 DATA_DIR = './data/training/pairwise'
-EPOCHS = 150
+EPOCHS = 300
 BATCH_SIZE = 924 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
@@ -61,7 +60,6 @@ def recall(y_true, y_pred):
     possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
     recall = true_positives / (possible_positives + K.epsilon())
     return recall
-
 
 def fbeta_score(y_true, y_pred, beta=1):
     """Computes the F score.
@@ -128,8 +126,12 @@ def smart_save_model(model):
     :return: None
     """
 
-    # Get the model description
-    desc = model.to_json()
+    try:
+        # Get the model description
+        desc = model.to_json()
+    except TypeError:
+        print "Could not get model json"
+        pass
 
     # Find the current model dirs in the data dir.
     _, dirs, _ = os.walk(DATA_DIR).next()
@@ -218,7 +220,13 @@ class TrainingDataGenerator(Sequence):
 
         self.neg_paths = neg_paths
 
-        self.neg_paths_sampled = self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :]
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
+                                            (-1, self.max_length))
+
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+
+
 
         self.batch_size = batch_size
 
@@ -227,9 +235,9 @@ class TrainingDataGenerator(Sequence):
 
     def __getitem__(self, idx):
         index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_questions = index(self.questions)
-        batch_pos_paths = index(self.pos_paths)
-        batch_neg_paths = index(np.reshape(self.neg_paths_sampled, (-1, self.max_length)))
+        batch_questions = index(self.questions_shuffled)
+        batch_pos_paths = index(self.pos_paths_shuffled)
+        batch_neg_paths = index(self.neg_paths_shuffled)
 
         # if self.firstDone == False:
         #     batch_neg_paths = index(self.neg_paths)
@@ -241,7 +249,10 @@ class TrainingDataGenerator(Sequence):
 
     def on_epoch_end(self):
         self.firstDone = not self.firstDone
-        self.neg_paths_sampled = self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :]
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
+                                            (-1, self.max_length))
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
 
 
 class ValidationDataGenerator(Sequence):
@@ -283,7 +294,6 @@ class ValidationDataGenerator(Sequence):
         self.firstDone = not self.firstDone
         neg_paths_sampled = self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :]
         self.all_paths = np.reshape(np.concatenate([self.pos_paths, neg_paths_sampled], axis=1), (-1, self.max_length))
-
 
 
 def rank_precision_metric(neg_paths_per_epoch):
@@ -475,6 +485,14 @@ def get_glove_embeddings():
 #         # You could also print it out here.
 
 
+def cross_correlation(x):
+    a, b = x
+    tf = K.tf
+    a_fft = tf.fft(tf.complex(a, 0.0))
+    b_fft = tf.fft(tf.complex(b, 0.0))
+    ifft = tf.ifft(tf.conj(a_fft) * b_fft)
+    return tf.cast(tf.real(ifft), 'float32')
+
 def main():
 
     gpu = sys.argv[1]
@@ -551,7 +569,10 @@ def main():
 
         vectors = get_glove_embeddings()
         embedding_dims = vectors.shape[1]
-        nr_hidden = 32
+        nr_hidden = 128
+
+        holographic_forward = Dense(1, activation='sigmoid')
+        final_forward = Dense(1, activation='sigmoid')
 
         embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.4)
         encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.4)
@@ -567,7 +588,12 @@ def main():
             ques_encoded = encode(x_ques_embedded)
             path_encoded = encode(x_path_embedded)
 
-            return dot([ques_encoded, path_encoded], axes=-1)
+            holographic_score = holographic_forward(Lambda(lambda x: cross_correlation(x)) ([ques_encoded, path_encoded]))
+            dot_score = dot([ques_encoded, path_encoded], axes=-1)
+            l1_score = Lambda(lambda x: K.abs(x[0]-x[1]))([ques_encoded, path_encoded])
+
+            return final_forward(concatenate([holographic_score, dot_score, l1_score], axis=-1))
+
             #
             # attention = attend(ques_encoded, path_encoded)
             #
@@ -605,7 +631,7 @@ def main():
 
         # rank_precision_callback = CustomLossHistory(rank_precision_metric(neg_paths_per_epoch_test), validation_generator().next())
         model.fit_generator(training_generator, epochs=EPOCHS,
-            validation_data=validation_generator, workers=12, use_multiprocessing=True)
+            validation_data=validation_generator, workers=3, use_multiprocessing=True)
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
     # ])
 

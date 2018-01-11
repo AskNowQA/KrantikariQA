@@ -14,6 +14,7 @@ import pickle
 import random
 import traceback
 import warnings
+import spacy
 import numpy as np
 from pprint import pprint
 from gensim import models
@@ -42,7 +43,8 @@ if DEBUG:
 
 # Initialize DBpedia
 dbp = db_interface.DBPedia(_verbose=True, caching=True)
-
+#Initialize spacy
+nlp = spacy.load('en_core_web_sm')
 
 def compute_true_labels(_question, _truepath, _falsepaths):
     """
@@ -77,8 +79,23 @@ def parse(_raw):
         # Get the question
         question = _raw[u'corrected_question']
 
+        #Spacy tokenizer
+        question_spacy = nlp(unicode(question,"utf-8"))
+        question_dep_token = {} #Link list for spacy token and their dep with the link list ordered inplace.
+        for token in question_spacy:
+                try:
+                    question_dep_token[token.text].append(token.dep_)
+                except:
+                    question_dep_token[token.text] = [token.dep_]
+
         # Tokenize the question
         question = nlutils.tokenize(question)
+        question_dep = []
+        skip = 0
+        for word in question:
+            try:
+                dep = question_dep_token
+
 
         # Now, embed the question.
         id_question = embeddings_interface.vocabularize(question, _report_unks=False)

@@ -122,9 +122,9 @@ class Krantikari:
         :return: SPARQL/CoreChain/Answers (and or)
         """
         # QA Specific Macros
-        self.K_1HOP_GLOVE = 100 if _training else 20
+        self.K_1HOP_GLOVE = 1000 if _training else 20
         self.K_1HOP_MODEL = 5
-        self.K_2HOP_GLOVE = 200 if _training else 10
+        self.K_2HOP_GLOVE = 2000 if _training else 10
         self.K_2HOP_MODEL = 5
         self.EMBEDDING = "glove"
         self.TRAINING = _training
@@ -210,7 +210,7 @@ class Krantikari:
         left_predicates, right_predicates = [], []  # Places to store data.
 
         for entity in intermediate_entities:
-            temp_l, temp_r = self.dbp.get_properties(_uri=entity, label=False)
+            temp_r, temp_l = self.dbp.get_properties(_uri=entity, label=False)
             left_predicates += temp_l
             right_predicates += temp_r
 
@@ -478,6 +478,9 @@ class Krantikari:
             for x in e_out_to_e_out_out_filtered:
                 for uri in sf_vocab.keys():
                     if x == sf_vocab[uri]:
+
+                        if x == 'leader':
+                            pass
 
                         # That's the URI. Find it's 1-hop Pred.
                         for hop1 in e_out_to_e_out_out.keys():
@@ -1099,12 +1102,14 @@ def generate_training_data():
 
         # Makes the number of Negative Samples constant
         id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+
         # Make neat matrices.
-        data.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
+        data.append([q, tp, fps, np.zeros((20, 1))])
 
         # results.append(evaluate(parsed_data, qa.best_path))
 
     # I don't know what to do of results. So just pickle shit
+    pickle.dump(bad_path_logs,open('resources/bad_path','w+'))
     pickle.dump(data, open(RESULTS_DIR, 'w+'))
     pickle.dump(actual_length_false_path,open(LENGTH_DIR,'w+'))
 

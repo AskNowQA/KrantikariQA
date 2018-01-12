@@ -92,7 +92,7 @@ RESULTS_DIR = './resources/results.pickle'
 LENGTH_DIR = './resources/lengths.pickle'
 QALD_DIR = './resources/qald-7-train-multilingual.json'
 MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
-MAX_FALSE_PATHS = 800
+MAX_FALSE_PATHS = 1000
 
 
 short_forms = {
@@ -308,9 +308,9 @@ class Krantikari:
             left_properties_filtered_uri = [left_properties[i] for i in left_properties_filter_indices]
 
             # Generate 1-hop paths out of them
-            paths_hop1_sf = [nlutils.tokenize(entity_sf) + ['+'] + nlutils.tokenize(_p)
+            paths_hop1_sf = [nlutils.tokenize(entity_sf, _ignore_brackets=True) + ['+'] + nlutils.tokenize(_p)
                              for _p in right_properties_filtered_sf]
-            paths_hop1_sf += [nlutils.tokenize(entity_sf) + ['-'] + nlutils.tokenize(_p)
+            paths_hop1_sf += [nlutils.tokenize(entity_sf, _ignore_brackets=True) + ['-'] + nlutils.tokenize(_p)
                               for _p in left_properties_filtered_sf]
 
             # Appending the hop 1 paths to the training data (surface forms used)
@@ -514,8 +514,8 @@ class Krantikari:
             for key in e_in_in_to_e_in_filtered_subgraph.keys():
                 for r2 in e_in_in_to_e_in_filtered_subgraph[key]:
 
-                    path = nlutils.tokenize(entity_sf)                  \
-                            + ['-'] + nlutils.tokenize(sf_vocab[key])   \
+                    path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
+                            + ['-'] + nlutils.tokenize(sf_vocab[key])           \
                             + ['-'] + nlutils.tokenize(sf_vocab[r2])
                     paths_hop2_sf.append(path)
 
@@ -526,8 +526,8 @@ class Krantikari:
             for key in e_in_to_e_in_out_filtered_subgraph.keys():
                 for r2 in e_in_to_e_in_out_filtered_subgraph[key]:
 
-                    path = nlutils.tokenize(entity_sf)                  \
-                            + ['-'] + nlutils.tokenize(sf_vocab[key])   \
+                    path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
+                            + ['-'] + nlutils.tokenize(sf_vocab[key])           \
                             + ['+'] + nlutils.tokenize(sf_vocab[r2])
                     paths_hop2_sf.append(path)
 
@@ -538,8 +538,8 @@ class Krantikari:
             for key in e_out_to_e_out_out_filtered_subgraph.keys():
                 for r2 in e_out_to_e_out_out_filtered_subgraph[key]:
 
-                    path = nlutils.tokenize(entity_sf)                  \
-                            + ['+'] + nlutils.tokenize(sf_vocab[key])   \
+                    path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
+                            + ['+'] + nlutils.tokenize(sf_vocab[key])           \
                             + ['+'] + nlutils.tokenize(sf_vocab[r2])
                     paths_hop2_sf.append(path)
 
@@ -550,8 +550,8 @@ class Krantikari:
             for key in e_out_in_to_e_out_filtered_subgraph.keys():
                 for r2 in e_out_in_to_e_out_filtered_subgraph[key]:
 
-                    path = nlutils.tokenize(entity_sf)                  \
-                            + ['+'] + nlutils.tokenize(sf_vocab[key])   \
+                    path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
+                            + ['+'] + nlutils.tokenize(sf_vocab[key])           \
                             + ['-'] + nlutils.tokenize(sf_vocab[r2])
                     paths_hop2_sf.append(path)
 
@@ -1090,7 +1090,7 @@ def generate_training_data():
             if DEBUG:
                 print("True path not in false path")
 
-            bad_path_logs += [q, e, tp, fps]
+            bad_path_logs.append([q, e, tp, fps])
 
         # Id-fy the entire thing
         id_q = embeddings_interface.vocabularize(nlutils.tokenize(q), _embedding="glove")
@@ -1136,11 +1136,11 @@ if __name__ == "__main__":
     #
     # print(qa.path_length)
 
-    try:
-        gpu = sys.argv[1]
-    except IndexError:
-        # No arguments given. Take from user
-        gpu = raw_input("Specify the GPU you wanna use boi:\t")
+    # try:
+    #     gpu = sys.argv[1]
+    # except IndexError:
+    #     # No arguments given. Take from user
+    #     gpu = raw_input("Specify the GPU you wanna use boi:\t")
 
     """
         TEST 3 : Check generate training data

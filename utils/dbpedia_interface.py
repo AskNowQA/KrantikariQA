@@ -28,7 +28,7 @@ import natural_language_utilities as nlutils
 import labels_mulitple_form
 
 # GLOBAL MACROS
-# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/', 'http://live.dbpedia.org/sparql/']
+# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/']
 # DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
 DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']
 REDIS_HOSTNAME = 'sda-srv01.iai.uni-bonn.de'
@@ -458,7 +458,7 @@ class DBPedia:
             temp_query = GET_SUBJECT % {'target_resource': _resource_uri, 'property': _relation}
         response = self.shoot_custom_query(temp_query)
         try:
-            entity_list = [x[u'entity'][u'value'].encode('ascii', 'ignore') for x in response[u'results'][u'bindings']]
+            entity_list = [x[u'entity'][u'value'] for x in response[u'results'][u'bindings']]
             return entity_list
         except:
             # TODO: Find and handle exceptions appropriately

@@ -1,48 +1,33 @@
 # Shared Feature Extraction Layer
 from __future__ import absolute_import
+
+import json
+import math
 import os
 import pickle
 import sys
-import json
-import math
-from keras.preprocessing.sequence import pad_sequences
+
 import numpy as np
-import keras.backend.tensorflow_backend as K
-from keras.layers.core import Layer
-from keras import initializers, regularizers, constraints
-# from keras import backend as K
-from keras.models import Model, Sequential
-from keras.layers import Input, Layer, Lambda
-from keras.layers import Dense, BatchNormalization
-from keras.layers import Dropout
-from keras.layers import Activation, RepeatVector, Reshape, Bidirectional, TimeDistributed
-from keras.layers.recurrent import LSTM
-from keras.layers.merge import concatenate, dot, subtract, maximum, multiply
-from keras.layers import merge
-from keras.activations import softmax
-from keras import optimizers, metrics
-from keras.callbacks import EarlyStopping
+from sklearn.utils import shuffle
+
+from keras import optimizers
 from keras.utils import Sequence
-
-from keras.layers import InputSpec, Layer, Input, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
-from keras.layers import Bidirectional, GRU, LSTM
-from keras.layers.noise import GaussianNoise
-from keras.layers.advanced_activations import ELU
-import keras.backend as K
-from keras.models import Sequential, Model, model_from_json
 from keras.regularizers import l2
-from keras.optimizers import Adam
+from keras.models import Sequential, Model
+import keras.backend.tensorflow_backend as K
+from keras.layers import Bidirectional, LSTM
+from keras.layers.merge import concatenate, dot
+from keras.preprocessing.sequence import pad_sequences
 from keras.layers.normalization import BatchNormalization
+from keras.layers import InputSpec, Layer, Input, Dense, merge
 from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
-from keras.layers import Merge
-
+from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
 
 # Some Macros
 DEBUG = True
 DATA_DIR = './data/training/pairwise'
-EPOCHS = 250
-BATCH_SIZE = 220 # Around 11 splits for full training dataset
+EPOCHS = 300
+BATCH_SIZE = 924 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
 NEGATIVE_SAMPLES = 100
@@ -61,7 +46,6 @@ def recall(y_true, y_pred):
     possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
     recall = true_positives / (possible_positives + K.epsilon())
     return recall
-
 
 def fbeta_score(y_true, y_pred, beta=1):
     """Computes the F score.
@@ -128,8 +112,12 @@ def smart_save_model(model):
     :return: None
     """
 
-    # Get the model description
-    desc = model.to_json()
+    try:
+        # Get the model description
+        desc = model.to_json()
+    except TypeError:
+        print "Could not get model json"
+        pass
 
     # Find the current model dirs in the data dir.
     _, dirs, _ = os.walk(DATA_DIR).next()
@@ -185,29 +173,47 @@ def custom_loss(y_true, y_pred):
     return K.sum(diff)
 
 
-def rank_precision(model, test_questions, test_pos_paths, test_neg_paths):
-    only_questions = test_questions[range(0, test_questions.shape[0], NEGATIVE_SAMPLES)]
-    only_pos_paths = test_pos_paths[range(0, test_pos_paths.shape[0], NEGATIVE_SAMPLES)]
+def rank_precision(model, neg_paths_per_epoch, max_length, test_questions, test_pos_paths, test_neg_paths):
+    questions = np.reshape(np.repeat(np.reshape(test_questions,
+                                            (test_questions.shape[0], 1, test_questions.shape[1])),
+                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
+    pos_paths = np.reshape(test_pos_paths,
+                                    (test_pos_paths.shape[0], 1, test_pos_paths.shape[1]))
+    neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
+    all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
 
-    pos_outputs = model.predict([only_questions, only_pos_paths, only_pos_paths])[:,0]
-    pos_outputs = np.reshape(pos_outputs, [only_pos_paths.shape[0], 1])
-    neg_outputs = model.predict([test_questions, test_neg_paths, test_neg_paths])[:,0]
-    neg_outputs = np.reshape(neg_outputs, [only_pos_paths.shape[0], NEGATIVE_SAMPLES])
-    all_outputs = np.hstack([pos_outputs, neg_outputs])
+    outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)])[:,0]
+    outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch+1))
 
-    precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
+    precision = float(len(np.where(np.argmax(outputs, axis=1)==0)[0]))/outputs.shape[0]
     return precision
 
 
-class IdBasedDataGenerator(Sequence):
+class TrainingDataGenerator(Sequence):
     def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
         self.dummy_y = np.zeros(batch_size)
         self.firstDone = False
         self.max_length = max_length
         self.neg_paths_per_epoch = neg_paths_per_epoch
-        self.questions = questions
-        self.pos_paths = pos_paths
+
+        self.questions = np.reshape(np.repeat(np.reshape(questions,
+                                            (questions.shape[0], 1, questions.shape[1])),
+                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+
+        self.pos_paths = np.reshape(np.repeat(np.reshape(pos_paths,
+                                            (pos_paths.shape[0], 1, pos_paths.shape[1])),
+                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+
         self.neg_paths = neg_paths
+
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
+                                            (-1, self.max_length))
+
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+
+
+
         self.batch_size = batch_size
 
     def __len__(self):
@@ -215,9 +221,9 @@ class IdBasedDataGenerator(Sequence):
 
     def __getitem__(self, idx):
         index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_questions = index(self.questions)
-        batch_pos_paths = index(self.pos_paths)
-        batch_neg_paths = index(np.reshape(self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES), :], (-1, self.max_length)))
+        batch_questions = index(self.questions_shuffled)
+        batch_pos_paths = index(self.pos_paths_shuffled)
+        batch_neg_paths = index(self.neg_paths_shuffled)
 
         # if self.firstDone == False:
         #     batch_neg_paths = index(self.neg_paths)
@@ -229,12 +235,29 @@ class IdBasedDataGenerator(Sequence):
 
     def on_epoch_end(self):
         self.firstDone = not self.firstDone
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
+                                            (-1, self.max_length))
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
 
-class DataGenerator(Sequence):
-    def __init__(self, questions, pos_paths, neg_paths, batch_size):
-        self.dummy_y = np.zeros(BATCH_SIZE)
+
+class ValidationDataGenerator(Sequence):
+    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
+        self.dummy_y = np.zeros(batch_size)
         self.firstDone = False
-        self.questions, self.pos_paths, self.neg_paths = questions, pos_paths, neg_paths
+        self.max_length = max_length
+        self.neg_paths_per_epoch = neg_paths_per_epoch
+
+        self.questions = np.reshape(np.repeat(np.reshape(questions,
+                                            (questions.shape[0], 1, questions.shape[1])),
+                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
+
+        self.pos_paths = np.reshape(pos_paths,
+                                            (pos_paths.shape[0], 1, pos_paths.shape[1]))
+        self.neg_paths = neg_paths
+        neg_paths_sampled = self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :]
+        self.all_paths = np.reshape(np.concatenate([self.pos_paths, neg_paths_sampled], axis=1), (-1, self.max_length))
+
         self.batch_size = batch_size
 
     def __len__(self):
@@ -243,17 +266,21 @@ class DataGenerator(Sequence):
     def __getitem__(self, idx):
         index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
         batch_questions = index(self.questions)
-        batch_pos_paths = index(self.pos_paths)
+        batch_all_paths = index(self.all_paths)
 
-        if self.firstDone == False:
-            batch_neg_paths = index(self.neg_paths)
-        else:
-            batch_neg_paths = neg_paths[np.random.randint(0, neg_paths.shape[0], BATCH_SIZE)]
+        # if self.firstDone == False:
+        #     batch_neg_paths = index(self.neg_paths)
+        # else:
+        #     batch_neg_paths = neg_paths[np.random.randint(0, neg_paths.shape[0], BATCH_SIZE)]
 
-        return ([batch_questions, batch_pos_paths, batch_neg_paths], self.dummy_y)
+
+        return ([batch_questions, batch_all_paths, np.zeros_like(batch_all_paths)], self.dummy_y)
 
     def on_epoch_end(self):
         self.firstDone = not self.firstDone
+        neg_paths_sampled = self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :]
+        self.all_paths = np.reshape(np.concatenate([self.pos_paths, neg_paths_sampled], axis=1), (-1, self.max_length))
+
 
 def rank_precision_metric(neg_paths_per_epoch):
     def metric(y_true, y_pred):
@@ -339,10 +366,10 @@ class _Entailment(object):
         self.model.add(Dense(nr_hidden, name='entail1',
             init='he_normal', W_regularizer=l2(L2)))
         self.model.add(Activation('relu'))
-        self.model.add(Dropout(dropout))
-        self.model.add(Dense(nr_hidden, name='entail2',
+        # self.model.add(Dropout(dropout))
+        self.model.add(Dense(nr_out, name='entail_out',
             init='he_normal', W_regularizer=l2(L2)))
-        self.model.add(Activation('relu'))
+        # self.model.add(Activation('relu'))
         # self.model.add(Dense(nr_out, name='entail_out', activation='softmax',
         #                 W_regularizer=l2(L2), init='zero'))
 
@@ -373,17 +400,17 @@ class _GlobalSumPooling1D(Layer):
 class _BiRNNEncoding(object):
     def __init__(self, max_length, embedding_dims, units, dropout=0.0):
         self.model = Sequential()
-        self.model.add(Bidirectional(LSTM(units, return_sequences=True,
+        self.model.add(Bidirectional(LSTM(units, return_sequences=False,
                                          dropout_W=dropout, dropout_U=dropout),
                                          input_shape=(max_length, embedding_dims)))
-        self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
-        self.model.add(TimeDistributed(Dropout(0.2)))
+        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
+        # self.model.add(TimeDistributed(Dropout(0.2)))
 
     def __call__(self, sentence):
         return self.model(sentence)
 
 class _StaticEmbedding(object):
-    def __init__(self, vectors, max_length, nr_out):
+    def __init__(self, vectors, max_length, nr_out, nr_tune=5000, dropout=0.0):
         self.nr_out = nr_out
         self.max_length = max_length
         self.embed = Embedding(
@@ -392,17 +419,34 @@ class _StaticEmbedding(object):
                         input_length=max_length,
                         weights=[vectors],
                         name='embed',
-                        trainable=False)
+                        trainable=False,)
+        self.tune = Embedding(
+                        nr_tune,
+                        nr_out,
+                        input_length=max_length,
+                        weights=None,
+                        name='tune',
+                        trainable=True,
+                        dropout=dropout)
+        self.mod_ids = Lambda(lambda sent: sent % (nr_tune-1)+1,
+                              output_shape=(self.max_length,))
 
-        # self.project = TimeDistributed(
-        #                     Dense(
-        #                         nr_out,
-        #                         activation=None,
-        #                         bias=False,
-        #                         name='project'))
+        self.project = TimeDistributed(
+                            Dense(
+                                nr_out,
+                                activation=None,
+                                bias=False,
+                                name='project'))
 
     def __call__(self, sentence):
-        return self.embed(sentence)
+        mod_sent = self.mod_ids(sentence)
+        tuning = self.tune(mod_sent)
+        #tuning = merge([tuning, mod_sent],
+        #    mode=lambda AB: AB[0] * (K.clip(K.cast(AB[1], 'float32'), 0, 1)),
+        #    output_shape=(self.max_length, self.nr_out))
+        pretrained = self.project(self.embed(sentence))
+        vectors = merge([pretrained, tuning], mode='sum')
+        return vectors
 
 def get_glove_embeddings():
     from utils.embeddings_interface import __prepare__
@@ -410,6 +454,30 @@ def get_glove_embeddings():
 
     from utils.embeddings_interface import glove_embeddings
     return glove_embeddings
+
+# class CustomLossHistory(Callback):
+#     def __init__(self, loss, validation_set):
+#         self.loss = loss
+#         self.validation_data = validation_set # validation_set = x, y
+#
+#     def on_train_begin(self, logs={}):
+#         self.losses = []
+#
+#     def on_batch_end(self, batch, logs={}):
+#         current_loss_value = self.loss(self.validation_data[1],
+#             self.model.predict(self.validation_data[0]))
+#         print current_loss_value
+#         self.losses.append(current_loss_value)
+#         # You could also print it out here.
+
+
+def cross_correlation(x):
+    a, b = x
+    tf = K.tf
+    a_fft = tf.fft(tf.complex(a, 0.0))
+    b_fft = tf.fft(tf.complex(b, 0.0))
+    ifft = tf.ifft(tf.conj(a_fft) * b_fft)
+    return tf.cast(tf.real(ifft), 'float32')
 
 def main():
 
@@ -459,9 +527,10 @@ def main():
     test_neg_paths = test_split(neg_paths)
     test_questions = test_split(questions)
 
-    neg_paths_per_epoch = 10
-    dummy_y_train = np.zeros(len(train_questions))
-    dummy_y_test = np.zeros(len(test_questions)*(neg_paths_per_epoch+1))
+    neg_paths_per_epoch_train = 11
+    neg_paths_per_epoch_test = 11
+    dummy_y_train = np.zeros(len(train_questions)*neg_paths_per_epoch_train)
+    dummy_y_test = np.zeros(len(test_questions)*(neg_paths_per_epoch_test+1))
 
     print train_questions.shape
     print train_pos_paths.shape
@@ -472,6 +541,8 @@ def main():
     print test_neg_paths.shape
 
     with K.tf.device('/gpu:' + gpu):
+        neg_paths_per_epoch_train = 11
+        neg_paths_per_epoch_test = 11
         K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
         """
             Model Time!
@@ -483,37 +554,45 @@ def main():
         x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
         vectors = get_glove_embeddings()
-        neg_paths_per_epoch = 10
         embedding_dims = vectors.shape[1]
-        nr_hidden = 64
+        nr_hidden = 128
 
-        embed = _StaticEmbedding(vectors, max_length, embedding_dims)
-        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.5)
-        attend = _Attention(max_length, nr_hidden, dropout=0.5, L2=0.01)
-        align = _SoftAlignment(max_length, nr_hidden)
-        compare = _Comparison(max_length, nr_hidden, dropout=0.5, L2=0.01)
+        holographic_forward = Dense(1, activation='sigmoid')
+        final_forward = Dense(1, activation='sigmoid')
 
-        x_ques_embedded = embed(x_ques)
-        x_pos_path_embedded = embed(x_pos_path)
-        x_neg_path_embedded = embed(x_neg_path)
+        embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.4)
+        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.4)
+        # attend = _Attention(max_length, nr_hidden, dropout=0.4, L2=0.01)
+        # align = _SoftAlignment(max_length, nr_hidden)
+        # compare = _Comparison(max_length, nr_hidden, dropout=0.4, L2=0.01)
+        # entail = _Entailment(nr_hidden, 1, dropout=0.4, L2=0.01)
 
-        ques_encoded = encode(x_ques_embedded)
-        x_pos_path_encoded = encode(x_pos_path_embedded)
-        x_neg_path_encoded = encode(x_neg_path_embedded)
+        def getScore(ques, path):
+            x_ques_embedded = embed(ques)
+            x_path_embedded = embed(path)
 
-        def getScore(path_encoded):
-            attention = attend(ques_encoded, path_encoded)
+            ques_encoded = encode(x_ques_embedded)
+            path_encoded = encode(x_path_embedded)
 
-            align_ques = align(path_encoded, attention)
-            align_path = align(ques_encoded, attention, transpose=True)
+            holographic_score = holographic_forward(Lambda(lambda x: cross_correlation(x)) ([ques_encoded, path_encoded]))
+            dot_score = dot([ques_encoded, path_encoded], axes=-1)
+            l1_score = Lambda(lambda x: K.abs(x[0]-x[1]))([ques_encoded, path_encoded])
 
-            feats_ques = compare(ques_encoded, align_ques)
-            feats_path = compare(path_encoded, align_path)
+            return final_forward(concatenate([holographic_score, dot_score, l1_score], axis=-1))
 
-            return dot([feats_ques, feats_path], axes=-1)
+            #
+            # attention = attend(ques_encoded, path_encoded)
+            #
+            # align_ques = align(path_encoded, attention)
+            # align_path = align(ques_encoded, attention, transpose=True)
+            #
+            # feats_ques = compare(ques_encoded, align_ques)
+            # feats_path = compare(path_encoded, align_path)
+            #
+            # return entail(feats_ques, feats_path)
 
-        pos_score = getScore(x_pos_path_encoded)
-        neg_score = getScore(x_neg_path_encoded)
+        pos_score = getScore(x_ques, x_pos_path)
+        neg_score = getScore(x_ques, x_neg_path)
 
         loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
 
@@ -526,28 +605,19 @@ def main():
         print(model.summary())
 
         model.compile(optimizer=OPTIMIZER,
-                      loss=custom_loss, metrics=[rank_precision_metric(neg_paths_per_epoch)])
+                      loss=custom_loss, metrics=[rank_precision_metric(neg_paths_per_epoch_train)])
 
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
 
-        def validation_generator():
-            questions = np.reshape(np.repeat(np.reshape(test_questions,
-                                            (test_questions.shape[0], 1, test_questions.shape[1])),
-                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
+        training_generator = TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                  max_length, neg_paths_per_epoch_train, BATCH_SIZE)
+        validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                  max_length, neg_paths_per_epoch_test, BATCH_SIZE*3)
 
-            pos_paths = np.reshape(test_pos_paths,
-                                            (test_pos_paths.shape[0], 1, test_pos_paths.shape[1]))
-
-
-            while True:
-                neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
-                all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
-                yield [questions, all_paths, np.zeros_like(all_paths)], dummy_y_test
-
-
-        model.fit_generator(IdBasedDataGenerator(train_questions, train_pos_paths, train_neg_paths, 50, neg_paths_per_epoch, BATCH_SIZE), epochs=EPOCHS,
-            validation_data=validation_generator(), validation_steps=1)
+        # rank_precision_callback = CustomLossHistory(rank_precision_metric(neg_paths_per_epoch_test), validation_generator().next())
+        model.fit_generator(training_generator, epochs=EPOCHS,
+            validation_data=validation_generator, workers=3, use_multiprocessing=True)
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
     # ])
 

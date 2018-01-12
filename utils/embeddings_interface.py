@@ -7,16 +7,17 @@
 import os
 import json
 import gensim
-import pickle
+import cPickle as pickle
 import bottle
 import warnings
 import numpy as np
-
 from bottle import post, get, put, delete, request, response
 
 word2vec_embeddings = None
+word2vec_vocab = None
 glove_embeddings = None
 glove_vocab = None
+
 DEFAULT_EMBEDDING = 'word2vec'
 DEBUG = True
 glove_location = \
@@ -58,7 +59,7 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
     """
     global word2vec_embeddings, glove_embeddings, glove_vocab
 
-    if DEBUG: print("embeddings_interface: Loading Word Vector to Memory.")
+    if DEBUG: print("embeddings_interface: Loading Word Vectors to Memory.")
 
     if _word2vec:
         word2vec_embeddings = gensim.models.KeyedVectors.load_word2vec_format('resources/GoogleNews-vectors-negative300.bin', binary=True)
@@ -122,8 +123,11 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
             f = open(os.path.join(glove_location['dir'], glove_location['raw']))
 
             for line in f:
+
                 values = line.split()
                 word = values[0]
+                if word in ['UNK', '+', '-', '/']:
+                    continue
                 coefs = np.asarray(values[1:], dtype='float32')
 
                 glove_embeddings[glove_vocab[word]] = coefs
@@ -137,13 +141,12 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
 
 def __congregate__(_vector_set, ignore=[]):
     if len(ignore) == 0:
-        return np.mean(_vector_set, axis = 0)
+        return np.mean(_vector_set, axis=0)
     else:
         return np.dot(np.transpose(_vector_set), ignore) / sum(ignore)
 
 
 def phrase_similarity(_phrase_1, _phrase_2, embedding='glove'):
-
     __check_prepared__(embedding)
 
     phrase_1 = _phrase_1.split(" ")
@@ -172,10 +175,10 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding='glove'):
     return float(cosine_similarity)
 
 
-def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embedding='glove'):
+def vectorize(_tokens, _report_unks=False, _embedding='glove'):
     """
         Function to embed a sentence and return it as a list of vectors.
-        WARNING: Give it already split. I ain't splitting it for ye.
+        WARNING: Give it already split strings. I ain't splitting it for ye.
 
         :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
         :param _report_unks: Whether or not return the out of vocab words
@@ -203,14 +206,6 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
 
         finally:
 
-            if _encode_special_chars:
-                # If you want path dividers like +, - or / to be treated specially
-                if token == "+":
-                    token_embedding = np.repeat(1, 300)
-                elif token == "-":
-                    token_embedding = np.repeat(-1, 300)
-                elif token == "/":
-                    token_embedding = np.repeat(0.5, 300)
             op += [token_embedding]
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
@@ -220,6 +215,7 @@ def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
     """
             Function to embed a sentence and return it as a list of "IDS".
             WARNING: Give it already split. I ain't splitting it for ye.
+
             :param _tokens: The sentence you want embedded. (Assumed pre-tokenized input)
             :param _report_unks: Whether or not return the out of vocab words
             :return: Numpy tensor of n * 300d, [OPTIONAL] List(str) of tokens out of vocabulary.

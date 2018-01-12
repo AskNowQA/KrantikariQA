@@ -93,10 +93,10 @@ MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 QALD_DIR = './resources/qald-7-train-multilingual.json'
 
 #CHANGE MACROS HERE
-RESULTS_DIR = './resources/results.pickle'
-LENGTH_DIR = './resources/lengths.pickle'
-EXCEPT_LOG = './resources/except.pickle'
-BAD_PATH = './resources/bad_path.pickle'
+RESULTS_DIR = './resources/results'
+LENGTH_DIR = './resources/lengths'
+EXCEPT_LOG = './resources/except'
+BAD_PATH = './resources/bad_path'
 
 
 short_forms = {
@@ -1030,7 +1030,7 @@ def run_qald():
     pickle.dump(results, open(RESULTS_DIR, 'w+'))
 
 
-def generate_training_data():
+def generate_training_data(start,end):
     """
         Function to hack Krantikari to generate model training data.
             - Parse LCQuAD
@@ -1056,11 +1056,14 @@ def generate_training_data():
     model = model_interpreter.ModelInterpreter(_gpu="0")  # Model interpreter to be used for ranking
 
     # Load LC-QuAD
-    dataset = json.load(open(LCQUAD_DIR))
+    if end == 0:
+        dataset = json.load(open(LCQUAD_DIR))[start:]
+    else:
+        dataset = json.load(open(LCQUAD_DIR))[start:end]
 
     progbar = ProgressBar()
     iterator = progbar(dataset)
-    counter = 0
+    counter = start
 
     # Parse it
     for x in iterator:
@@ -1117,7 +1120,7 @@ def generate_training_data():
 
             # Make neat matrices.
             data.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
-        except:
+        except Exception:
             except_log.append(x)
 
             # results.append(evaluate(parsed_data, qa.best_path))
@@ -1151,14 +1154,21 @@ if __name__ == "__main__":
     #
     # print(qa.path_length)
 
-    # try:
-    #     gpu = sys.argv[1]
-    # except IndexError:
-    #     # No arguments given. Take from user
-    #     gpu = raw_input("Specify the GPU you wanna use boi:\t")
+    try:
+        append = sys.argv[1]
+        start = sys.argv[2]
+        end = sys.argv[3]
+    except IndexError:
+        # No arguments given. Take from user
+        gpu = raw_input("Specify the GPU you wanna use boi:\t")
 
     """
         TEST 3 : Check generate training data
     """
-    generate_training_data()
+    RESULTS_DIR = RESULTS_DIR + append + '.pickle'
+    LENGTH_DIR = LENGTH_DIR + append + '.pickle'
+    EXCEPT_LOG = EXCEPT_LOG + append + '.pickle'
+    BAD_PATH = BAD_PATH + append + '.pickle'
+
+    generate_training_data(int(start),int(end))
 

@@ -88,11 +88,15 @@ from utils import natural_language_utilities as nlutils
 DEBUG = True
 PATH_CHARS = ['+', '-', '/']
 LCQUAD_DIR = './resources/data_set.json'
+MAX_FALSE_PATHS = 1000
+MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
+QALD_DIR = './resources/qald-7-train-multilingual.json'
+
+#CHANGE MACROS HERE
 RESULTS_DIR = './resources/results.pickle'
 LENGTH_DIR = './resources/lengths.pickle'
-QALD_DIR = './resources/qald-7-train-multilingual.json'
-MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
-MAX_FALSE_PATHS = 1000
+EXCEPT_LOG = './resources/except.pickle'
+BAD_PATH = './resources/bad_path.pickle'
 
 
 short_forms = {
@@ -122,7 +126,7 @@ class Krantikari:
         :return: SPARQL/CoreChain/Answers (and or)
         """
         # QA Specific Macros
-        self.K_1HOP_GLOVE = 1000 if _training else 20
+        self.K_1HOP_GLOVE = 200 if _training else 20
         self.K_1HOP_MODEL = 5
         self.K_2HOP_GLOVE = 2000 if _training else 10
         self.K_2HOP_MODEL = 5
@@ -207,6 +211,8 @@ class Krantikari:
         # Filter out the literals, and keep uniques.
         intermediate_entities = list(set([x for x in intermediate_entities if x.startswith('http://dbpedia.org/resource')]))
 
+        if len(intermediate_entities) > 1000:
+            intermediate_entities = intermediate_entities[0:1000]
         left_predicates, right_predicates = [], []  # Places to store data.
 
         for entity in intermediate_entities:
@@ -1041,6 +1047,7 @@ def generate_training_data():
     data = []
     bad_path_logs = []
     actual_length_false_path = []
+    except_log = []
 
     # Create a DBpedia object.
     dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
@@ -1049,67 +1056,75 @@ def generate_training_data():
     model = model_interpreter.ModelInterpreter(_gpu="0")  # Model interpreter to be used for ranking
 
     # Load LC-QuAD
-    dataset = json.load(open(LCQUAD_DIR))
+    dataset = json.load(open(LCQUAD_DIR))[0:500]
 
     progbar = ProgressBar()
     iterator = progbar(dataset)
+    counter = 0
 
     # Parse it
     for x in iterator:
-        parsed_data = parse_lcquad(x)
-
-        if not parsed_data:
-            continue
-
-        # Get Needed data
-        q = parsed_data[u'corrected_question']
-        e = parsed_data[u'entity']
-
-        # Find the correct path
-        entity_sf = nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True)  # @TODO: multi-entity alert
-        path_sf = []
-        for x in parsed_data[u'path']:
-            path_sf.append(str(x[0]))
-            path_sf += nlutils.tokenize(dbp.get_label(x[1:]))
-        tp = entity_sf + path_sf
-
-        if len(e) > 1:
-            # results.append([0, 0])
-            continue
-
-        qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True)
-        fps = qa.training_paths
-
-
-        # See if the correct path is there
         try:
-            fps.remove(tp)
-        except ValueError:
+            parsed_data = parse_lcquad(x)
+            counter = counter + 1
+            print counter
 
-            # The true path was not in the paths generated from Krantikari. Log this son of a bitch.
-            if DEBUG:
-                print("True path not in false path")
+            if not parsed_data:
+                continue
 
-            bad_path_logs.append([q, e, tp, fps])
+            # Get Needed data
+            q = parsed_data[u'corrected_question']
+            e = parsed_data[u'entity']
 
-        # Id-fy the entire thing
-        id_q = embeddings_interface.vocabularize(nlutils.tokenize(q), _embedding="glove")
-        id_tp = embeddings_interface.vocabularize(tp)
-        id_fps = [embeddings_interface.vocabularize(x) for x in fps]
+            # print q,e
+            # Find the correct path
+            entity_sf = nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True)  # @TODO: multi-entity alert
+            path_sf = []
+            for x in parsed_data[u'path']:
+                path_sf.append(str(x[0]))
+                path_sf += nlutils.tokenize(dbp.get_label(x[1:]))
+            tp = entity_sf + path_sf
 
-        # Actual length of False Paths
-        actual_length_false_path.append(len(id_fps))
+            if len(e) > 1:
+                # results.append([0, 0])
+                continue
 
-        # Makes the number of Negative Samples constant
-        id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+            qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True)
+            fps = qa.training_paths
 
-        # Make neat matrices.
-        data.append([q, tp, fps, np.zeros((20, 1))])
 
-        # results.append(evaluate(parsed_data, qa.best_path))
+            # See if the correct path is there
+            try:
+                fps.remove(tp)
+            except ValueError:
+
+                # The true path was not in the paths generated from Krantikari. Log this son of a bitch.
+                if DEBUG:
+                    print("True path not in false path")
+
+                bad_path_logs.append([q, e, tp, fps])
+
+            # Id-fy the entire thing
+            id_q = embeddings_interface.vocabularize(nlutils.tokenize(q), _embedding="glove")
+            id_tp = embeddings_interface.vocabularize(tp)
+            id_fps = [embeddings_interface.vocabularize(x) for x in fps]
+
+            # Actual length of False Paths
+            actual_length_false_path.append(len(id_fps))
+
+            # Makes the number of Negative Samples constant
+            id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+
+            # Make neat matrices.
+            data.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
+        except:
+            except_log.append(x)
+
+            # results.append(evaluate(parsed_data, qa.best_path))
 
     # I don't know what to do of results. So just pickle shit
-    pickle.dump(bad_path_logs,open('resources/bad_path','w+'))
+    pickle.dump(except_log, open(EXCEPT_LOG, 'w+'))
+    pickle.dump(bad_path_logs,open(BAD_PATH,'w+'))
     pickle.dump(data, open(RESULTS_DIR, 'w+'))
     pickle.dump(actual_length_false_path,open(LENGTH_DIR,'w+'))
 

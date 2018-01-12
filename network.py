@@ -1,27 +1,41 @@
 # Shared Feature Extraction Layer
 from __future__ import absolute_import
-
-import json
-import math
 import os
 import pickle
 import sys
-
+import json
+import math
+from keras.preprocessing.sequence import pad_sequences
 import numpy as np
+import keras.backend.tensorflow_backend as K
+from keras.layers.core import Layer  
+from keras import initializers, regularizers, constraints
+from keras.models import Model, Sequential
+from keras.layers import Input, Layer, Lambda
+from keras.layers import Dense, BatchNormalization
+from keras.layers import Dropout
+from keras.layers import Activation, RepeatVector, Reshape, Bidirectional, TimeDistributed
+from keras.layers.recurrent import LSTM
+from keras.layers.merge import concatenate, dot, subtract, maximum, multiply
+from keras.layers import merge
+from keras.activations import softmax
+from keras import optimizers, metrics
+from keras.callbacks import EarlyStopping
+from keras.utils import Sequence
+from keras.callbacks import Callback
+from keras.layers import InputSpec, Layer, Input, Dense, merge
+from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
+from keras.layers import Bidirectional, GRU, LSTM
+from keras.layers.noise import GaussianNoise
+from keras.layers.advanced_activations import ELU
+from keras.models import Sequential, Model, model_from_json
+from keras.regularizers import l2
+from keras.optimizers import Adam
+from keras.layers.normalization import BatchNormalization
+from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
+from keras.layers import Merge
 from sklearn.utils import shuffle
 
-from keras import optimizers
-from keras.utils import Sequence
-from keras.regularizers import l2
-from keras.models import Sequential, Model
-import keras.backend.tensorflow_backend as K
-from keras.layers import Bidirectional, LSTM
-from keras.layers.merge import concatenate, dot
-from keras.preprocessing.sequence import pad_sequences
-from keras.layers.normalization import BatchNormalization
-from keras.layers import InputSpec, Layer, Input, Dense, merge
-from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
-from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
 
 # Some Macros
 DEBUG = True

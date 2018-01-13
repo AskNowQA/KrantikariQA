@@ -7,6 +7,7 @@ import json
 import math
 from keras.preprocessing.sequence import pad_sequences
 import numpy as np
+import pandas as pd
 import keras.backend.tensorflow_backend as K
 from keras.layers.core import Layer  
 from keras import initializers, regularizers, constraints
@@ -20,7 +21,7 @@ from keras.layers.merge import concatenate, dot, subtract, maximum, multiply
 from keras.layers import merge
 from keras.activations import softmax
 from keras import optimizers, metrics
-from keras.callbacks import EarlyStopping
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.utils import Sequence
 from keras.callbacks import Callback
 from keras.layers import InputSpec, Layer, Input, Dense, merge
@@ -41,10 +42,10 @@ from sklearn.utils import shuffle
 DEBUG = True
 DATA_DIR = './data/training/pairwise'
 EPOCHS = 300
-BATCH_SIZE = 924 # Around 11 splits for full training dataset
+BATCH_SIZE = 880 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
-NEGATIVE_SAMPLES = 100
+NEGATIVE_SAMPLES = 1000
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 '''
@@ -117,15 +118,8 @@ def fmeasure(y_true, y_pred):
     return fbeta_score(y_true, y_pred, beta=1)
 
 
-def smart_save_model(model):
-    """
-        Function to properly save the model to disk.
-            If the model config is the same as one already on disk, overwrite it.
-            Else make a new folder and write things there
-
-    :return: None
-    """
-
+def get_smart_save_path(model):
+    desc = None
     try:
         # Get the model description
         desc = model.to_json()
@@ -147,13 +141,7 @@ def smart_save_model(model):
 
     # Check if the latest dir has the same model as current
     try:
-        if json.load(open(os.path.join(l_dir, 'model.json'))) == desc:
-            # Same desc. Just save stuff here
-            if DEBUG:
-                print "network.py:smart_save_model: Saving model in %s" % l_dir
-            model.save(os.path.join(l_dir, 'model.h5'))
-
-        else:
+        if json.load(open(os.path.join(l_dir, 'model.json'))) != desc:
             # Diff model. Make new folder and do stuff. @TODO this
             new_num = int(dir_nums[-1]) + 1
             if new_num < 10:
@@ -163,15 +151,26 @@ def smart_save_model(model):
 
             l_dir = os.path.join(DATA_DIR, "model_" + new_num)
             os.mkdir(l_dir)
-            raise IOError
+    except:
+        pass
+    finally:
+        return desc, l_dir
 
-    except IOError:
 
-        # Apparently there's nothing here. Let's set camp.
-        if DEBUG:
-            print "network.py:smart_save_model: Saving model in %s" % l_dir
-        model.save(os.path.join(l_dir, 'model.h5'))
-        json.dump(desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
+def smart_save_model(model):
+    """
+        Function to properly save the model to disk.
+            If the model config is the same as one already on disk, overwrite it.
+            Else make a new folder and write things there
+
+    :return: None
+    """
+    json_desc, l_dir = get_smart_save_path(model)
+    path = os.path.join(l_dir, 'model.h5')
+    if DEBUG:
+        print "network.py:smart_save_model: Saving model in %s" % path
+    model.save(path)
+    json.dump(json_desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
 
 def zeroloss(yt, yp):
     return 0.0
@@ -463,8 +462,8 @@ class _StaticEmbedding(object):
         return vectors
 
 def get_glove_embeddings():
-    from utils.embeddings_interface import __prepare__
-    __prepare__(_word2vec=False, _glove=True)
+    from utils.embeddings_interface import __check_prepared__
+    __check_prepared__('glove')
 
     from utils.embeddings_interface import glove_embeddings
     return glove_embeddings
@@ -493,6 +492,43 @@ def cross_correlation(x):
     ifft = tf.ifft(tf.conj(a_fft) * b_fft)
     return tf.cast(tf.real(ifft), 'float32')
 
+def load_data(file, max_sequence_length):
+    glove_embeddings = get_glove_embeddings()
+
+    try:
+        with open(os.path.join(DATA_DIR, file + ".mapped.npz")) as data, open(os.path.join(DATA_DIR, file + ".index.npy")) as idx:
+            dataset = np.load(data)
+            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
+            index = np.load(idx)
+            vectors = glove_embeddings[index]
+            return vectors, questions, pos_paths, neg_paths
+    except:
+        with open(os.path.join(DATA_DIR, file)) as fp:
+            dataset = pickle.load(fp)
+            questions = [i[0] for i in dataset]
+            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+            pos_paths = [i[1] for i in dataset]
+            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+            neg_paths = [i[2] for i in dataset]
+            neg_paths = [path for paths in neg_paths for path in paths]
+            neg_paths = pad_sequences(neg_paths, maxlen=max_sequence_length, padding='post')
+
+            all = np.concatenate([questions, pos_paths, neg_paths], axis=0)
+            mapped_all, index = pd.factorize(all.flatten(), sort=True)
+            mapped_all = mapped_all.reshape((-1, max_sequence_length))
+            vectors = glove_embeddings[index]
+
+            questions, pos_paths, neg_paths = np.split(mapped_all, [questions.shape[0], questions.shape[0]*2])
+            neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_sequence_length))
+
+            with open(os.path.join(DATA_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(DATA_DIR, file + ".index.npy"), "w") as idx:
+                np.savez(data, questions, pos_paths, neg_paths)
+                np.save(idx, index)
+
+            return vectors, questions, pos_paths, neg_paths
+
+
+
 def main():
 
     gpu = sys.argv[1]
@@ -504,16 +540,7 @@ def main():
     """
     # Pull the data up from disk
     max_length = 50
-    with open(DATA_DIR + "/latest.pickle") as fp:
-        dataset = pickle.load(fp)
-    questions = [i[0] for i in dataset]
-    questions = pad_sequences(questions, maxlen=max_length, padding='post')
-    pos_paths = [i[1] for i in dataset]
-    pos_paths = pad_sequences(pos_paths, maxlen=max_length, padding='post')
-    neg_paths = [i[2] for i in dataset]
-    neg_paths = [path for paths in neg_paths for path in paths]
-    neg_paths = pad_sequences(neg_paths, maxlen=max_length, padding='post')
-    neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_length))
+    vectors, questions, pos_paths, neg_paths = load_data("results_jan_12_full.pickle", max_length)
     # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
     # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
     # if pos_paths.shape[1] < questions.shape[1]:
@@ -541,8 +568,8 @@ def main():
     test_neg_paths = test_split(neg_paths)
     test_questions = test_split(questions)
 
-    neg_paths_per_epoch_train = 11
-    neg_paths_per_epoch_test = 11
+    neg_paths_per_epoch_train = 10
+    neg_paths_per_epoch_test = 10
     dummy_y_train = np.zeros(len(train_questions)*neg_paths_per_epoch_train)
     dummy_y_test = np.zeros(len(test_questions)*(neg_paths_per_epoch_test+1))
 
@@ -555,8 +582,8 @@ def main():
     print test_neg_paths.shape
 
     with K.tf.device('/gpu:' + gpu):
-        neg_paths_per_epoch_train = 11
-        neg_paths_per_epoch_test = 11
+        neg_paths_per_epoch_train = 10
+        neg_paths_per_epoch_test = 10
         K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
         """
             Model Time!
@@ -567,12 +594,11 @@ def main():
         x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
         x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
-        vectors = get_glove_embeddings()
         embedding_dims = vectors.shape[1]
         nr_hidden = 128
 
-        holographic_forward = Dense(1, activation='sigmoid')
-        final_forward = Dense(1, activation='sigmoid')
+        # holographic_forward = Dense(1, activation='sigmoid')
+        # final_forward = Dense(1, activation='sigmoid')
 
         embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.4)
         encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.4)
@@ -588,11 +614,12 @@ def main():
             ques_encoded = encode(x_ques_embedded)
             path_encoded = encode(x_path_embedded)
 
-            holographic_score = holographic_forward(Lambda(lambda x: cross_correlation(x)) ([ques_encoded, path_encoded]))
+            # holographic_score = holographic_forward(Lambda(lambda x: cross_correlation(x)) ([ques_encoded, path_encoded]))
             dot_score = dot([ques_encoded, path_encoded], axes=-1)
-            l1_score = Lambda(lambda x: K.abs(x[0]-x[1]))([ques_encoded, path_encoded])
+            # l1_score = Lambda(lambda x: K.abs(x[0]-x[1]))([ques_encoded, path_encoded])
 
-            return final_forward(concatenate([holographic_score, dot_score, l1_score], axis=-1))
+            # return final_forward(concatenate([holographic_score, dot_score, l1_score], axis=-1))
+            return dot_score
 
             #
             # attention = attend(ques_encoded, path_encoded)
@@ -629,13 +656,18 @@ def main():
         validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
                                                   max_length, neg_paths_per_epoch_test, BATCH_SIZE*3)
 
-        # rank_precision_callback = CustomLossHistory(rank_precision_metric(neg_paths_per_epoch_test), validation_generator().next())
+
+        json_desc, dir = get_smart_save_path(model)
+        model_save_path = os.path.join(dir, 'model.h5')
+
+        checkpointer = ModelCheckpoint(filepath=model_save_path, monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=10)
+
         model.fit_generator(training_generator, epochs=EPOCHS,
-            validation_data=validation_generator, workers=3, use_multiprocessing=True)
+            validation_data=validation_generator, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
     # ])
 
-        smart_save_model(model)
+
 
         # Prepare test data
 

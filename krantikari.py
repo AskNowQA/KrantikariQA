@@ -1154,21 +1154,34 @@ if __name__ == "__main__":
     #
     # print(qa.path_length)
 
+
+
+    # try:
+    #     append = sys.argv[1]
+    #     start = sys.argv[2]
+    #     end = sys.argv[3]
+    # except IndexError:
+    #     # No arguments given. Take from user
+    #     gpu = raw_input("Specify the GPU you wanna use boi:\t")
+    #
+    # """
+    #     TEST 3 : Check generate training data
+    # """
+    # RESULTS_DIR = RESULTS_DIR + append + '.pickle'
+    # LENGTH_DIR = LENGTH_DIR + append + '.pickle'
+    # EXCEPT_LOG = EXCEPT_LOG + append + '.pickle'
+    # BAD_PATH = BAD_PATH + append + '.pickle'
+    #
+    # generate_training_data(int(start),int(end))
+
+    '''
+        Runnning as eval pipeline
+    '''
+
     try:
-        append = sys.argv[1]
-        start = sys.argv[2]
-        end = sys.argv[3]
+        gpu = sys.argv[1]
     except IndexError:
         # No arguments given. Take from user
         gpu = raw_input("Specify the GPU you wanna use boi:\t")
 
-    """
-        TEST 3 : Check generate training data
-    """
-    RESULTS_DIR = RESULTS_DIR + append + '.pickle'
-    LENGTH_DIR = LENGTH_DIR + append + '.pickle'
-    EXCEPT_LOG = EXCEPT_LOG + append + '.pickle'
-    BAD_PATH = BAD_PATH + append + '.pickle'
-
-    generate_training_data(int(start),int(end))
-
+    run_lcquad(gpu)

@@ -130,8 +130,13 @@ class QARankingModel:
 
 
     def compile(self, optimizer, **kwargs):
-        self.prediction_model.compile(loss=lambda y_true, y_pred: y_pred, optimizer=optimizer, **kwargs)
-        self.training_model.compile(loss=lambda y_true, y_pred: y_pred, optimizer=optimizer, **kwargs)
+        self.prediction_model.compile(loss=lambda y_true, y_pred: y_pred,
+                                      optimizer=optimizer, **kwargs)
+        self.training_model.compile(loss=lambda y_true, y_pred: y_pred,
+                                    metrics=[self.get_hitsatk_metric(1),
+                                             self.get_hitsatk_metric(5),
+                                             self.get_hitsatk_metric(10)],
+                                    optimizer=optimizer, **kwargs)
 
     def fit(self, training_data, validation_data, **kwargs):
         assert self.training_model is not None, 'Must compile the model before fitting data'
@@ -173,3 +178,17 @@ class QARankingModel:
 
     def load_model(self, path):
         self.prediction_model = keras.models.load_model(path)
+
+    def get_hitsatk_metric(self, k):
+        neg_samples = self.neg_samples
+        def metric(y_true, y_pred):
+            scores = y_pred[:, 0]
+            scores = K.reshape(scores, (-1, neg_samples+1))
+            _, topk = K.tf.nn.top_k(scores, k=10, sorted=True)
+            hitsatk = K.cast(K.shape(K.tf.where(K.tf.equal(topk,0)))[0], 'float32')
+            hitsatk = hitsatk/K.cast(K.shape(scores)[0], 'float32')
+            return hitsatk
+
+        # dirty exec hack to create function named hits_at_k because keras extracts function name
+        exec "def hits_at_%d(y_true, y_pred): return metric(y_true, y_pred)" % k in locals()
+        return locals()["hits_at_%d" % k]

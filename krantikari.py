@@ -1030,7 +1030,7 @@ def run_qald():
     pickle.dump(results, open(RESULTS_DIR, 'w+'))
 
 
-def generate_training_data(start,end):
+def generate_training_data(start,end,qald=False):
     """
         Function to hack Krantikari to generate model training data.
             - Parse LCQuAD
@@ -1055,11 +1055,22 @@ def generate_training_data(start,end):
     # Create a model interpreter.
     model = model_interpreter.ModelInterpreter(_gpu="0")  # Model interpreter to be used for ranking
 
-    # Load LC-QuAD
-    if end == 0:
-        dataset = json.load(open(LCQUAD_DIR))[start:]
+    if not qald:
+        # Load LC-QuAD
+        if end == 0:
+            dataset = json.load(open(LCQUAD_DIR))[start:]
+        else:
+            dataset = json.load(open(LCQUAD_DIR))[start:end]
     else:
-        dataset = json.load(open(LCQUAD_DIR))[start:end]
+        # Basic Pre-Processing
+
+        if end == 0:
+            dataset = json.load(open(QALD_DIR))['questions'][start:]
+        else:
+            dataset = json.load(open(QALD_DIR))['questions'][start:end]
+
+        for i in range(len(dataset)):
+            dataset[i]['query']['sparql'] = dataset[i]['query']['sparql'].replace('.\n', '. ')
 
     progbar = ProgressBar()
     iterator = progbar(dataset)
@@ -1068,7 +1079,10 @@ def generate_training_data(start,end):
     # Parse it
     for x in iterator:
         try:
-            parsed_data = parse_lcquad(x)
+            if not qald:
+                parsed_data = parse_lcquad(x)
+            else:
+                parsed_data = parse_qald(x)
             counter = counter + 1
             print counter
 
@@ -1154,21 +1168,30 @@ if __name__ == "__main__":
     #
     # print(qa.path_length)
 
+
+
+
     try:
         append = sys.argv[1]
         start = sys.argv[2]
         end = sys.argv[3]
+        qald = sys.argv[3]
     except IndexError:
         # No arguments given. Take from user
         gpu = raw_input("Specify the GPU you wanna use boi:\t")
-
-    """
-        TEST 3 : Check generate training data
-    """
-    RESULTS_DIR = RESULTS_DIR + append + '.pickle'
-    LENGTH_DIR = LENGTH_DIR + append + '.pickle'
-    EXCEPT_LOG = EXCEPT_LOG + append + '.pickle'
-    BAD_PATH = BAD_PATH + append + '.pickle'
-
-    generate_training_data(int(start),int(end))
-
+	#
+    # """
+    #     TEST 3 : Check generate training data
+    # """
+    if int(qald) == 0:
+        RESULTS_DIR = RESULTS_DIR + append + '.pickle'
+        LENGTH_DIR = LENGTH_DIR + append + '.pickle'
+        EXCEPT_LOG = EXCEPT_LOG + append + '.pickle'
+        BAD_PATH = BAD_PATH + append + '.pickle'
+        generate_training_data(int(start),int(end),qald=False)
+    else:
+        RESULTS_DIR = RESULTS_DIR + "qald" + append + '.pickle'
+        LENGTH_DIR = LENGTH_DIR + "qald" + append + '.pickle'
+        EXCEPT_LOG = EXCEPT_LOG + "qald" + append + '.pickle'
+        BAD_PATH = BAD_PATH + "qald" + append + '.pickle'
+        generate_training_data(int(start), int(end), qald=True)

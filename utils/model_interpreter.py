@@ -23,14 +23,15 @@ class ModelInterpreter:
             @TODO: Describe most major functions here.
 
         """
-        metric = rank_precision_metric(10)
-        # Find and load the model from disk.
-        with K.tf.device('/gpu:' + _gpu):
-            K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
-            self.model = load_model(os.path.join(_model_dir, 'model.h5'), custom_objects={'custom_loss': loss_fn,
-                                                                                          'rank_precision_metric':
-                                                                                              metric})
-        self._parse_model_inputs()
+        pass
+        # metric = rank_precision_metric(10)
+        # # Find and load the model from disk.
+        # with K.tf.device('/gpu:' + _gpu):
+        #     K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+        #     self.model = load_model(os.path.join(_model_dir, 'model.h5'), custom_objects={'custom_loss': loss_fn,
+        #                                                                                   'rank_precision_metric':
+        #                                                                                       metric})
+        # self._parse_model_inputs()
 
     def _parse_model_inputs(self):
         """

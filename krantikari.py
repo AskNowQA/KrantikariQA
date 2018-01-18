@@ -1211,12 +1211,12 @@ if __name__ == "__main__":
     #
     # generate_training_data(int(start),int(end))
 
-    '''
-        Runnning as eval pipeline
-    '''
-
-    try:
-        gpu = sys.argv[1]
-    except IndexError:
-        # No arguments given. Take from user
-        gpu = raw_input("Specify the GPU you wanna use boi:\t")
+    # '''
+    #     Runnning as eval pipeline
+    # '''
+	#
+    # try:
+    #     gpu = sys.argv[1]
+    # except IndexError:
+    #     # No arguments given. Take from user
+    #     gpu = raw_input("Specify the GPU you wanna use boi:\t")

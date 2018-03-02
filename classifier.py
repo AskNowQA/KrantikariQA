@@ -10,7 +10,8 @@ from keras.layers import Embedding, Flatten
 from keras.preprocessing.sequence import pad_sequences
 
 from keras.utils import to_categorical
-from keras.layers import Dense, Input, GlobalMaxPooling1D, Reshape, Flatten, Dropout
+from keras.layers import Dense, Input, GlobalMaxPooling1D, Reshape, Flatten, Dropout, LSTM, Bidirectional
+from keras import regularizers
 from keras.layers import Conv1D, MaxPooling1D, Embedding
 from keras.models import Model
 
@@ -41,6 +42,7 @@ def generate_training_data(qald = False,shuffle = True,seed = 42):
 	for datapoint in dataset:
 		parsed_data_point = k.parse_lcquad(datapoint)
 		parsed_data.append(parsed_data_point)
+
 	if shuffle:
 		np.random.seed(seed)
 		s = np.arange(len(parsed_data))
@@ -132,6 +134,10 @@ def load_data():
 	y_train,y_test = labels[:int(len(vec_questions)*.80)],labels[int(len(vec_questions)*.80):]
 	return x_train,y_train,x_test,y_test,max_sequence_length
 
+
+
+
+generate_training_data()
 x_train,y_train,x_test,y_test,max_seq_length = load_data()
 
 '''
@@ -158,50 +164,137 @@ embedding_layer = Embedding(len(continous_id) + 1,
 
 
 
-sequence_input = Input(shape=(max_seq_length,))
-embedded_sequences = embedding_layer(sequence_input)
-x = Conv1D(128, 5, activation='relu',input_shape = (25,300))(embedded_sequences)
-x = MaxPooling1D(2)(x)
-x = Conv1D(128, 5, activation='relu')(x)
-x = Dropout(0.5)(x)
-x = Conv1D(128, 5, activation='relu')(x)
-x = MaxPooling1D(2)(x)  # global max pooling
-x = Flatten()(x)
-x = Dense(128, activation='relu')(x)
-preds = Dense(3, activation='softmax')(x)
+def cnn_model():
+	sequence_input = Input(shape=(max_seq_length,))
+	embedded_sequences = embedding_layer(sequence_input)
+	x = Conv1D(128, 5, activation='relu',input_shape = (25,300))(embedded_sequences)
+	x = MaxPooling1D(2)(x)
+	x = Conv1D(128, 5, activation='relu')(x)
+	# x = Dropout(0.5)(x)
+	x = Conv1D(128, 5, activation='relu')(x)
+	x = MaxPooling1D(2)(x)  # global max pooling
+	x = Flatten()(x)
+	x = Dense(128, activation='relu')(x)
+	preds = Dense(3, activation='softmax')(x)
 
-model = Model(sequence_input, preds)
-model.compile(loss='categorical_crossentropy',
-              optimizer='rmsprop',
-              metrics=['acc'])
-model.summary()
-model.fit(np.asarray(x_train), np.asarray(y_train),
-          epochs=10, batch_size=128)
+	model = Model(sequence_input, preds)
+	model.compile(loss='categorical_crossentropy',
+				  optimizer='rmsprop',
+				  metrics=['acc'])
+	model.summary()
+	model.fit(np.asarray(x_train), np.asarray(y_train),
+			  epochs=30, batch_size=128)
+	return model
 
-predicted_output = model.predict(x_test)
+def rnn_model():
+	sequence_input = Input(shape=(max_seq_length,))
+	embedded_sequences = embedding_layer(sequence_input)
+	x = LSTM(128,dropout=0.3)(embedded_sequences)
+	x = Dense(128, activation='relu')(x)
+	preds = Dense(3, activation='softmax')(x)
+	model = Model(sequence_input, preds)
+	model.compile(loss='categorical_crossentropy',
+				  optimizer='rmsprop',
+				  metrics=['acc'])
+	model.summary()
+	model.fit(np.asarray(x_train), np.asarray(y_train),
+			  epochs=20, batch_size=128)
+	return model
+
+
+def rnn_cnn_model():
+	sequence_input = Input(shape=(max_seq_length,))
+	embedded_sequences = embedding_layer(sequence_input)
+	x = Conv1D(128, 5, activation='relu',input_shape = (25,300))(embedded_sequences)
+	x = MaxPooling1D(2)(x)
+	x = Conv1D(128, 5, activation='relu')(x)
+	x = Conv1D(128, 5, activation='relu')(x)
+	x = MaxPooling1D(2)(x)  # global max pooling
+	# x = Flatten()(x)
+	x = LSTM(128)(x)
+	x = Dropout(0.5)(x)
+	x = Dense(128, activation='relu')(x)
+	preds = Dense(3, activation='softmax')(x)
+
+	model = Model(sequence_input, preds)
+	model.compile(loss='categorical_crossentropy',
+				  optimizer='rmsprop',
+				  metrics=['acc'])
+	model.summary()
+	model.fit(np.asarray(x_train), np.asarray(y_train),
+			  epochs=30, batch_size=128)
+	return model
+
+
+
+cnn_model = cnn_model()
+rnn_model = rnn_model()
+rnn_cnn_model = rnn_cnn_model()
+
+
+
+cnn_model_predict = cnn_model.predict(x_test)
+rnn_model_predict = rnn_model.predict(x_test)
+rnn_cnn_model_predict = rnn_cnn_model.predict(x_test)
+
 
 result = 0
-for i in xrange(len(predicted_output)):
-	if np.argmax(predicted_output[i]) == np.argmax(y_test[i]):
+for i in xrange(len(cnn_model_predict)):
+	if np.argmax(cnn_model_predict[i]) == np.argmax(y_test[i]) or np.argmax(rnn_model_predict[i]) == np.argmax(y_test[i]):
 		result = result + 1
 
-print result
-print len(y_test)
+print "combined results are ", result
 
-stats_dict = {0:0,1:0,2:0}
-
-for i in xrange(len(y_test)):
-	stats_dict[np.argmax(y_test[i])] = stats_dict[np.argmax(y_test[i])] + 1
-
-stats_dict = {0:0,1:0,2:0}
-
-for i in xrange(len(y_test)):
-	stats_dict[np.argmax(predicted_output[i])] = stats_dict[np.argmax(predicted_output[i])] + 1
+result = 0
+for i in xrange(len(cnn_model_predict)):
+	if np.argmax(cnn_model_predict[i]) == np.argmax(y_test[i]):
+		result = result + 1
+print "cnn model results are ", result
 
 
+result = 0
+for i in xrange(len(rnn_model_predict)):
+	if np.argmax(rnn_model_predict[i]) == np.argmax(y_test[i]):
+		result = result + 1
+print "rnn model results are ", result
+
+result = 0
+for i in xrange(len(rnn_cnn_model_predict)):
+	if np.argmax(rnn_cnn_model_predict[i]) == np.argmax(y_test[i]):
+		result = result + 1
+print "rnn model results are ", result
 
 
 
-
-
+#
+#
+#
+# result = 0
+# for i in xrange(len(cnn_model_predict)):
+# 	if np.argmax(cnn_model_predict[i]) == np.argmax(y_test[i]):
+# 		result = result + 1
+#
+#
+#
+# model = rnn_model()
+#
+# predicted_output = model.predict(x_test)
+#
+# result = 0
+# for i in xrange(len(predicted_output)):
+# 	if np.argmax(predicted_output[i]) == np.argmax(y_test[i]):
+# 		result = result + 1
+#
+# print result
+# print len(y_test)
+#
+# stats_dict = {0:0,1:0,2:0}
+#
+# for i in xrange(len(y_test)):
+# 	stats_dict[np.argmax(y_test[i])] = stats_dict[np.argmax(y_test[i])] + 1
+#
+# stats_dict = {0:0,1:0,2:0}
+#
+# for i in xrange(len(y_test)):
+# 	stats_dict[np.argmax(predicted_output[i])] = stats_dict[np.argmax(predicted_output[i])] + 1
 

@@ -189,7 +189,7 @@ def cnn_model():
 def rnn_model():
 	sequence_input = Input(shape=(max_seq_length,))
 	embedded_sequences = embedding_layer(sequence_input)
-	x = LSTM(128,dropout=0.3)(embedded_sequences)
+	x = Bidirectional(LSTM(128,dropout=0.5))(embedded_sequences)
 	x = Dense(128, activation='relu')(x)
 	preds = Dense(3, activation='softmax')(x)
 	model = Model(sequence_input, preds)
@@ -198,7 +198,7 @@ def rnn_model():
 				  metrics=['acc'])
 	model.summary()
 	model.fit(np.asarray(x_train), np.asarray(y_train),
-			  epochs=20, batch_size=128)
+			  epochs=30, batch_size=128)
 	return model
 
 
@@ -208,6 +208,7 @@ def rnn_cnn_model():
 	x = Conv1D(128, 5, activation='relu',input_shape = (25,300))(embedded_sequences)
 	x = MaxPooling1D(2)(x)
 	x = Conv1D(128, 5, activation='relu')(x)
+	x = Dropout(0.5)(x)
 	x = Conv1D(128, 5, activation='relu')(x)
 	x = MaxPooling1D(2)(x)  # global max pooling
 	# x = Flatten()(x)
@@ -265,6 +266,14 @@ for i in xrange(len(rnn_cnn_model_predict)):
 print "rnn model results are ", result
 
 
+
+result = 0
+for i in xrange(len(cnn_model_predict)):
+	if np.argmax(cnn_model_predict[i]) == np.argmax(y_test[i]) or np.argmax(rnn_model_predict[i]) == np.argmax(y_test[i])\
+			or np.argmax(rnn_cnn_model_predict[i]) == np.argmax(y_test[i]) :
+		result = result + 1
+
+print "combined results are ", result
 
 #
 #

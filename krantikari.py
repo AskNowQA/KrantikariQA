@@ -193,6 +193,66 @@ class Krantikari:
         else:
             return 2
 
+    @staticmethod
+    def get_something(SPARQL, te1, te2, id, dbp):
+        if id == 1:
+            temp = {}
+            temp['te1'] = te1
+            temp['te2'] = te2
+            answer = dbp.get_answer(SPARQL)  # -,+
+            data_temp = []
+            for i in xrange(len(answer['r1'])):
+                data_temp.append(['-', answer['r1'][i], "+", answer['r2'][i], '-'])
+            temp['path'] = data_temp
+            return temp
+        if id == 2:
+            temp = {}
+            temp['te1'] = te1
+            temp['te2'] = te2
+            answer = dbp.get_answer(SPARQL)  # -,+
+            data_temp = []
+            for i in xrange(len(answer['r1'])):
+                data_temp.append(['+', answer['r1'][i], "+", answer['r2'][i], '-'])
+            temp['path'] = data_temp
+            return temp
+        if id == 3:
+            temp = {}
+            temp['te1'] = te1
+            temp['te2'] = te2
+            answer = dbp.get_answer(SPARQL)  # -,+
+            data_temp = []
+            for i in xrange(len(answer['r1'])):
+                data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i], '-'])
+            temp['path'] = data_temp
+            return temp
+
+
+    @classmethod
+    def two_topic_entity(cls, te1, te2, dbp):
+        '''
+            There are three ways to fit the set of te1,te2 and r1,r2
+             > SELECT DISTINCT ?uri WHERE { ?uri <%(e_to_e_out)s> <%(e_out_1)s> . ?uri <%(e_to_e_out)s> <%(e_out_2)s>}
+             > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. <%(e_in_2)s> <%(e_in_to_e_2)s> ?uri}
+             > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. ?uri <%(e_in_2)s> <%(e_in_to_e_2)s> }
+        '''
+        te1 = "<" + te1 + ">"
+        te2 = "<" + te2 + ">"
+        data = []
+        SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
+        SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
+        SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+
+        SPARQL1 = SPARQL1 % {'te1': te1, 'te2': te2}
+        SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
+        SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+        data.append(cls.get_something(SPARQL1, te1, te2, 1, dbp))
+        data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
+        data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
+        data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
+        data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
+        data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
+        return data
+
     def convert_core_chain_to_sparql(self, _core_chain):  # @TODO
         pass
 
@@ -610,6 +670,22 @@ class Krantikari:
         if len(_entities) >= 2:
             self.best_path = 0  # @TODO: FIX THIS ONCE WE IMPLEMENT DIS!
             NO_PATHS = True
+            results = self.get_hop2_subgraph(_entities[0],_entities[1],self.dbp)
+            final_results = []
+            '''
+                Filtering out blacklisted relationships and then tokenize and finally vectorized the input.
+            '''
+            for node in results:
+                for paths in node['path']:
+                    if not (any(x in paths for x in PREDICATE_BLACKLIST)):
+                        #convert each of the uri to surface forms and then to wordvectors
+                        _temp_path = []
+                        for path in paths:
+                            if path != "+" or path != "-":
+                                _temp_path.append(nlutils.tokenize(self.dbp.get_label(path)))
+                            else:
+                                _temp_path.append(nlutils.tokenize(path))
+                        final_results.append(_temp_path)
             pass
 
         # ###########

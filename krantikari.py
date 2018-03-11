@@ -74,8 +74,9 @@ import json
 import pickle
 import warnings
 import traceback
-import editdistance
 import numpy as np
+import editdistance
+from pprint import pprint
 from progressbar import ProgressBar
 
 # Local file imports
@@ -202,7 +203,7 @@ class Krantikari:
             answer = dbp.get_answer(SPARQL)  # -,+
             data_temp = []
             for i in xrange(len(answer['r1'])):
-                data_temp.append(['-', answer['r1'][i], "+", answer['r2'][i], '-'])
+                data_temp.append(['-', answer['r1'][i], "+", answer['r2'][i]])
             temp['path'] = data_temp
             return temp
         if id == 2:
@@ -212,7 +213,7 @@ class Krantikari:
             answer = dbp.get_answer(SPARQL)  # -,+
             data_temp = []
             for i in xrange(len(answer['r1'])):
-                data_temp.append(['+', answer['r1'][i], "+", answer['r2'][i], '-'])
+                data_temp.append(['+', answer['r1'][i], "+", answer['r2'][i]])
             temp['path'] = data_temp
             return temp
         if id == 3:
@@ -222,7 +223,7 @@ class Krantikari:
             answer = dbp.get_answer(SPARQL)  # -,+
             data_temp = []
             for i in xrange(len(answer['r1'])):
-                data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i], '-'])
+                data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i]])
             temp['path'] = data_temp
             return temp
 
@@ -246,11 +247,11 @@ class Krantikari:
         SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
         SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
         data.append(cls.get_something(SPARQL1, te1, te2, 1, dbp))
-        data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
+        # data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
         data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
-        data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
+        # data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
         data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
-        data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
+        # data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
         return data
 
     def convert_core_chain_to_sparql(self, _core_chain):  # @TODO
@@ -373,10 +374,16 @@ class Krantikari:
             right_properties_filtered_uri = [right_properties[i] for i in right_properties_filter_indices]
             left_properties_filtered_uri = [left_properties[i] for i in left_properties_filter_indices]
 
-            # Generate 1-hop paths out of them
-            paths_hop1_sf = [nlutils.tokenize(entity_sf, _ignore_brackets=True) + ['+'] + nlutils.tokenize(_p)
+            # # Generate 1-hop paths out of them
+            # paths_hop1_sf = [nlutils.tokenize(entity_sf, _ignore_brackets=True) + ['+'] + nlutils.tokenize(_p)
+            #                  for _p in right_properties_filtered_sf]
+            # paths_hop1_sf += [nlutils.tokenize(entity_sf, _ignore_brackets=True) + ['-'] + nlutils.tokenize(_p)
+            #                   for _p in left_properties_filtered_sf]
+
+            # Removing entites from the path
+            paths_hop1_sf = [['+'] + nlutils.tokenize(_p)
                              for _p in right_properties_filtered_sf]
-            paths_hop1_sf += [nlutils.tokenize(entity_sf, _ignore_brackets=True) + ['-'] + nlutils.tokenize(_p)
+            paths_hop1_sf += [['-'] + nlutils.tokenize(_p)
                               for _p in left_properties_filtered_sf]
 
             # Appending the hop 1 paths to the training data (surface forms used)
@@ -385,6 +392,9 @@ class Krantikari:
             # Create their corresponding paths but with URI.
             paths_hop1_uri = [[_entities[0], '+', _p] for _p in right_properties_filtered_uri]
             paths_hop1_uri += [[_entities[0], '-', _p] for _p in left_properties_filtered_uri]
+
+
+
 
 
             if not self.TRAINING:
@@ -580,9 +590,12 @@ class Krantikari:
             for key in e_in_in_to_e_in_filtered_subgraph.keys():
                 for r2 in e_in_in_to_e_in_filtered_subgraph[key]:
 
-                    path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
-                            + ['-'] + nlutils.tokenize(sf_vocab[key])           \
-                            + ['-'] + nlutils.tokenize(sf_vocab[r2])
+                    # path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
+                    #         + ['-'] + nlutils.tokenize(sf_vocab[key])           \
+                    #         + ['-'] + nlutils.tokenize(sf_vocab[r2])
+
+                    path = ['-'] + nlutils.tokenize(sf_vocab[key]) \
+                           + ['-'] + nlutils.tokenize(sf_vocab[r2])
                     paths_hop2_sf.append(path)
 
                     path_uri = [_entities[0], '-', key, '-', r2]
@@ -592,9 +605,12 @@ class Krantikari:
             for key in e_in_to_e_in_out_filtered_subgraph.keys():
                 for r2 in e_in_to_e_in_out_filtered_subgraph[key]:
 
-                    path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
-                            + ['-'] + nlutils.tokenize(sf_vocab[key])           \
-                            + ['+'] + nlutils.tokenize(sf_vocab[r2])
+                    # path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
+                    #         + ['-'] + nlutils.tokenize(sf_vocab[key])           \
+                    #         + ['+'] + nlutils.tokenize(sf_vocab[r2])
+
+                    path = ['-'] + nlutils.tokenize(sf_vocab[key]) \
+                           + ['+'] + nlutils.tokenize(sf_vocab[r2])
                     paths_hop2_sf.append(path)
 
                     path_uri = [_entities[0], '-', key, '+', r2]
@@ -604,9 +620,13 @@ class Krantikari:
             for key in e_out_to_e_out_out_filtered_subgraph.keys():
                 for r2 in e_out_to_e_out_out_filtered_subgraph[key]:
 
-                    path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
-                            + ['+'] + nlutils.tokenize(sf_vocab[key])           \
-                            + ['+'] + nlutils.tokenize(sf_vocab[r2])
+                    # path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
+                    #         + ['+'] + nlutils.tokenize(sf_vocab[key])           \
+                    #         + ['+'] + nlutils.tokenize(sf_vocab[r2])
+
+                    path = ['+'] + nlutils.tokenize(sf_vocab[key]) \
+                           + ['+'] + nlutils.tokenize(sf_vocab[r2])
+
                     paths_hop2_sf.append(path)
 
                     path_uri = [_entities[0], '+', key, '+', r2]
@@ -616,9 +636,12 @@ class Krantikari:
             for key in e_out_in_to_e_out_filtered_subgraph.keys():
                 for r2 in e_out_in_to_e_out_filtered_subgraph[key]:
 
-                    path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
-                            + ['+'] + nlutils.tokenize(sf_vocab[key])           \
-                            + ['-'] + nlutils.tokenize(sf_vocab[r2])
+                    # path = nlutils.tokenize(entity_sf, _ignore_brackets=True)   \
+                    #         + ['+'] + nlutils.tokenize(sf_vocab[key])           \
+                    #         + ['-'] + nlutils.tokenize(sf_vocab[r2])
+
+                    path = ['+'] + nlutils.tokenize(sf_vocab[key]) \
+                           + ['-'] + nlutils.tokenize(sf_vocab[r2])
                     paths_hop2_sf.append(path)
 
                     path_uri = [_entities[0], '+', key, '-', r2]
@@ -670,7 +693,8 @@ class Krantikari:
         if len(_entities) >= 2:
             self.best_path = 0  # @TODO: FIX THIS ONCE WE IMPLEMENT DIS!
             NO_PATHS = True
-            results = self.get_hop2_subgraph(_entities[0],_entities[1],self.dbp)
+            pprint(_entities)
+            results = self.two_topic_entity(_entities[0],_entities[1],self.dbp)
             final_results = []
             '''
                 Filtering out blacklisted relationships and then tokenize and finally vectorized the input.
@@ -684,10 +708,12 @@ class Krantikari:
                             if path != "+" or path != "-":
                                 _temp_path.append(nlutils.tokenize(self.dbp.get_label(path)))
                             else:
-                                _temp_path.append(nlutils.tokenize(path))
+                                _temp_path.append([path])
+                        _temp_path = [y for x in _temp_path for y in x]
                         final_results.append(_temp_path)
-            pass
-
+            for path in final_results:
+                if path not in self.training_paths:
+                    self.training_paths.append(path)
         # ###########
         # Paths have been generated and ranked.
         #   Now verify the state fail variables and decide what to do
@@ -801,7 +827,7 @@ def parse_lcquad(_data):
     :param _data: JSON of LCQuAD
     :return: JSON of LCQuAD on steroids.
     """
-    if _data[u"sparql_template_id"] in [1, 301, 401, 101]:  # :
+    if _data[u"sparql_template_id"] in [1, 301, 401, 101, 601]:  # :
         '''
             {
                 u'_id': u'9a7523469c8c45b58ec65ed56af6e306',
@@ -819,7 +845,7 @@ def parse_lcquad(_data):
         data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
         data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
         data_node[u'constraints'] = {}
-        if _data[u"sparql_template_id"] in [301, 401]:
+        if _data[u"sparql_template_id"] in [301, 401, 601]:
             data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[2][1:-1]}
         if _data[u"sparql_template_id"] in [401, 101]:
             data_node[u'constraints']['count'] = True
@@ -872,7 +898,7 @@ def parse_lcquad(_data):
             data_node[u'constraints']['count'] = True
         return data_node
 
-    elif _data[u"sparql_template_id"] in [5, 305, 405, 105, 111]:
+    elif _data[u"sparql_template_id"] in [5, 305, 311, 405, 105, 111, 605, 11]:
         '''
             >Verify this !!
             {
@@ -892,13 +918,13 @@ def parse_lcquad(_data):
         data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
         data_node[u'path'] = ["-" + rel1, "+" + rel2]
         data_node[u'constraints'] = {}
-        if _data[u"sparql_template_id"] in [305, 405]:
+        if _data[u"sparql_template_id"] in [305, 405, 311, 605]:
             data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
         if _data[u"sparql_template_id"] in [105, 405, 111]:
             data_node[u'constraints']['count'] = True
         return data_node
 
-    elif _data[u'sparql_template_id'] in [6, 306, 406, 106]:
+    elif _data[u'sparql_template_id'] in [6, 306, 406, 106, 906]:
         '''
             {
                 u'_id': u'd3695db03a5e45ae8906a2527508e7c5',
@@ -917,7 +943,7 @@ def parse_lcquad(_data):
         data_node[u'entity'].append(triples[0].split(" ")[2][1:-1])
         data_node[u'path'] = ["-" + rel1, "-" + rel2]
         data_node[u'constraints'] = {}
-        if _data[u"sparql_template_id"] in [306, 406]:
+        if _data[u"sparql_template_id"] in [306, 406, 906]:
             data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}
         if _data[u"sparql_template_id"] in [406, 106]:
             data_node[u'constraints']['count'] = True
@@ -1221,6 +1247,98 @@ def generate_training_data(start,end,qald=False):
     pickle.dump(data, open(RESULTS_DIR, 'w+'))
     pickle.dump(actual_length_false_path,open(LENGTH_DIR,'w+'))
 
+
+def test_lcquad(_target_gpu = 0, _debug = True):
+    '''
+        >Create a dataset, which contains one question for each tempalte id.
+    '''
+    final_dataset = []
+    parsing_error = []
+    false_path_error = []
+    other_error = []
+    correct = []
+    template_id = {}
+    id = 'sparql_template_id'
+    dataset = json.load(open(LCQUAD_DIR))
+    new_dataset = []
+    for data in dataset:
+        if data[id] not in template_id:
+            new_dataset.append(data)
+            template_id[data[id]] = 1
+
+    '''
+        The new_dataset contains an instance for each template id
+    '''# Create a DBpedia object.
+
+    pprint("check the length of new_dataset")
+    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface. Since using online, no caching needed.
+
+    # Create a model interpreter.
+    model = model_interpreter.ModelInterpreter(_gpu=_target_gpu)  # Model interpreter to be used for ranking
+
+    pprint("everything must be initialized ")
+
+
+    correctly_solved_template = []
+    for data in new_dataset:
+        parsed_data = parse_lcquad(data)
+        two_entity = False #Tracks two entity question.
+        if not parsed_data:
+            parsing_error.append(data)
+            if _debug:
+                pprint(data)
+            continue
+            # Get Needed data
+        q = parsed_data[u'corrected_question']
+        e = parsed_data[u'entity']
+        if len(e) > 1:
+            two_entity = True
+
+        # pprint('check for question, parsed entity and two_entity varaibles')
+
+
+        entity_sf = nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True)  # @TODO: multi-entity alert
+        if two_entity:
+            entity_sf.append(nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True))
+        path_sf = []
+        for x in parsed_data[u'path']:
+            path_sf.append(str(x[0]))
+            path_sf += nlutils.tokenize(dbp.get_label(x[1:]))
+        tp = path_sf    #Differs from previous implementation as true path does not contain entity
+
+        pprint('check for safe path and entity found')
+        qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True)
+
+        fps = qa.training_paths
+
+        # pprint('check for false paths')
+
+        print "done with finding false paths. Please verify everything"
+
+        # See if the correct path is there
+        try:
+            fps.remove(tp)
+            correctly_solved_template.append(data[id])
+            correct.append(data)
+        except ValueError:
+
+            # The true path was not in the paths generated from Krantikari. Log this son of a bitch.
+            false_path_error.append(data)
+            if _debug:
+                print("True path not in false path")
+                pprint(data)
+        final_dataset.append([q,tp,fps])
+        # pprint('check for true path in false paths. Also check for correctly solved template')
+    pprint("Done with everything and check for length of correctly solved template")
+    pprint("correctly solved templates are ")
+    pprint(correctly_solved_template)
+    pickle.dump(final_dataset,open('temp/temp_final_dataset.pickle','w+'))
+    pickle.dump(false_path_error, open('temp/temp_false_path.pickle', 'w+'))
+    pickle.dump(correct, open('temp/correct.pickle', 'w+'))
+    pickle.dump(parsing_error, open('temp/parsing_error.pickle', 'w+'))
+    pickle.dump(new_dataset,open('temp/new_dataset.pickle','w+'))
+
+
 if __name__ == "__main__":
     # """
     #     TEST1 : Accuracy of similar_predicates
@@ -1244,31 +1362,40 @@ if __name__ == "__main__":
     #
     # print(qa.path_length)
 
-
-    try:
-        append = sys.argv[1]
-        start = sys.argv[2]
-        end = sys.argv[3]
-        qald = sys.argv[3]
-    except IndexError:
-        # No arguments given. Take from user
-        gpu = raw_input("Specify the GPU you wanna use boi:\t")
 	#
-    # """
-    #     TEST 3 : Check generate training data
-    # """
-    if int(qald) == 0:
-        RESULTS_DIR = RESULTS_DIR + append + '.pickle'
-        LENGTH_DIR = LENGTH_DIR + append + '.pickle'
-        EXCEPT_LOG = EXCEPT_LOG + append + '.pickle'
-        BAD_PATH = BAD_PATH + append + '.pickle'
-        generate_training_data(int(start),int(end),qald=False)
-    else:
-        RESULTS_DIR = RESULTS_DIR + "qald" + append + '.pickle'
-        LENGTH_DIR = LENGTH_DIR + "qald" + append + '.pickle'
-        EXCEPT_LOG = EXCEPT_LOG + "qald" + append + '.pickle'
-        BAD_PATH = BAD_PATH + "qald" + append + '.pickle'
-        generate_training_data(int(start), int(end), qald=True)
+	#
+    # try:
+    #     append = sys.argv[1]
+    #     start = sys.argv[2]
+    #     end = sys.argv[3]
+    #     qald = sys.argv[3]
+    # except IndexError:
+    #     # No arguments given. Take from user
+    #     gpu = raw_input("Specify the GPU you wanna use boi:\t")
+	# #
+    # # """
+    # #     TEST 3 : Check generate training data
+    # # """
+    # if int(qald) == 0:
+    #     RESULTS_DIR = RESULTS_DIR + append + '.pickle'
+    #     LENGTH_DIR = LENGTH_DIR + append + '.pickle'
+    #     EXCEPT_LOG = EXCEPT_LOG + append + '.pickle'
+    #     BAD_PATH = BAD_PATH + append + '.pickle'
+    #     generate_training_data(int(start),int(end),qald=False)
+    # else:
+    #     RESULTS_DIR = RESULTS_DIR + "qald" + append + '.pickle'
+    #     LENGTH_DIR = LENGTH_DIR + "qald" + append + '.pickle'
+    #     EXCEPT_LOG = EXCEPT_LOG + "qald" + append + '.pickle'
+    #     BAD_PATH = BAD_PATH + "qald" + append + '.pickle'
+    #     generate_training_data(int(start), int(end), qald=True)
+
+
+
+    '''
+        Testing lc-qald parser and data generator
+    '''
+    test_lcquad()
+    print "done with the test "
     # try:
     #     append = sys.argv[1]
     #     start = sys.argv[2]

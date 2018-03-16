@@ -80,7 +80,7 @@ class DBPedia:
         self.verbose = _verbose
         self.sparql_endpoint = DBPEDIA_ENDPOINTS[0]
         if caching:
-            self.r = redis.StrictRedis(host=REDIS_HOSTNAME, port=6379, db=_db_name)
+            self.r = redis.StrictRedis(host=REDIS_HOSTNAME, port=6378, db=_db_name)
         else:
             self.r = False
         try:

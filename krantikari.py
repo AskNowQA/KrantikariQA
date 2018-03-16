@@ -1384,7 +1384,7 @@ if __name__ == "__main__":
         append = sys.argv[1]
         start = sys.argv[2]
         end = sys.argv[3]
-        qald = sys.argv[3]
+        qald = sys.argv[4]
     except IndexError:
         # No arguments given. Take from user
         gpu = raw_input("Specify the GPU you wanna use boi:\t")

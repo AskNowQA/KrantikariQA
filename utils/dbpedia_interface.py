@@ -29,9 +29,12 @@ import labels_mulitple_form
 
 # GLOBAL MACROS
 # DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/']
+DBPEDIA_ENDPOINTS = ['http://18.197.39.162/sparql/']
+
 # DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
-DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']
-REDIS_HOSTNAME = 'sda-srv01.iai.uni-bonn.de'
+# DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']
+# REDIS_HOSTNAME = 'sda-srv01.iai.uni-bonn.de'
+REDIS_HOSTNAME  = '127.0.0.1'
 MAX_WAIT_TIME = 1.0
 
 # SPARQL Templates

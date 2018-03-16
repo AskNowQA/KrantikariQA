@@ -98,7 +98,7 @@ RESULTS_DIR = './resources/results'
 LENGTH_DIR = './resources/lengths'
 EXCEPT_LOG = './resources/except'
 BAD_PATH = './resources/bad_path'
-
+PARSING_ERROR = './resources/parsing_error'
 
 short_forms = {
     'dbo:': 'http://dbpedia.org/ontology/',
@@ -1152,7 +1152,7 @@ def generate_training_data(start,end,qald=False):
     except_log = []
 
     # Create a DBpedia object.
-    dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
+    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
 
     # Create a model interpreter.
     model = model_interpreter.ModelInterpreter(_gpu="0")  # Model interpreter to be used for ranking
@@ -1178,35 +1178,49 @@ def generate_training_data(start,end,qald=False):
     iterator = progbar(dataset)
     counter = start
 
+
+    parsing_error = []
     # Parse it
     for x in iterator:
+
         try:
             if not qald:
                 parsed_data = parse_lcquad(x)
             else:
                 parsed_data = parse_qald(x)
             counter = counter + 1
+            two_entity = False
             print counter
 
             if not parsed_data:
+                #log this somewhere
+                parsing_error.append(x)
                 continue
+
+
 
             # Get Needed data
             q = parsed_data[u'corrected_question']
             e = parsed_data[u'entity']
+            _id = parsed_data[u'_id']
 
+            if len(e) > 1:
+                # results.append([0, 0])
+                two_entity = True
             # print q,e
             # Find the correct path
             entity_sf = nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True)  # @TODO: multi-entity alert
+            if two_entity:
+                entity_sf.append(nlutils.tokenize(dbp.get_label(e[1]), _ignore_brackets=True))
+
             path_sf = []
             for x in parsed_data[u'path']:
                 path_sf.append(str(x[0]))
                 path_sf += nlutils.tokenize(dbp.get_label(x[1:]))
-            tp = entity_sf + path_sf
+            tp = path_sf
 
-            if len(e) > 1:
-                # results.append([0, 0])
-                continue
+
+
 
             qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True)
             fps = qa.training_paths
@@ -1220,22 +1234,23 @@ def generate_training_data(start,end,qald=False):
                 # The true path was not in the paths generated from Krantikari. Log this son of a bitch.
                 if DEBUG:
                     print("True path not in false path")
+                bad_path_logs.append([q, e, tp, fps,_id])
 
-                bad_path_logs.append([q, e, tp, fps])
+            # # Id-fy the entire thing
+            # id_q = embeddings_interface.vocabularize(nlutils.tokenize(q), _embedding="glove")
+            # id_tp = embeddings_interface.vocabularize(tp)
+            # id_fps = [embeddings_interface.vocabularize(x) for x in fps]
+			#
+            # # Actual length of False Paths
+            # actual_length_false_path.append(len(id_fps))
+			#
+            # # Makes the number of Negative Samples constant
+            # id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+			#
+            # # Make neat matrices.
+            # data.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
 
-            # Id-fy the entire thing
-            id_q = embeddings_interface.vocabularize(nlutils.tokenize(q), _embedding="glove")
-            id_tp = embeddings_interface.vocabularize(tp)
-            id_fps = [embeddings_interface.vocabularize(x) for x in fps]
-
-            # Actual length of False Paths
-            actual_length_false_path.append(len(id_fps))
-
-            # Makes the number of Negative Samples constant
-            id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
-
-            # Make neat matrices.
-            data.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
+            data.append([q,e,tp,fps,_id])
         except Exception:
             except_log.append(x)
 
@@ -1246,6 +1261,7 @@ def generate_training_data(start,end,qald=False):
     pickle.dump(bad_path_logs,open(BAD_PATH,'w+'))
     pickle.dump(data, open(RESULTS_DIR, 'w+'))
     pickle.dump(actual_length_false_path,open(LENGTH_DIR,'w+'))
+    pickle.dump(parsing_error,open(PARSING_ERROR,'w+'))
 
 
 def test_lcquad(_target_gpu = 0, _debug = True):
@@ -1299,7 +1315,7 @@ def test_lcquad(_target_gpu = 0, _debug = True):
 
         entity_sf = nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True)  # @TODO: multi-entity alert
         if two_entity:
-            entity_sf.append(nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True))
+            entity_sf.append(nlutils.tokenize(dbp.get_label(e[1]), _ignore_brackets=True))
         path_sf = []
         for x in parsed_data[u'path']:
             path_sf.append(str(x[0]))
@@ -1364,38 +1380,38 @@ if __name__ == "__main__":
 
 	#
 	#
-    # try:
-    #     append = sys.argv[1]
-    #     start = sys.argv[2]
-    #     end = sys.argv[3]
-    #     qald = sys.argv[3]
-    # except IndexError:
-    #     # No arguments given. Take from user
-    #     gpu = raw_input("Specify the GPU you wanna use boi:\t")
-	# #
-    # # """
-    # #     TEST 3 : Check generate training data
-    # # """
-    # if int(qald) == 0:
-    #     RESULTS_DIR = RESULTS_DIR + append + '.pickle'
-    #     LENGTH_DIR = LENGTH_DIR + append + '.pickle'
-    #     EXCEPT_LOG = EXCEPT_LOG + append + '.pickle'
-    #     BAD_PATH = BAD_PATH + append + '.pickle'
-    #     generate_training_data(int(start),int(end),qald=False)
-    # else:
-    #     RESULTS_DIR = RESULTS_DIR + "qald" + append + '.pickle'
-    #     LENGTH_DIR = LENGTH_DIR + "qald" + append + '.pickle'
-    #     EXCEPT_LOG = EXCEPT_LOG + "qald" + append + '.pickle'
-    #     BAD_PATH = BAD_PATH + "qald" + append + '.pickle'
-    #     generate_training_data(int(start), int(end), qald=True)
-
-
+    try:
+        append = sys.argv[1]
+        start = sys.argv[2]
+        end = sys.argv[3]
+        qald = sys.argv[3]
+    except IndexError:
+        # No arguments given. Take from user
+        gpu = raw_input("Specify the GPU you wanna use boi:\t")
+	#
+    # """
+    #     TEST 3 : Check generate training data
+    # """
+    if int(qald) == 0:
+        RESULTS_DIR = RESULTS_DIR + append + '.pickle'
+        LENGTH_DIR = LENGTH_DIR + append + '.pickle'
+        EXCEPT_LOG = EXCEPT_LOG + append + '.pickle'
+        BAD_PATH = BAD_PATH + append + '.pickle'
+        PARSING_ERROR = PARSING_ERROR + append + '.pickle'
+        generate_training_data(int(start),int(end),qald=False)
+    else:
+        RESULTS_DIR = RESULTS_DIR + "qald" + append + '.pickle'
+        LENGTH_DIR = LENGTH_DIR + "qald" + append + '.pickle'
+        EXCEPT_LOG = EXCEPT_LOG + "qald" + append + '.pickle'
+        BAD_PATH = BAD_PATH + "qald" + append + '.pickle'
+        PARSING_ERROR = PARSING_ERROR + "qald" + append + '.pickle'
+        generate_training_data(int(start), int(end), qald=True)
 
     '''
         Testing lc-qald parser and data generator
     '''
-    test_lcquad()
-    print "done with the test "
+    # test_lcquad()
+    # print "done with the test "
     # try:
     #     append = sys.argv[1]
     #     start = sys.argv[2]

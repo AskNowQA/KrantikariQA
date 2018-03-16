@@ -1152,7 +1152,7 @@ def generate_training_data(start,end,qald=False):
     except_log = []
 
     # Create a DBpedia object.
-    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
 
     # Create a model interpreter.
     model = model_interpreter.ModelInterpreter(_gpu="0")  # Model interpreter to be used for ranking
@@ -1287,7 +1287,7 @@ def test_lcquad(_target_gpu = 0, _debug = True):
     '''# Create a DBpedia object.
 
     pprint("check the length of new_dataset")
-    dbp = db_interface.DBPedia(_verbose=True, caching=False)  # Summon a DBpedia interface. Since using online, no caching needed.
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface. Since using online, no caching needed.
 
     # Create a model interpreter.
     model = model_interpreter.ModelInterpreter(_gpu=_target_gpu)  # Model interpreter to be used for ranking

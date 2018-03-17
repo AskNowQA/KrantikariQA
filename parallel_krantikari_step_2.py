@@ -4,7 +4,8 @@
 
 
 import numpy as np
-import pickle, json
+from pprint import pprint
+import pickle, json, traceback
 from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
 
@@ -65,18 +66,25 @@ for bd in bad_paths_log:
 new_results = [r for r in results if r[-1] not in id_to_remove]
 id_results = []
 
+counter = 0
 for result in new_results:
 	# Id-fy the entire thing
-	id_q = embeddings_interface.vocabularize(nlutils.tokenize(result[0]), _embedding="glove")
-	id_tp = embeddings_interface.vocabularize(result[2])
-	id_fps = [embeddings_interface.vocabularize(x) for x in result[3]]
+	try:
+		id_q = embeddings_interface.vocabularize(nlutils.tokenize(result[0]), _embedding="glove")
+		id_tp = embeddings_interface.vocabularize(result[2])
+		id_fps = [embeddings_interface.vocabularize(x) for x in result[3]]
 
-	# Actual length of False Paths
-	# actual_length_false_path.append(len(id_fps))
+		# Actual length of False Paths
+		# actual_length_false_path.append(len(id_fps))
 
-	# Makes the number of Negative Samples constant
-	id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+		# Makes the number of Negative Samples constant
+		id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
 
-	# Make neat matrices.
-	id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
-pickle.dump(id_results,open('resources/id_result.pickle'))
+		# Make neat matrices.
+		id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
+	except:
+		'''
+			There is some bug in random choice. Need to investigate more on this.
+		'''
+		counter = counter + 1
+pickle.dump(id_results,open('resources/id_results.pickle','w+'))

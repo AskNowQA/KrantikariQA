@@ -83,17 +83,18 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 glove_vocab = {}
 
                 # Push Special chars artificially.
-                glove_vocab['UNK'] = 0
-                glove_vocab['+'] = 1
-                glove_vocab['-'] = 2
-                glove_vocab['/'] = 3
+                glove_vocab['PAD'] = 0
+                glove_vocab['UNK'] = 1
+                glove_vocab['+'] = 2
+                glove_vocab['-'] = 3
+                glove_vocab['/'] = 4
 
                 f = open(os.path.join(glove_location['dir'], glove_location['raw']))
-                counter = 4
+                counter = 5
                 for line in f:
                     values = line.split()
                     word = values[0]
-                    if word in ['UNK', '+', '-', '/']:
+                    if word in ['PAD', 'UNK', '+', '-', '/']:
                         continue
                     glove_vocab[word] = counter
                     counter += 1
@@ -199,7 +200,7 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
 
         except KeyError:
             if _report_unks: unks.append(token)
-            token_embedding = np.zeros(300, dtype=np.float32)
+            token_embedding = np.repeat(-0.5, 300)
 
         finally:
 
@@ -211,6 +212,9 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
                     token_embedding = np.repeat(-1, 300)
                 elif token == "/":
                     token_embedding = np.repeat(0.5, 300)
+                elif token == "PAD":
+                    token_embedding = np.zeros(300, dtype=np.float32)
+
             op += [token_embedding]
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)

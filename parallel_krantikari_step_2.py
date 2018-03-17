@@ -79,3 +79,4 @@ for result in new_results:
 
 	# Make neat matrices.
 	id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
+pickle.dump(id_results,open('resources/id_result.pickle'))

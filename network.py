@@ -42,7 +42,7 @@ from sklearn.utils import shuffle
 DEBUG = True
 DATA_DIR = './data/training/pairwise'
 RESOURCE_DIR = './resources'
-EPOCHS = 1
+EPOCHS = 300
 BATCH_SIZE = 880 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
@@ -656,7 +656,7 @@ def main():
         training_generator = TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
                                                   max_length, neg_paths_per_epoch_train, BATCH_SIZE)
         validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                  max_length, neg_paths_per_epoch_test, BATCH_SIZE*3)
+                                                  max_length, neg_paths_per_epoch_test, BATCH_SIZE)
 
 
         json_desc, dir = get_smart_save_path(model)

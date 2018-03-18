@@ -41,7 +41,8 @@ from sklearn.utils import shuffle
 # Some Macros
 DEBUG = True
 DATA_DIR = './data/training/pairwise'
-EPOCHS = 300
+RESOURCE_DIR = './resources/id_result.pickle'
+EPOCHS = 50
 BATCH_SIZE = 880 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
@@ -496,14 +497,14 @@ def load_data(file, max_sequence_length):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(DATA_DIR, file + ".mapped.npz")) as data, open(os.path.join(DATA_DIR, file + ".index.npy")) as idx:
+        with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy")) as idx:
             dataset = np.load(data)
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
             index = np.load(idx)
             vectors = glove_embeddings[index]
             return vectors, questions, pos_paths, neg_paths
     except:
-        with open(os.path.join(DATA_DIR, file)) as fp:
+        with open(os.path.join(RESOURCE_DIR, file)) as fp:
             dataset = pickle.load(fp)
             questions = [i[0] for i in dataset]
             questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
@@ -521,7 +522,7 @@ def load_data(file, max_sequence_length):
             questions, pos_paths, neg_paths = np.split(mapped_all, [questions.shape[0], questions.shape[0]*2])
             neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_sequence_length))
 
-            with open(os.path.join(DATA_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(DATA_DIR, file + ".index.npy"), "w") as idx:
+            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy"), "w") as idx:
                 np.savez(data, questions, pos_paths, neg_paths)
                 np.save(idx, index)
 
@@ -540,7 +541,8 @@ def main():
     """
     # Pull the data up from disk
     max_length = 50
-    vectors, questions, pos_paths, neg_paths = load_data("results_jan_12_full.pickle", max_length)
+
+    vectors, questions, pos_paths, neg_paths = load_data(os.path.join(RESOURCE_DIR + "id_result.pickle"), max_length)
     # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
     # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
     # if pos_paths.shape[1] < questions.shape[1]:

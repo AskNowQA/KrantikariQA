@@ -41,8 +41,8 @@ from sklearn.utils import shuffle
 # Some Macros
 DEBUG = True
 DATA_DIR = './data/training/pairwise'
-RESOURCE_DIR = './resources/id_result.pickle'
-EPOCHS = 50
+RESOURCE_DIR = './resources'
+EPOCHS = 1
 BATCH_SIZE = 880 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
@@ -542,7 +542,7 @@ def main():
     # Pull the data up from disk
     max_length = 50
 
-    vectors, questions, pos_paths, neg_paths = load_data(os.path.join(RESOURCE_DIR + "id_result.pickle"), max_length)
+    vectors, questions, pos_paths, neg_paths = load_data("id_results.pickle", max_length)
     # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
     # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
     # if pos_paths.shape[1] < questions.shape[1]:
@@ -673,7 +673,7 @@ def main():
 
         # Prepare test data
 
-        print "Precision (hits@1) = ", rank_precision(model, test_questions, test_pos_paths, test_neg_paths)
+        print "Precision (hits@1) = ", rank_precision(model, 1000, max_length,  test_questions, test_pos_paths, test_neg_paths)
 
     # print "Evaluation Complete"
     # print "Loss     = ", results[0]

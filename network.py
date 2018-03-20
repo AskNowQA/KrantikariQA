@@ -187,7 +187,8 @@ def custom_loss(y_true, y_pred):
     return K.sum(diff)
 
 
-def rank_precision(model, neg_paths_per_epoch, max_length, test_questions, test_pos_paths, test_neg_paths):
+def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
+    max_length = test_questions.shape[-1]
     questions = np.reshape(np.repeat(np.reshape(test_questions,
                                             (test_questions.shape[0], 1, test_questions.shape[1])),
                                  neg_paths_per_epoch+1, axis=1), (-1, max_length))
@@ -196,7 +197,7 @@ def rank_precision(model, neg_paths_per_epoch, max_length, test_questions, test_
     neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
     all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
 
-    outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)])[:,0]
+    outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)], batch_size=batch_size)[:,0]
     outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch+1))
 
     precision = float(len(np.where(np.argmax(outputs, axis=1)==0)[0]))/outputs.shape[0]

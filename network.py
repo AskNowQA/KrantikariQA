@@ -187,7 +187,8 @@ def custom_loss(y_true, y_pred):
     return K.sum(diff)
 
 
-def rank_precision(model, neg_paths_per_epoch, max_length, test_questions, test_pos_paths, test_neg_paths):
+def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
+    max_length = test_questions.shape[-1]
     questions = np.reshape(np.repeat(np.reshape(test_questions,
                                             (test_questions.shape[0], 1, test_questions.shape[1])),
                                  neg_paths_per_epoch+1, axis=1), (-1, max_length))
@@ -196,11 +197,111 @@ def rank_precision(model, neg_paths_per_epoch, max_length, test_questions, test_
     neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
     all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
 
-    outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)])[:,0]
+    outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)], batch_size=batch_size)[:,0]
     outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch+1))
 
     precision = float(len(np.where(np.argmax(outputs, axis=1)==0)[0]))/outputs.shape[0]
     return precision
+
+class CustomModelCheckpoint(Callback):
+    """Save the model after every epoch.
+    `filepath` can contain named formatting options,
+    which will be filled the value of `epoch` and
+    keys in `logs` (passed in `on_epoch_end`).
+    For example: if `filepath` is `weights.{epoch:02d}-{val_loss:.2f}.hdf5`,
+    then the model checkpoints will be saved with the epoch number and
+    the validation loss in the filename.
+    # Arguments
+        filepath: string, path to save the model file.
+        monitor: quantity to monitor.
+        verbose: verbosity mode, 0 or 1.
+        save_best_only: if `save_best_only=True`,
+            the latest best model according to
+            the quantity monitored will not be overwritten.
+        mode: one of {auto, min, max}.
+            If `save_best_only=True`, the decision
+            to overwrite the current save file is made
+            based on either the maximization or the
+            minimization of the monitored quantity. For `val_acc`,
+            this should be `max`, for `val_loss` this should
+            be `min`, etc. In `auto` mode, the direction is
+            automatically inferred from the name of the monitored quantity.
+        save_weights_only: if True, then only the model's weights will be
+            saved (`model.save_weights(filepath)`), else the full model
+            is saved (`model.save(filepath)`).
+        period: Interval (number of epochs) between checkpoints.
+    """
+
+    def __init__(self, filepath, test_questions, test_pos_paths, test_neg_paths, monitor='val_loss', verbose=0,
+                 save_best_only=False, save_weights_only=False,
+                 mode='auto', period=1):
+        super(CustomModelCheckpoint, self).__init__()
+        self.monitor = monitor
+        self.verbose = verbose
+        self.filepath = filepath
+        self.save_best_only = save_best_only
+        self.save_weights_only = save_weights_only
+        self.period = period
+        self.epochs_since_last_save = 0
+        self.test_questions = test_questions
+        self.test_pos_paths = test_pos_paths
+        self.test_neg_paths = test_neg_paths
+
+        if mode not in ['auto', 'min', 'max']:
+            warnings.warn('ModelCheckpoint mode %s is unknown, '
+                          'fallback to auto mode.' % (mode),
+                          RuntimeWarning)
+            mode = 'auto'
+
+        if mode == 'min':
+            self.monitor_op = np.less
+            self.best = np.Inf
+        elif mode == 'max':
+            self.monitor_op = np.greater
+            self.best = -np.Inf
+        else:
+            if 'acc' in self.monitor or self.monitor.startswith('fmeasure'):
+                self.monitor_op = np.greater
+                self.best = -np.Inf
+            else:
+                self.monitor_op = np.less
+                self.best = np.Inf
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        self.epochs_since_last_save += 1
+        if self.epochs_since_last_save >= self.period:
+            self.epochs_since_last_save = 0
+            filepath = self.filepath.format(epoch=epoch + 1, **logs)
+            if self.save_best_only:
+                current = rank_precision(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 1000, 10000)
+                print('\Validation recall@1: {}\n'.format(current))
+                if current is None:
+                    warnings.warn('Can save best model only with %s available, '
+                                  'skipping.' % (self.monitor), RuntimeWarning)
+                else:
+                    if self.monitor_op(current, self.best):
+                        if self.verbose > 0:
+                            print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
+                                  ' saving model to %s'
+                                  % (epoch + 1, self.monitor, self.best,
+                                     current, filepath))
+                        self.best = current
+                        if self.save_weights_only:
+                            self.model.save_weights(filepath, overwrite=True)
+                        else:
+                            self.model.save(filepath, overwrite=True)
+                    else:
+                        if self.verbose > 0:
+                            print('\nEpoch %05d: %s did not improve' %
+                                  (epoch + 1, self.monitor))
+            else:
+                if self.verbose > 0:
+                    print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
+                if self.save_weights_only:
+                    self.model.save_weights(filepath, overwrite=True)
+                else:
+                    self.model.save(filepath, overwrite=True)
 
 
 class TrainingDataGenerator(Sequence):
@@ -433,7 +534,7 @@ class _StaticEmbedding(object):
                         input_length=max_length,
                         weights=[vectors],
                         name='embed',
-                        trainable=False,)
+                        trainable=True,)
         self.tune = Embedding(
                         nr_tune,
                         nr_out,
@@ -468,6 +569,18 @@ def get_glove_embeddings():
 
     from utils.embeddings_interface import glove_embeddings
     return glove_embeddings
+
+class ValidationCallback(Callback):
+    def __init__(self, test_data, test_questions, test_pos_paths, test_neg_paths):
+        self.test_data = test_data
+        self.test_questions = test_questions
+        self.test_pos_paths = test_pos_paths
+        self.test_neg_paths = test_neg_paths
+
+    def on_epoch_end(self, epoch, logs={}):
+        if epoch % 20 == 0:
+            recall = rank_precision(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 1000, 10000)
+            print('\Validation recall@1: {}\n'.format(recall))
 
 # class CustomLossHistory(Callback):
 #     def __init__(self, loss, validation_set):
@@ -542,7 +655,7 @@ def main():
     # Pull the data up from disk
     max_length = 50
 
-    vectors, questions, pos_paths, neg_paths = load_data("id_results.pickle", max_length)
+    vectors, questions, pos_paths, neg_paths = load_data("id_results_hop.pickle", max_length)
     # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
     # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
     # if pos_paths.shape[1] < questions.shape[1]:
@@ -571,7 +684,7 @@ def main():
     test_questions = test_split(questions)
 
     neg_paths_per_epoch_train = 10
-    neg_paths_per_epoch_test = 10
+    neg_paths_per_epoch_test = 1000
     dummy_y_train = np.zeros(len(train_questions)*neg_paths_per_epoch_train)
     dummy_y_test = np.zeros(len(test_questions)*(neg_paths_per_epoch_test+1))
 
@@ -585,7 +698,7 @@ def main():
 
     with K.tf.device('/gpu:' + gpu):
         neg_paths_per_epoch_train = 10
-        neg_paths_per_epoch_test = 10
+        neg_paths_per_epoch_test = 1000
         K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
         """
             Model Time!
@@ -604,6 +717,7 @@ def main():
 
         embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.4)
         encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.4)
+	#encode = LSTM(max_length)(encode)
         # attend = _Attention(max_length, nr_hidden, dropout=0.4, L2=0.01)
         # align = _SoftAlignment(max_length, nr_hidden)
         # compare = _Comparison(max_length, nr_hidden, dropout=0.4, L2=0.01)
@@ -648,7 +762,7 @@ def main():
         print(model.summary())
 
         model.compile(optimizer=OPTIMIZER,
-                      loss=custom_loss, metrics=[rank_precision_metric(neg_paths_per_epoch_train)])
+                      loss=custom_loss)
 
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
@@ -656,16 +770,17 @@ def main():
         training_generator = TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
                                                   max_length, neg_paths_per_epoch_train, BATCH_SIZE)
         validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                  max_length, neg_paths_per_epoch_test, BATCH_SIZE)
+                                                  max_length, neg_paths_per_epoch_test, 9999)
 
 
         json_desc, dir = get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
-        checkpointer = ModelCheckpoint(filepath=model_save_path, monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=10)
+        checkpointer = CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,\
+            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=5)
+        # validator = ValidationCallback(validation_generator, test_questions, test_pos_paths, test_neg_paths)
 
-        model.fit_generator(training_generator, epochs=EPOCHS,
-            validation_data=validation_generator, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
+        model.fit_generator(training_generator, epochs=EPOCHS, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
     # ])
 
@@ -673,7 +788,7 @@ def main():
 
         # Prepare test data
 
-        print "Precision (hits@1) = ", rank_precision(model, 1000, max_length,  test_questions, test_pos_paths, test_neg_paths)
+        print "Precision (hits@1) = ", rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000)
 
     # print "Evaluation Complete"
     # print "Loss     = ", results[0]

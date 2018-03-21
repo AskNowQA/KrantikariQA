@@ -778,7 +778,6 @@ def main():
 
         checkpointer = CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,\
             monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=5)
-        # validator = ValidationCallback(validation_generator, test_questions, test_pos_paths, test_neg_paths)
 
         model.fit_generator(training_generator, epochs=EPOCHS, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')

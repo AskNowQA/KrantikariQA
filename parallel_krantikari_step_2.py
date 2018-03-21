@@ -188,4 +188,70 @@ def hop_based():
 			counter = counter + 1
 	print counter
 	pickle.dump(id_results, open('resources/id_results_hop.pickle', 'w+'))
-hop_based()
+def hop_based_alternative():
+	'''
+		This creates a hop based dataset.
+		For example Who is the wife of president of America ?
+			>initially [q,[president, wife],fps] this gets converted into
+			[q , [president], [fp containg only one hop]]
+			[q,[president wife],[fp, containg only two hop]
+	'''
+	MAX_FALSE_PATHS = 1000
+	results = return_combined_result()
+	new_results = []
+	for result in results:
+		if result[2].count('+') + result[2].count('-') == 1:
+			'''
+				Remove all the false paths which have more than one hop.
+			'''
+			_temp_result = []
+			_temp_result.append(result[0])	#question
+			_temp_result.append(result[1])	#entity
+			_temp_result.append(result[2])	#relation/true path
+			_temp_false_path = []
+			for false_path in result[3]:
+				if false_path.count('+') + false_path.count('-') == 1:
+					_temp_false_path.append(false_path)
+			_temp_result.append(_temp_false_path)
+			new_results.append(_temp_result)
+		else:
+			'''
+				Generate it for second hop by removing first hop.
+			'''
+			_temp_result = []
+			_temp_result.append(result[0])  # question
+			_temp_result.append(result[1])  # entity
+			_temp_result.append(result[2])  # relation/true path
+			_temp_false_path = []
+			for false_path in result[3]:
+				if false_path.count('+') + false_path.count('-') != 1:
+					_temp_false_path.append(false_path)
+			_temp_result.append(_temp_false_path)
+			new_results.append(_temp_result)
+
+	id_results = []
+	counter = 0
+
+	for result in new_results:
+		# Id-fy the entire thing
+		try:
+			id_q = embeddings_interface.vocabularize(nlutils.tokenize(result[0]), _embedding="glove")
+			id_tp = embeddings_interface.vocabularize(result[2])
+			id_fps = [embeddings_interface.vocabularize(x) for x in result[3]]
+
+			# Actual length of False Paths
+			# actual_length_false_path.append(len(id_fps))
+
+			# Makes the number of Negative Samples constant
+			id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+
+			# Make neat matrices.
+			id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
+		except:
+			'''
+				There is some bug in random choice. Need to investigate more on this.
+			'''
+			counter = counter + 1
+	print counter
+	pickle.dump(id_results, open('resources/id_results_hop_alternative.pickle', 'w+'))
+hop_based_alternative()

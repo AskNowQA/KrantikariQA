@@ -1355,6 +1355,88 @@ def test_lcquad(_target_gpu = 0, _debug = True):
     pickle.dump(new_dataset,open('temp/new_dataset.pickle','w+'))
 
 
+def hop_lcquad(_target_gpu = 0, _debug = True):
+    '''
+        This will take a set of test question and answer and the length of true path. Use the hop based system to get
+         the answer.
+    '''
+
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
+
+
+    data_set = json.load(open(LCQUAD_DIR))
+    test_set = data_set[int(.8*len(data_set)):]
+    parsing_error = []
+    for data in test_set:
+        try:
+            counter = counter + 1
+            two_entity = False
+            print counter
+
+            parsed_data = parse_lcquad(data)
+
+            if not parsed_data:
+                # log this somewhere
+                parsing_error.append(x)
+                continue
+
+            # Get Needed data
+            q = parsed_data[u'corrected_question']
+            e = parsed_data[u'entity']
+            _id = parsed_data[u'_id']
+
+            if len(e) > 1:
+                # results.append([0, 0])
+                two_entity = True
+            # print q,e
+            # Find the correct path
+            entity_sf = nlutils.tokenize(dbp.get_label(e[0]), _ignore_brackets=True)  # @TODO: multi-entity alert
+            if two_entity:
+                entity_sf.append(nlutils.tokenize(dbp.get_label(e[1]), _ignore_brackets=True))
+
+            path_sf = []
+            for x in parsed_data[u'path']:
+                path_sf.append(str(x[0]))
+                path_sf += nlutils.tokenize(dbp.get_label(x[1:]))
+            tp = path_sf
+            
+
+            qa = Krantikari(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True)
+            fps = qa.training_paths
+
+            # See if the correct path is there
+            try:
+                fps.remove(tp)
+            except ValueError:
+
+                # The true path was not in the paths generated from Krantikari. Log this son of a bitch.
+                if DEBUG:
+                    print("True path not in false path")
+                bad_path_logs.append([q, e, tp, fps, _id])
+
+                # # Id-fy the entire thing
+                # id_q = embeddings_interface.vocabularize(nlutils.tokenize(q), _embedding="glove")
+                # id_tp = embeddings_interface.vocabularize(tp)
+                # id_fps = [embeddings_interface.vocabularize(x) for x in fps]
+            #
+            # # Actual length of False Paths
+            # actual_length_false_path.append(len(id_fps))
+            #
+            # # Makes the number of Negative Samples constant
+            # id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+            #
+            # # Make neat matrices.
+            # data.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
+
+            data.append([q, e, tp, fps, _id])
+        except Exception:
+            except_log.append(x)
+
+
+
+
+
+
 if __name__ == "__main__":
     # """
     #     TEST1 : Accuracy of similar_predicates

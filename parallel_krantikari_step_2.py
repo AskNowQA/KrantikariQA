@@ -10,8 +10,9 @@ from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
 
 
+MAX_FALSE_PATHS = 1000
+
 def return_combined_result():
-	MAX_FALSE_PATHS = 1000
 	file_name = [250,500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 3000, 3500, 4000, 4500, 5000]
 
 	temp_results = []
@@ -162,6 +163,8 @@ def hop_based():
 			new_results.append(_temp_result)
 
 	id_results = []
+	counter = 0
+
 	for result in new_results:
 		# Id-fy the entire thing
 		try:

@@ -69,7 +69,7 @@ def return_combined_result():
 	new_results = [r for r in results if r[-1] not in id_to_remove]
 	return new_results
 def main():
-
+	MAX_FALSE_PATHS = 1000
 	new_results = return_combined_result()
 	id_results = []
 
@@ -105,6 +105,7 @@ def hop_based():
 			[q , [president], [fp containg only one hop]]
 			[q,[president wife],[fp, containg only two hop]
 	'''
+	MAX_FALSE_PATHS = 1000
 	results = return_combined_result()
 	new_results = []
 	for result in results:
@@ -187,5 +188,4 @@ def hop_based():
 			counter = counter + 1
 	print counter
 	pickle.dump(id_results, open('resources/id_results_hop.pickle', 'w+'))
-	return new_results
-
+hop_based()

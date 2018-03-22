@@ -13,6 +13,7 @@ import warnings
 import numpy as np
 
 from bottle import post, get, put, delete, request, response
+# from torch.nn._functions.thnn.pooling import MaxPool2d
 
 word2vec_embeddings = None
 glove_embeddings = None
@@ -27,6 +28,9 @@ glove_location = \
         'vocab': "glove_vocab.pickle"
     }
 
+OUT_OF_VOCAB = 'resources/out_of_vocab.pickle'
+MAX_GLOVE_LENGTH = 0
+out_of_vocab = []   #keeps track of all the out of vocab words
 
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
@@ -98,8 +102,20 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                         continue
                     glove_vocab[word] = counter
                     counter += 1
+                MAX_GLOVE_LENGTH = counter + 1
                 f.close()
 
+                '''
+                    Check for vocab file.
+                '''
+
+                try:
+                    vocab_list = pickle.load(open(OUT_OF_VOCAB))
+                    for word in vocab_list:
+                        glove_vocab[word] = MAX_GLOVE_LENGTH
+                        MAX_GLOVE_LENGTH = MAX_GLOVE_LENGTH + 1
+                except:
+                    pass
                 # Now store this object
                 pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))
 
@@ -126,8 +142,10 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 values = line.split()
                 word = values[0]
                 coefs = np.asarray(values[1:], dtype='float32')
-
-                glove_embeddings[glove_vocab[word]] = coefs
+                try:
+                    glove_embeddings[glove_vocab[word]] = coefs
+                except:
+                    glove_embeddings[glove_vocab[word]] = np.random.rand(1,300)
             f.close()
 
             # Now store them to disk
@@ -246,12 +264,22 @@ def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
                 token_id = glove_vocab[token]
 
         except KeyError:
-
-            if _report_unks: unks.append(token)
-            token_id = 0
-
+            '''
+                Add it to out of vocab dictionary.
+                Init it with random 300D vector.
+            '''
+            if token not in out_of_vocab:
+                out_of_vocab.append(token)
+            else:
+                if _report_unks:
+                    unks.append(token)
+                print "check"
+                token_id = 0
         finally:
 
             op += [token_id]
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
+
+def save_out_of_vocab():
+    pickle.dump(out_of_vocab,open(OUT_OF_VOCAB,'w+'))

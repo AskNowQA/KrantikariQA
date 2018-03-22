@@ -94,6 +94,7 @@ def main():
 				There is some bug in random choice. Need to investigate more on this.
 			'''
 			counter = counter + 1
+	embeddings_interface.save_out_of_vocab()
 	pickle.dump(id_results,open('resources/id_results.pickle','w+'))
 
 
@@ -187,6 +188,7 @@ def hop_based():
 			'''
 			counter = counter + 1
 	print counter
+	embeddings_interface.save_out_of_vocab()
 	pickle.dump(id_results, open('resources/id_results_hop.pickle', 'w+'))
 def hop_based_alternative():
 	'''
@@ -253,5 +255,9 @@ def hop_based_alternative():
 			'''
 			counter = counter + 1
 	print counter
+	'''
+		Saaving out of vocab things
+	'''
+	embeddings_interface.save_out_of_vocab()
 	pickle.dump(id_results, open('resources/id_results_hop_alternative.pickle', 'w+'))
 hop_based_alternative()

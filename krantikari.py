@@ -1150,6 +1150,7 @@ def generate_training_data(start,end,qald=False):
     bad_path_logs = []
     actual_length_false_path = []
     except_log = []
+    big_data = []   #This will store/log everything we need.
 
     # Create a DBpedia object.
     dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
@@ -1184,6 +1185,7 @@ def generate_training_data(start,end,qald=False):
     for x in iterator:
 
         try:
+            temp_big_data = {}
             if not qald:
                 parsed_data = parse_lcquad(x)
             else:
@@ -1197,6 +1199,10 @@ def generate_training_data(start,end,qald=False):
                 parsing_error.append(x)
                 continue
 
+            temp_big_data['parsed_data'] = parsed_data
+            '''
+                Parsed data would contain triples and the contraints.
+            '''
 
 
             # Get Needed data

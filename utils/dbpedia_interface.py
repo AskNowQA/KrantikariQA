@@ -29,7 +29,8 @@ import labels_mulitple_form
 
 # GLOBAL MACROS
 # DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/']
-DBPEDIA_ENDPOINTS = ['http://18.197.39.162/sparql/']
+DBPEDIA_ENDPOINTS = ['http://localhost:8890/sparql/']
+
 
 # DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
 # DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']

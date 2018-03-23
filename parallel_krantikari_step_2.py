@@ -13,23 +13,26 @@ from utils import natural_language_utilities as nlutils
 MAX_FALSE_PATHS = 1000
 
 def return_combined_result():
+	#@TODO: Handle big data properly
 	file_name = [250,500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 3000, 3500, 4000, 4500, 5000]
 
 	temp_results = []
 	temp_parsing_errors = []
 	temp_bad_paths = []
 	temp_excepts = []
+	temp_bigdata = []
 
 	for file in file_name:
-		temp_results.append(pickle.load(open('resources/results' +  str(file) + '.pickle')))
-		temp_parsing_errors.append(pickle.load(open('resources/parsing_error' + str(file) + '.pickle')))
-		temp_bad_paths.append(pickle.load(open('resources/bad_path' + str(file) + '.pickle')))
-		temp_excepts.append(pickle.load(open('resources/except' + str(file) + '.pickle')))
-
+		temp_results.append(pickle.load(open('resources_v2/results' +  str(file) + '.pickle')))
+		temp_parsing_errors.append(pickle.load(open('resources_v2/parsing_error' + str(file) + '.pickle')))
+		temp_bad_paths.append(pickle.load(open('resources_v2/bad_path' + str(file) + '.pickle')))
+		temp_excepts.append(pickle.load(open('resources_v2/except' + str(file) + '.pickle')))
+		# temp_bigdata.append(pickle.load(open('resources/big_data' + str(file) + '.pickle')))
 	results = [y for result in temp_results for y in result]
 	parsing_errors = [y for result in temp_parsing_errors for y in result]
 	bad_paths = [y for result in temp_bad_paths for y in result]
 	excepts = [y for result in temp_excepts for y in result]
+	# bigdata = [y for result in temp_bigdata for y in result]
 
 	data_set = json.load(open('resources/data_set.json'))
 	bad_paths_log = []

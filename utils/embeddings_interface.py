@@ -270,6 +270,7 @@ def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
             '''
             if token not in out_of_vocab:
                 out_of_vocab.append(token)
+                token_id = 0
             else:
                 if _report_unks:
                     unks.append(token)

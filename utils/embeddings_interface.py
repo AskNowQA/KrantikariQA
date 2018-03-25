@@ -2,6 +2,15 @@
     Script does all the magic with word embeddings including lazy loading them in the RAM and all that.
 
     ! NOTE: This file no longer works with word2vec. Pls stay tuned.
+
+    For handeling out of vocab run the embedding interface such that it sees the whole data set i.e. run krantikari step 2. Once that is done, delete the glove_vocab.pickle
+    and glove_parssed.npy. Then run the krantikari_step_2 again. This will include out of vocab for the data seen by krantikari.py. One can do exactly same for relation aggregate.
+     Summarize - Whenever a new data is seen, this three step process of
+	>Run the file
+	>Delete vocab
+	>Run the file again.
+	needs to be done.
+
 """
 
 import os
@@ -10,6 +19,7 @@ import gensim
 import pickle
 import bottle
 import warnings
+import traceback
 import numpy as np
 
 from bottle import post, get, put, delete, request, response
@@ -20,6 +30,7 @@ glove_embeddings = None
 glove_vocab = None
 DEFAULT_EMBEDDING = 'word2vec'
 DEBUG = True
+oov_counter = 0
 glove_location = \
     {
         'dir': "./resources",
@@ -114,6 +125,8 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                     for word in vocab_list:
                         glove_vocab[word] = MAX_GLOVE_LENGTH
                         MAX_GLOVE_LENGTH = MAX_GLOVE_LENGTH + 1
+                    if DEBUG:
+                        print "vocab file now part of vocab list"
                 except:
                     pass
                 # Now store this object
@@ -255,32 +268,41 @@ def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
 
         # Small cap everything
         token = token.lower()
-
         try:
 
-            if _embedding == "glove":
-                token_id = glove_vocab[token]
-            else:
-                token_id = glove_vocab[token]
+            try:
 
-        except KeyError:
-            '''
-                Add it to out of vocab dictionary.
-                Init it with random 300D vector.
-            '''
-            if token not in out_of_vocab:
-                out_of_vocab.append(token)
-                token_id = 0
-            else:
-                if _report_unks:
-                    unks.append(token)
+                if _embedding == "glove":
+                    token_id = glove_vocab[token]
+                else:
+                    token_id = glove_vocab[token]
+
+            except KeyError:
+                '''
+                    Add it to out of vocab dictionary.
+                    Init it with random 300D vector.
+                '''
                 print "check"
-                token_id = 0
-        finally:
+                if token not in out_of_vocab:
+                    out_of_vocab.append(token)
+                    token_id = 0
+                else:
+                    if _report_unks:
+                        unks.append(token)
+                    global oov_counter
+                    oov_counter = oov_counter + 1
+                    token_id = 0
+            finally:
 
-            op += [token_id]
+                op += [token_id]
+        except:
+            print traceback.print_exc()
+            print token
+            print token_id
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
 
 def save_out_of_vocab():
+    global oov_counter
+    print "out of vocab words are ", str(oov_counter)
     pickle.dump(out_of_vocab,open(OUT_OF_VOCAB,'w+'))

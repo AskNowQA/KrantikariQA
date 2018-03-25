@@ -18,7 +18,7 @@ short_forms = {
 relations_dict = {}
 relations_list = []
 
-big_data = pickle.load(open('resources/big_data42.pickle'))
+big_data = pickle.load(open('resources_v3/big_data.pickle'))
 dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 
@@ -55,6 +55,32 @@ for rel in relations_list:
 	counter = counter + 1
 pickle.dump(relations_dict,open('resources/relations.pickle','w+'))
 
+embeddings_interface.save_out_of_vocab()
+
 id_big_data = []
 
-for data in id_big_data:
+for data in big_data:
+	path_id = [str(p[0])+str(relations_dict[p[1:]][0]) for p in data['parsed-data']['path']]
+	data['parsed-data']['path_id'] = path_id
+	hop1 = [[r[0], relations_dict[r[1]][0]] for r in data['uri']['hop-1-properties']]
+	data['uri']['hop-1-properties'] = hop1
+	hop2 = [[r[0], relations_dict[r[1]][0], r[2], relations_dict[r[3]][0]] for r in data['uri']['hop-2-properties']]
+	data['uri']['hop-2-properties'] = hop2
+	'''
+		Remove the true path from the data['uri']. If not found removing the datapoint
+	'''
+	try:
+		if len(path_id) == 1:
+			new_path_id = [str(path_id[0]),int(path_id[1:])]
+			data['uri']['hop-1-properties'].remove(new_path_id)
+		else:
+			new_path_id = [str(path_id[0][0]),int(path_id[0][1:]), str(path_id[1][0]),int(path_id[1][1:])]
+			data['uri']['hop-2-properties'].remove(new_path_id)
+	except:
+		continue
+	id_big_data.append(data)
+
+pickle.dump(id_big_data,open('resources_v3/id_big_data.pickle','w+'))
+
+
+

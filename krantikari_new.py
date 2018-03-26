@@ -30,12 +30,12 @@ MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 QALD_DIR = './resources/qald-7-train-multilingual.json'
 
 #CHANGE MACROS HERE
-RESULTS_DIR = './resources_v4/results'
-LENGTH_DIR = './resources_v4/lengths'
-EXCEPT_LOG = './resources_v4/except'
-BAD_PATH = './resources_v4/bad_path'
-PARSING_ERROR = './resources_v4/parsing_error'
-BIG_DATA = './resources_v4/big_data'
+RESULTS_DIR = './resources_v5/results'
+LENGTH_DIR = './resources_v5/lengths'
+EXCEPT_LOG = './resources_v5/except'
+BAD_PATH = './resources_v5/bad_path'
+PARSING_ERROR = './resources_v5/parsing_error'
+BIG_DATA = './resources_v5/big_data'
 
 short_forms = {
 	'dbo:': 'http://dbpedia.org/ontology/',
@@ -147,7 +147,7 @@ class Krantikari_v2:
 			answer = dbp.get_answer(SPARQL)  # -,+
 			data_temp = []
 			for i in xrange(len(answer['r1'])):
-				data_temp.append(['+', answer['r1'][i], "+", answer['r2'][i]])
+				data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i]])
 			temp['path'] = data_temp
 			return temp
 		if id == 3:
@@ -175,16 +175,16 @@ class Krantikari_v2:
 		data = []
 		SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
 		SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
-		SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+		# SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
 
 		SPARQL1 = SPARQL1 % {'te1': te1, 'te2': te2}
 		SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
-		SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+		# SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
 		data.append(cls.get_something(SPARQL1, te1, te2, 1, dbp))
 		# data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
 		data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
 		# data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
-		data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
+		# data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
 		# data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
 		return data
 

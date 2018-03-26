@@ -213,7 +213,7 @@ class Krantikari:
             answer = dbp.get_answer(SPARQL)  # -,+
             data_temp = []
             for i in xrange(len(answer['r1'])):
-                data_temp.append(['+', answer['r1'][i], "+", answer['r2'][i]])
+                data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i]])
             temp['path'] = data_temp
             return temp
         if id == 3:
@@ -241,16 +241,16 @@ class Krantikari:
         data = []
         SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
         SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
-        SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+        # SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
 
         SPARQL1 = SPARQL1 % {'te1': te1, 'te2': te2}
         SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
-        SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+        # SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
         data.append(cls.get_something(SPARQL1, te1, te2, 1, dbp))
         # data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
         data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
         # data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
-        data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
+        # data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
         # data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
         return data
 
@@ -978,12 +978,12 @@ def parse_lcquad(_data):
     elif _data[u'sparql_template_id'] in [15, 16, 315, 316, 415, 416, 115, 116]:
         '''
             {
-                u'_id': u'6ff03a568e2e4105b491ab1c1411c1ab',
-                u'corrected_question': u'What tv series can be said to be related to the sarah jane adventure and dr who confidential?',
-                u'sparql_query': u'SELECT DISTINCT ?uri WHERE { ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/The_Sarah_Jane_Adventures> . ?uri <http://dbpedia.org/ontology/related> <http://dbpedia.org/resource/Doctor_Who_Confidential> . }',
-                u'sparql_template_id': 7,
-                u'verbalized_question': u'What is the <television show> whose <relateds> are <The Sarah Jane Adventures> and <Doctor Who Confidential>?'
-             }
+                u'_id': u'a899e312823543e7b728a2517d29392d',
+                u'corrected_question': u'Which home town of PAvel Moroz is the death location of the Yakov Estrin ?',
+                u'sparql_query': u' SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Pavel_Moroz> <http://dbpedia.org/property/hometown> ?uri. <http://dbpedia.org/resource/Yakov_Estrin> <http://dbpedia.org/ontology/deathPlace> ?uri} ',
+                u'sparql_template_id': 16,
+                u'verbalized_question': u'What is the <hometown> of the <Pavel Moroz> and <death location> of the <Yakov Estrin>'
+            }
         '''
         data_node = _data
         _data[u'sparql_query'] = _data[u'sparql_query'].replace('uri}', 'uri . }')
@@ -993,7 +993,7 @@ def parse_lcquad(_data):
         data_node[u'entity'] = []
         data_node[u'entity'].append(triples[0].split(" ")[0][1:-1])
         data_node[u'entity'].append(triples[1].split(" ")[0][1:-1])
-        data_node[u'path'] = ["+" + rel1, "+" + rel2]
+        data_node[u'path'] = ["+" + rel1, "-" + rel2]
         data_node[u'constraints'] = {}
         if _data[u"sparql_template_id"] in [315, 415, 316, 416]:
             data_node[u'constraints'] = {triples[2].split(" ")[0]: triples[2].split(" ")[2][1:-1]}

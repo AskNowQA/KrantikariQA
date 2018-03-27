@@ -99,12 +99,13 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 if DEBUG: print "total vocab size is ", str(counter-1)
                 try:
                     #check if oov file exists
-                    oov = pickle.load(open(OUT_OF_VOCAB,'w+'))
+                    oov = pickle.load(open(OUT_OF_VOCAB))
                     for token in oov:
                         glove_vocab[token] = counter
                         counter = counter + 1
                     if DEBUG: print "length of new vocab file is ", len(glove_vocab)
                 except:
+                    print traceback.print_exc()
                     if DEBUG: print "oov file not found @glove_vocab"
                     pass
             except (IOError, EOFError) as e:
@@ -163,7 +164,7 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
             glove_embeddings = np.load(open(os.path.join(glove_location['dir'], glove_location['parsed'])))
             #Now load the oov words
             try:
-                oov = pickle.load(open(OUT_OF_VOCAB, 'w+'))
+                oov = pickle.load(open(OUT_OF_VOCAB))
                 for token in oov:
                     glove_embeddings[glove_vocab[token]] = oov[token]
             except:
@@ -173,12 +174,12 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
         except IOError:
             # Glove is not parsed and stored. Do it.
             if DEBUG: warnings.warn(" GloVe embeddings are not parsed and stored. This will take some time.")
-    
+
             glove_embeddings = np.zeros((len(glove_vocab.keys()), 300))
             f = open(os.path.join(glove_location['dir'], glove_location['raw']))
 
             try:
-                oov = pickle.load(open(OUT_OF_VOCAB, 'w+'))
+                oov = pickle.load(open(OUT_OF_VOCAB))
                 for token in oov:
                     glove_embeddings[glove_vocab[token]] = oov[token]
             except:
@@ -202,7 +203,7 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
 
             # Now store them to disk
             np.save(os.path.join(glove_location['dir'], glove_location['parsed']), glove_embeddings)
-    
+
             if DEBUG: print("GloVe embeddings successfully parsed and stored. This won't happen again.")
 
 
@@ -321,7 +322,7 @@ def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
                     Add it to out of vocab dictionary.
                     Init it with random 300D vector.
                 '''
-                print "check"
+                # print "check"
                 if token not in out_of_vocab:
                     out_of_vocab.append(token)
                     token_id = 0
@@ -345,7 +346,7 @@ def save_out_of_vocab():
     global oov_counter
     print "out of vocab words are ", str(oov_counter)
     try:
-        ov = pickle.load(open(OUT_OF_VOCAB,'w+'))
+        ov = pickle.load(open(OUT_OF_VOCAB))
         for token in  out_of_vocab:
             if token not in ov:
                 ov[token] = np.random.rand(1,300)

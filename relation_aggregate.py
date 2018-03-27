@@ -2,6 +2,7 @@
 	Some scripts to do somethings. I will update it once I write something.
 '''
 import pickle
+from progressbar import ProgressBar
 from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
@@ -19,12 +20,18 @@ dump_location = './resources_v5/'
 relations_dict = {}
 relations_list = []
 
+print "loading the data from ", dump_location
+
 big_data = pickle.load(open('resources_v5/big_data.pickle'))
 dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
+print "done loading the data"
 
 # data['hop-1-properties']
-for data in big_data:
+progbar = ProgressBar()
+iterator = progbar(big_data)
+
+for data in iterator:
 	relations = []
 	path = data['parsed-data'][u'path']
 	'''
@@ -54,11 +61,23 @@ for rel in relations_list:
 	surface_form_tokenized_id = embeddings_interface.vocabularize(surface_form_tokenized)
 	relations_dict[rel] = [counter,surface_form,surface_form_tokenized,surface_form_tokenized_id]
 	counter = counter + 1
+
+print "dumping the file", dump_location
+
+
 pickle.dump(relations_dict,open(dump_location + 'relations.pickle','w+'))
+
+print "saving the dump locations"
+
 
 embeddings_interface.save_out_of_vocab()
 
+print "done saving "
+
+
+print "idfying things"
 id_big_data = []
+
 
 for data in big_data:
 	path_id = [str(p[0])+str(relations_dict[p[1:]][0]) for p in data['parsed-data']['path']]
@@ -81,7 +100,11 @@ for data in big_data:
 		continue
 	id_big_data.append(data)
 
+print "done with idfying and now saving in the dump location: ", dump_location
+
 pickle.dump(id_big_data,open(dump_location + 'id_big_data.pickle','w+'))
+
+print "done"
 
 
 

@@ -24,7 +24,7 @@ from utils import natural_language_utilities as nlutils
 # Some MACROS
 DEBUG = True
 PATH_CHARS = ['+', '-', '/']
-LCQUAD_DIR = './resources/remaining_data.json'
+LCQUAD_DIR = './resources/data_set.json'
 MAX_FALSE_PATHS = 1000
 MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 QALD_DIR = './resources/qald-7-train-multilingual.json'

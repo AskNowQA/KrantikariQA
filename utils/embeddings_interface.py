@@ -92,6 +92,21 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
 
             try:
                 glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab'])))
+                '''
+                    Load the OOV word with their id's
+                '''
+                counter = len(glove_vocab) + 1
+                if DEBUG: print "total vocab size is ", str(counter-1)
+                try:
+                    #check if oov file exists
+                    oov = pickle.load(open(OUT_OF_VOCAB,'w+'))
+                    for token in oov:
+                        glove_vocab[token] = counter
+                        counter = counter + 1
+                    if DEBUG: print "length of new vocab file is ", len(glove_vocab)
+                except:
+                    if DEBUG: print "oov file not found @glove_vocab"
+                    pass
             except (IOError, EOFError) as e:
                 if DEBUG: warnings.warn(" GloVe vocabulary is not parsed and stored. This will take some time.")
 
@@ -122,6 +137,9 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
 
                 try:
                     vocab_list = pickle.load(open(OUT_OF_VOCAB))
+                    '''
+                        Remove all the oov tokens which are part of the
+                    '''
                     for word in vocab_list:
                         glove_vocab[word] = MAX_GLOVE_LENGTH
                         MAX_GLOVE_LENGTH = MAX_GLOVE_LENGTH + 1
@@ -143,6 +161,14 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
 
             # Let's try to load the embeddings now.
             glove_embeddings = np.load(open(os.path.join(glove_location['dir'], glove_location['parsed'])))
+            #Now load the oov words
+            try:
+                oov = pickle.load(open(OUT_OF_VOCAB, 'w+'))
+                for token in oov:
+                    glove_embeddings[glove_vocab[token]] = oov[token]
+            except:
+                if DEBUG: print('No oov file found during embedding interface loading')
+                pass
 
         except IOError:
             # Glove is not parsed and stored. Do it.
@@ -151,6 +177,13 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
             glove_embeddings = np.zeros((len(glove_vocab.keys()), 300))
             f = open(os.path.join(glove_location['dir'], glove_location['raw']))
 
+            try:
+                oov = pickle.load(open(OUT_OF_VOCAB, 'w+'))
+                for token in oov:
+                    glove_embeddings[glove_vocab[token]] = oov[token]
+            except:
+                pass
+
             for line in f:
                 values = line.split()
                 word = values[0]
@@ -158,7 +191,13 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 try:
                     glove_embeddings[glove_vocab[word]] = coefs
                 except:
-                    glove_embeddings[glove_vocab[word]] = np.random.rand(1,300)
+                    try:
+                        if oov:
+                            glove_embeddings[glove_vocab[word]] = oov[word]
+                        else:
+                            glove_embeddings[glove_vocab[word]] = np.random.rand(1,300)
+                    except:
+                        glove_embeddings[glove_vocab[word]] = np.random.rand(1, 300)
             f.close()
 
             # Now store them to disk
@@ -305,4 +344,15 @@ def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
 def save_out_of_vocab():
     global oov_counter
     print "out of vocab words are ", str(oov_counter)
-    pickle.dump(out_of_vocab,open(OUT_OF_VOCAB,'w+'))
+    try:
+        ov = pickle.load(open(OUT_OF_VOCAB,'w+'))
+        for token in  out_of_vocab:
+            if token not in ov:
+                ov[token] = np.random.rand(1,300)
+        pickle.dump(ov,open(OUT_OF_VOCAB,'w+'))
+    except:
+        ov = {}
+        for token in out_of_vocab:
+            ov[token] = np.random.rand(1,300)
+        pickle.dump(ov, open(OUT_OF_VOCAB, 'w+'))
+

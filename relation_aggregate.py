@@ -13,12 +13,13 @@ short_forms = {
 	'dbp:': 'http://dbpedia.org/property/'
 }
 
+dump_location = './resources_v5/'
 
 
 relations_dict = {}
 relations_list = []
 
-big_data = pickle.load(open('resources_v3/big_data.pickle'))
+big_data = pickle.load(open('resources_v5/big_data.pickle'))
 dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 
@@ -53,7 +54,7 @@ for rel in relations_list:
 	surface_form_tokenized_id = embeddings_interface.vocabularize(surface_form_tokenized)
 	relations_dict[rel] = [counter,surface_form,surface_form_tokenized,surface_form_tokenized_id]
 	counter = counter + 1
-pickle.dump(relations_dict,open('resources/relations.pickle','w+'))
+pickle.dump(relations_dict,open(dump_location + 'relations.pickle','w+'))
 
 embeddings_interface.save_out_of_vocab()
 
@@ -80,7 +81,7 @@ for data in big_data:
 		continue
 	id_big_data.append(data)
 
-pickle.dump(id_big_data,open('resources_v3/id_big_data.pickle','w+'))
+pickle.dump(id_big_data,open(dump_location + 'id_big_data.pickle','w+'))
 
 
 

@@ -12,6 +12,7 @@ from utils import natural_language_utilities as nlutils
 
 MAX_FALSE_PATHS = 1000
 
+DIR = './resources_v5/'
 def return_combined_result():
 	#@TODO: Handle big data properly
 	file_name = [250,500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 3000, 3500, 4000, 4500, 5000]
@@ -23,11 +24,11 @@ def return_combined_result():
 	temp_bigdata = []
 
 	for file in file_name:
-		temp_results.append(pickle.load(open('resources_v3/results' +  str(file) + '.pickle')))
-		temp_parsing_errors.append(pickle.load(open('resources_v3/parsing_error' + str(file) + '.pickle')))
-		temp_bad_paths.append(pickle.load(open('resources_v3/bad_path' + str(file) + '.pickle')))
-		temp_excepts.append(pickle.load(open('resources_v3/except' + str(file) + '.pickle')))
-		temp_bigdata.append(pickle.load(open('resources_v3/big_data' + str(file) + '.pickle')))
+		temp_results.append(pickle.load(open(DIR + 'results' +  str(file) + '.pickle')))
+		temp_parsing_errors.append(pickle.load(open(DIR + 'parsing_error' + str(file) + '.pickle')))
+		temp_bad_paths.append(pickle.load(open(DIR + 'bad_path' + str(file) + '.pickle')))
+		temp_excepts.append(pickle.load(open(DIR + 'except' + str(file) + '.pickle')))
+		temp_bigdata.append(pickle.load(open(DIR + 'big_data' + str(file) + '.pickle')))
 	results = [y for result in temp_results for y in result]
 	parsing_errors = [y for result in temp_parsing_errors for y in result]
 	bad_paths = [y for result in temp_bad_paths for y in result]
@@ -69,7 +70,7 @@ def return_combined_result():
 	# for e in excepts:
 	# 	id_to_remove.append(e[u'_id'])
 
-	pickle.dump(bigdata,open('resources_v3/big_data.pickle','w+'))
+	pickle.dump(bigdata,open(DIR + 'big_data.pickle','w+'))
 
 	new_results = [r for r in results if r[-1] not in id_to_remove]
 	return new_results
@@ -100,7 +101,7 @@ def main():
 			'''
 			counter = counter + 1
 	embeddings_interface.save_out_of_vocab()
-	pickle.dump(id_results,open('resources_v3/id_results.pickle','w+'))
+	pickle.dump(id_results,open(DIR + 'id_results.pickle','w+'))
 
 
 def hop_based():
@@ -194,7 +195,7 @@ def hop_based():
 			counter = counter + 1
 	print counter
 	embeddings_interface.save_out_of_vocab()
-	pickle.dump(id_results, open('resources_v3/id_results_hop.pickle', 'w+'))
+	pickle.dump(id_results, open(DIR + 'id_results_hop.pickle', 'w+'))
 def hop_based_alternative():
 	'''
 		This creates a hop based dataset.
@@ -264,5 +265,5 @@ def hop_based_alternative():
 		Saaving out of vocab things
 	'''
 	embeddings_interface.save_out_of_vocab()
-	pickle.dump(id_results, open('resources_v3/id_results_hop_alternative.pickle', 'w+'))
+	pickle.dump(id_results, open(DIR + 'id_results_hop_alternative.pickle', 'w+'))
 main()

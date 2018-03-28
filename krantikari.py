@@ -846,7 +846,7 @@ def parse_lcquad(_data):
         data_node[u'path'] = ["-" + triples[0].split(" ")[1][1:-1]]
         data_node[u'constraints'] = {}
         if _data[u"sparql_template_id"] in [301, 401, 601]:
-            data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[2][1:-1]}
+            data_node[u'constraints'] = {triples[1].split(" ")[0]: triples[1].split(" ")[2][1:-2]}
         if _data[u"sparql_template_id"] in [401, 101]:
             data_node[u'constraints']['count'] = True
         return data_node

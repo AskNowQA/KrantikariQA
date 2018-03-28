@@ -657,7 +657,7 @@ def main():
     # Pull the data up from disk
     max_length = 50
 
-    vectors, questions, pos_paths, neg_paths = load_data("id_results_hop.pickle", max_length)
+    vectors, questions, pos_paths, neg_paths = load_data("id_results.pickle", max_length)
     # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
     # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
     # if pos_paths.shape[1] < questions.shape[1]:
@@ -779,7 +779,7 @@ def main():
         model_save_path = os.path.join(dir, 'model.h5')
 
         checkpointer = CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,\
-            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=5)
+            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=10)
 
         model.fit_generator(training_generator, epochs=EPOCHS, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')

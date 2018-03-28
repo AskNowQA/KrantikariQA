@@ -515,11 +515,11 @@ class _GlobalSumPooling1D(Layer):
 class _BiRNNEncoding(object):
     def __init__(self, max_length, embedding_dims, units, dropout=0.0):
         self.model = Sequential()
-        self.model.add(Bidirectional(LSTM(units, return_sequences=True,
+        self.model.add(Bidirectional(LSTM(units, return_sequences=False,
                                          dropout_W=dropout, dropout_U=dropout),
                                          input_shape=(max_length, embedding_dims)))
-        self.model.add(LSTM(units, return_sequences=False,
-                                         dropout_W=dropout, dropout_U=dropout))
+        #self.model.add(LSTM(units, return_sequences=False,
+        #                                 dropout_W=dropout, dropout_U=dropout))
         # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
         # self.model.add(TimeDistributed(Dropout(0.2)))
 
@@ -657,7 +657,7 @@ def main():
     # Pull the data up from disk
     max_length = 50
 
-    vectors, questions, pos_paths, neg_paths = load_data("id_results.pickle", max_length)
+    vectors, questions, pos_paths, neg_paths = load_data("id_results_hop_alternative.pickle", max_length)
     # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
     # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
     # if pos_paths.shape[1] < questions.shape[1]:

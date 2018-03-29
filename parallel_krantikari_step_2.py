@@ -7,6 +7,7 @@ import numpy as np
 from pprint import pprint
 import pickle, json, traceback
 from utils import embeddings_interface
+# from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
 
 
@@ -28,7 +29,7 @@ def return_combined_result():
 		temp_parsing_errors.append(pickle.load(open(DIR + 'parsing_error' + str(file) + '.pickle')))
 		temp_bad_paths.append(pickle.load(open(DIR + 'bad_path' + str(file) + '.pickle')))
 		temp_excepts.append(pickle.load(open(DIR + 'except' + str(file) + '.pickle')))
-		temp_bigdata.append(pickle.load(open(DIR + 'big_data' + str(file) + '.pickle')))
+		# temp_bigdata.append(pickle.load(open(DIR + 'big_data' + str(file) + '.pickle')))
 	results = [y for result in temp_results for y in result]
 	parsing_errors = [y for result in temp_parsing_errors for y in result]
 	bad_paths = [y for result in temp_bad_paths for y in result]

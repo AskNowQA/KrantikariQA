@@ -119,13 +119,15 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 glove_vocab['+'] = 2
                 glove_vocab['-'] = 3
                 glove_vocab['/'] = 4
+                glove_vocab['uri'] = 5
+                glove_vocab['x'] = 6
 
                 f = open(os.path.join(glove_location['dir'], glove_location['raw']))
-                counter = 5
+                counter = 7
                 for line in f:
                     values = line.split()
                     word = values[0]
-                    if word in ['PAD', 'UNK', '+', '-', '/']:
+                    if word in ['PAD', 'UNK', '+', '-', '/','uri','x']:
                         continue
                     glove_vocab[word] = counter
                     counter += 1
@@ -285,6 +287,10 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
                     token_embedding = np.repeat(0.5, 300)
                 elif token == "PAD":
                     token_embedding = np.zeros(300, dtype=np.float32)
+                elif token == "x":
+                    token_embedding = np.repeat(2, 300)
+                elif token == "uri":
+                    token_embedding = np.repeat(-2, 300)
 
             op += [token_embedding]
 

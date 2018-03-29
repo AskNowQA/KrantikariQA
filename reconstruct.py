@@ -2,11 +2,15 @@
 	This will re-construct SPARQL given core-chain and topic entites.
 '''
 
-import pickle, json
-from utils import dbpedia_interface as db_interface
+import numpy as np
 import krantikari as K
+import pickle, json, traceback
+from utils import embeddings_interface
+from utils import dbpedia_interface as db_interface
+from utils import natural_language_utilities as nlutils
 
 BIG_DATA_DIR = 'resources/big_data.pickle'
+DIR = './resources_v5/'
 
 sparql_template_1 = {
 	"-" : 'SELECT DISTINCT ?uri WHERE {?uri <%(r1)s> <%(te1)s> . }',
@@ -21,9 +25,9 @@ sparql_template_2 = {
 }
 
 sparql_template_3 = {
-	"++" : 'SELECT DISTINCT ?uri WHERE { <%(te1)s> <%(r1)s> ?uri . <te2> <%(r2)s> ?uri  . }',
-	"--" : 'SELECT DISTINCT ?uri WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <te2>  . }',
-	"-+" : 'SELECT DISTINCT ?uri WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <te2>  . }'
+	"+-" : 'SELECT DISTINCT ?uri WHERE { <%(te1)s> <%(r1)s> ?uri . <te2> <%(r2)s> ?uri  . }',
+	"--" : 'SELECT DISTINCT ?uri WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . }',
+	"-+" : 'SELECT DISTINCT ?uri WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . }'
 }
 
 x_const = '  ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?cons_x . } '
@@ -101,7 +105,7 @@ def reconstruct(ent, core_chain, alternative = False):
 		# ent = ent[0]
 		if rel_length == 1:
 			sparql = sparql_template_1[core_chain[0]]
-			return sparql % {'r1': str(relations[1:]), 'te1':ent[0]}
+			return sparql % {'r1': str(relations[1]), 'te1':ent[0]}
 		if rel_length == 2:
 			if '+' in core_chain[1:]:
 				index_of = core_chain[1:].index('+')
@@ -124,20 +128,30 @@ def reconstruct(ent, core_chain, alternative = False):
 
 
 def create_sparql_constraints(sparql):
-	sparql_x = sparql.replace('}',x_const).replace('SELECT DISTINCT ?uri', 'SELECT DISTINCT ?cons_x')
-	sparql_uri = sparql.replace('}',uri_const).replace('SELECT DISTINCT ?uri', 'SELECT DISTINCT ?cons_uri')
-	# sparql_uri_x = sparql.replace('}',uri_x_const).replace('SELECT DISTINCT ?uri', 'SELECT DISTINCT ?cons_uri, ?cons_x')
+	if 'SELECT DISTINCT COUNT(?uri)' not in sparql:
+		sparql_x = sparql.replace('}',x_const).replace('SELECT DISTINCT ?uri', 'SELECT DISTINCT ?cons_x')
+		sparql_uri = sparql.replace('}',uri_const).replace('SELECT DISTINCT ?uri', 'SELECT DISTINCT ?cons_uri')
+	else:
+		sparql_x = sparql.replace('}', x_const).replace('SELECT DISTINCT COUNT(?uri)', 'SELECT DISTINCT ?cons_x')
+		sparql_uri = sparql.replace('}', uri_const).replace('SELECT DISTINCT COUNT(?uri)', 'SELECT DISTINCT ?cons_uri')
 	return [sparql_x, sparql_uri]
 
 
 def retrive_answers(sparql):
-	temp_type_x = dbp.get_answer(sparql[0])['cons_x']
-	temp_type_uri = dbp.get_answer(sparql[1])['cons_uri']
-	type_x = [x for x in temp_type_x if
-			  x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
-	type_uri = [x for x in temp_type_uri if
-				x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
-	return type_x,type_uri
+	if len(sparql) == 2:
+		temp_type_x = dbp.get_answer(sparql[0])['cons_x']
+		temp_type_uri = dbp.get_answer(sparql[1])['cons_uri']
+		type_x = [x for x in temp_type_x if
+				  x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
+		type_uri = [x for x in temp_type_uri if
+					x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
+		return type_x,type_uri
+	else:
+		temp_type_uri = dbp.get_answer(sparql[0])['cons_uri']
+		type_x = []
+		type_uri = [x for x in temp_type_uri if
+					x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
+		return type_x, type_uri
 
 def construct_training_data():
 	'''
@@ -180,6 +194,10 @@ for x in data_set:
 		path = [x for p in path for x in p]
 		sparql = reconstruct(data['entity'], path, alternative=True)
 		sparqls = create_sparql_constraints(sparql)
+		if len(data['entity']) == 2:
+			sparqls = [sparqls[1]]
+		if len(path) == 2:
+			sparqls = [sparqls[1]]
 		type_x, type_uri = retrive_answers(sparqls)
 		data['constraints_candidates'] = {
 			"type_x": type_x,
@@ -189,6 +207,141 @@ for x in data_set:
 		print counter
 		counter = counter + 1
 	except:
+		print traceback.print_exc()
+		# raw_input()
 		continue
 
 pickle.dump(new_data,open('resources/rdf-type.pickle','w+'))
+
+rdf = pickle.load(open('resources/rdf-type.pickle'))
+
+new_data = []
+t = 0
+for data in rdf:
+	try:
+		temp = data
+		# pprint(data)
+		const = data['constraints']
+		path = ""
+		try:
+			path = const['?uri']
+			t= t + 1
+		except:
+			pass
+		if not path:
+			try:
+				path = const['?x']
+			except:
+				pass
+		temp['path-constraint'] = path
+		new_data.append(temp)
+		# raw_input()
+	except:
+		continue
+
+error = []
+counter = 0
+for data in new_data:
+	if data['path-constraint'] :
+		if data['path-constraint'] not in data['constraints_candidates']['type_uri'] and data['path-constraint'] not in data['constraints_candidates']['type_x']:
+			counter = counter + 1
+			error.append(data)
+
+template_dict = {}
+
+for x in error:
+	if x['sparql_template_id'] in template_dict:
+		template_dict[x['sparql_template_id']] = template_dict[x['sparql_template_id']] + 1
+	else:
+		template_dict[x['sparql_template_id']] = 0
+
+training_data = []
+training_data_v2 = []
+true_paths = []
+false_paths = []
+for data in new_data:
+	temp = data
+	true_path = ''
+	false_path = []
+	path = path = [[p[0], p[1:]] for p in data['path']]
+	path = [x for p in path for x in p]
+
+	if data['path-constraint'] != "":
+		if '?uri' in data['constraints']:
+			'''
+				Remove the true path from the false path
+			'''
+			try:
+				data['constraints_candidates']['type_uri'].remove(data['path-constraint'])
+			except:
+				print traceback.print_exc()
+				continue
+			#Still need to create this path
+			true_path = path + ['/'] +  ['uri'] + [data['path-constraint']]
+
+		else:
+			try:
+				data['constraints_candidates']['type_x'].remove(data['path-constraint'])
+
+			except:
+				print traceback.print_exc()
+				continue
+			true_path = path + ['/'] + ['x'] +[data['path-constraint']]
+
+		for d in data['constraints_candidates']['type_uri']:
+			false_path.append(path + ['/'] + ['uri'] + [d])
+		for d in data['constraints_candidates']['type_x']:
+			false_path.append(path + ['/'] + ['x'] + [d])
+		temp['true-path'] = true_path
+		temp['false-path'] = false_path
+		label_true_path = []
+		for token in true_path:
+			if token == '/':
+				label_true_path.append('/')
+			else:
+				label_true_path.append(nlutils.tokenize(dbp.get_label(token))[0])
+		temp['label-true-path'] = label_true_path
+		label_false_paths = []
+		for path in false_path:
+			temp_fp = []
+			for token in path:
+				if token == '/':
+					temp_fp.append('/')
+				else:
+					temp_fp.append(nlutils.tokenize(dbp.get_label(token))[0])
+			label_false_paths.append(temp_fp)
+		temp['label-false-path'] = label_false_paths
+		false_paths.append(false_path)
+		true_paths.append(true_path)
+		training_data.append(temp)
+		training_data_v2.append([data[u'corrected_question'],data['entity'],label_true_path,label_false_paths,data['_id']])
+# pickle.dump(training_data,open('resources/training-rdf-data.pickle','w+'))
+pickle.dump(training_data_v2,open('resources/training-rdf-data.pickle','w+'))
+
+MAX_FALSE_PATHS = 270
+
+id_results = []
+
+counter = 0
+for result in training_data_v2:
+	# Id-fy the entire thing
+	try:
+		id_q = embeddings_interface.vocabularize(nlutils.tokenize(result[0]), _embedding="glove")
+		id_tp = embeddings_interface.vocabularize(result[2])
+		id_fps = [embeddings_interface.vocabularize(x) for x in result[3]]
+
+		# Actual length of False Paths
+		# actual_length_false_path.append(len(id_fps))
+
+		# Makes the number of Negative Samples constant
+		id_fps = np.random.choice(id_fps, size=MAX_FALSE_PATHS)
+
+		# Make neat matrices.
+		id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
+	except:
+		'''
+			There is some bug in random choice. Need to investigate more on this.
+		'''
+		counter = counter + 1
+# embeddings_interface.save_out_of_vocab()
+pickle.dump(id_results, open(DIR + 'rdf_id_results.pickle', 'w+'))

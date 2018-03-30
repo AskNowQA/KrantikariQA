@@ -28,10 +28,12 @@ import natural_language_utilities as nlutils
 import labels_mulitple_form
 
 # GLOBAL MACROS
-# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/', 'http://live.dbpedia.org/sparql/']
+# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/']
+# DBPEDIA_ENDPOINTS = ['http://localhost:8890/sparql/']
 # DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
-DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8890/sparql/']
-REDIS_HOSTNAME = 'sda-srv01.iai.uni-bonn.de'
+DBPEDIA_ENDPOINTS = ['http://sda-srv01:8890/sparql']
+REDIS_HOSTNAME = 'sda-srv01'
+#REDIS_HOSTNAME  = '127.0.0.1'
 MAX_WAIT_TIME = 1.0
 
 # SPARQL Templates
@@ -129,8 +131,8 @@ class DBPedia:
 
     def get_properties_on_resource(self, _resource_uri):
         """
-			Fetch properties that point to this resource. 
-			Eg. 
+			Fetch properties that point to this resource.
+			Eg.
 			Barack Obama -> Ex-President of -> _resource_uri would yield ex-president of as the relation
 		"""
         if not nlutils.has_url(_resource_uri):
@@ -144,7 +146,7 @@ class DBPedia:
 			This function can fetch the properties connected to this '_resource', in the format - _resource -> R -> O
 			The boolean flag can be used if we want to return the (R,O) tuples instead of just R
 
-			Return Type 
+			Return Type
 				if _with_connected_resource == True, [ [R,O], [R,O], [R,O] ...]
 				else [ R,R,R,R...]
 		"""
@@ -266,7 +268,7 @@ class DBPedia:
 			Function used to fetch the english label for a given resource.
 			Not thoroughly tested tho.
 
-			Also now it stores the labels in a pickled folder and 
+			Also now it stores the labels in a pickled folder and
 
 			Always returns one value
 		"""
@@ -281,48 +283,50 @@ class DBPedia:
         # Preparing the Query
         _resource_uri = '<' + _resource_uri + '>'
 
-        # First try finding it in file
-        try:
-            label = np.random.choice(self.labels[_resource_uri[1:-1]])
-            # print "Label for %s found in cache." % _resource_uri
-            return label
+        return nlutils.get_label_via_parsing(_resource_uri)
 
-        except KeyError:
-            # Label not found in file. Throw it as a query to DBpedia
-            # print "####", "its a key error"
-            try:
-                # print _resource_uri
-                response = self.shoot_custom_query(GET_LABEL_OF_RESOURCE % {'target_resource': _resource_uri})
-
-                results = [x[u'label'][u'value'].encode('ascii', 'ignore') for x in response[u'results'][u'bindings']]
-                if len(results) > 0:
-                    self.labels[_resource_uri[1:-1]] = results
-                else:
-                    p = results[0]  # Should raise exception
-                self.fresh_labels += 1
-
-                if self.fresh_labels >= 100:
-                    f = open('resources/labels.pickle', 'w+')
-                    pickle.dump(self.labels, f)
-                    f.close()
-                    self.fresh_labels = 0
-                    print "Labels dumped to file."
-
-                return np.random.choice(self.labels[_resource_uri[1:-1]])
-            except IndexError as e:
-                # print e
-                # print _resource_uri, results
-                # raw_input()
-                return nlutils.get_label_via_parsing(_resource_uri)
-
-            except:
-                # print "in Exception"
-                traceback.print_exc()
-                # raw_input()
-                return nlutils.get_label_via_parsing(_resource_uri)
-
-        except:
-            return nlutils.get_label_via_parsing(_resource_uri)
+        # # First try finding it in file
+        # try:
+        #     label = self.labels[_resource_uri[1:-1]][0]
+        #     # print "Label for %s found in cache." % _resource_uri
+        #     return label
+		#
+        # except KeyError:
+        #     # Label not found in file. Throw it as a query to DBpedia
+        #     # print "####", "its a key error"
+        #     try:
+        #         # print _resource_uri
+        #         response = self.shoot_custom_query(GET_LABEL_OF_RESOURCE % {'target_resource': _resource_uri})
+		#
+        #         results = [x[u'label'][u'value'].encode('ascii', 'ignore') for x in response[u'results'][u'bindings']]
+        #         if len(results) > 0:
+        #             self.labels[_resource_uri[1:-1]] = results
+        #         else:
+        #             p = results[0]  # Should raise exception
+        #         self.fresh_labels += 1
+		#
+        #         if self.fresh_labels >= 10:
+        #             f = open('resources/labels.pickle', 'w+')
+        #             pickle.dump(self.labels, f)
+        #             f.close()
+        #             self.fresh_labels = 0
+        #             print "Labels dumped to file."
+		#
+        #         return self.labels[_resource_uri[1:-1]][0]
+        #     except IndexError as e:
+        #         # print e
+        #         # print _resource_uri, results
+        #         # raw_input()
+        #         return nlutils.get_label_via_parsing(_resource_uri)
+		#
+        #     except:
+        #         # print "in Exception"
+        #         traceback.print_exc()
+        #         # raw_input()
+        #         return nlutils.get_label_via_parsing(_resource_uri)
+		#
+        # except:
+        #     return nlutils.get_label_via_parsing(_resource_uri)
 
     def get_most_specific_class(self, _resource_uri):
         """
@@ -458,7 +462,7 @@ class DBPedia:
             temp_query = GET_SUBJECT % {'target_resource': _resource_uri, 'property': _relation}
         response = self.shoot_custom_query(temp_query)
         try:
-            entity_list = [x[u'entity'][u'value'].encode('ascii', 'ignore') for x in response[u'results'][u'bindings']]
+            entity_list = [x[u'entity'][u'value'] for x in response[u'results'][u'bindings']]
             return entity_list
         except:
             # TODO: Find and handle exceptions appropriately
@@ -485,7 +489,7 @@ class DBPedia:
 if __name__ == '__main__':
     pass
     # print "\n\nBill Gates"
-    dbp = DBPedia(caching=False)
+    dbp = DBPedia(caching=True)
     # pprint(dbp.get_type_of_resource('http://dbpedia.org/resource/M._J._P._Rohilkhand_University', _filter_dbpedia = True))
     # print "\n\nIndia"
     # pprint(dbp.get_type_of_resource('http://dbpedia.org/resource/India', _filter_dbpedia = True))

@@ -362,5 +362,3 @@ def save_out_of_vocab():
         for token in out_of_vocab:
             ov[token] = np.random.rand(1,300)
         pickle.dump(ov, open(OUT_OF_VOCAB, 'w+'))
-
-

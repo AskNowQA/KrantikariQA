@@ -23,3 +23,6 @@ http://dbpedia.org/property/id
 http://xmlns.com/foaf/0.1/homepage
 http://dbpedia.org/ontology/wikiPageOutDegree
 http://xmlns.com/foaf/0.1/name
+http://www.w3.org/2004/02/skos/core#broader
+http://www.w3.org/2004/02/skos/core#prefLabel
+http://purl.org/dc/terms/subject

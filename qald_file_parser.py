@@ -46,7 +46,7 @@ def get_triples(_sparql_query):
 
 def checker(uri,reverse=True,update=True):
 	'''
-		Checks if uri ends and starts with '>' and '<' respectively. 
+		Checks if uri ends and starts with '>' and '<' respectively.
 		if update= True then also update the uri
 	'''
 	if uri[0] != '<':
@@ -56,7 +56,7 @@ def checker(uri,reverse=True,update=True):
 			return False
 	if uri[-1] != '>':
 		if update:
-			uri =  uri + ">" 
+			uri =  uri + ">"
 		else:
 			return False
 	if reverse:
@@ -79,7 +79,7 @@ def top_k_relation(entity,question,relations,k=20,method=1):
             if method == 1:
             	if rel_tup[0] == 'www.w3.org/1999/02/22-rdf-syntax-ns#type':
             		phrase_1 = entity_label + " " + nlutils.get_label_via_parsing('type')
-            	else:		
+            	else:
                 	phrase_1 = entity_label + " " + nlutils.get_label_via_parsing(rel_tup[0])
                 similarity_score = sim.phrase_similarity(phrase_1, question)
                 temp_relations.append((rel_tup[0],rel_tup[1],similarity_score))
@@ -93,7 +93,7 @@ def top_k_relation(entity,question,relations,k=20,method=1):
     if len(temp_relations) > k:
         return temp_relations[:k]
     else:
-		return temp_relations	
+		return temp_relations
 
 for i in xrange(len(data)):
 	data[i]['query']['sparql'] = data[i]['query']['sparql'].replace('.\n','. ')
@@ -194,7 +194,7 @@ for node in data:
 	One of the program structure could be - assuming just single entity and single relations (factoid)
 	>Take the question
 	>Extract the topic entity and also the core chain/s
-	>Take top 20 relationships 
+	>Take top 20 relationships
 	>Match them and find the best and see if it matches the model
 	[question,quesion_entity,core relationship]
 '''
@@ -214,7 +214,7 @@ for node in data_triple:
 				right_properties.append(properties)
 		for properties in temp_left_properties:
 			if 'ontology' in properties or 'dbo' in properties:
-				left_properties.append(properties)	
+				left_properties.append(properties)
 		relations = [(rel,'outgoing') for rel in right_properties]
 		relations.extend([(rel,'incoming') for rel in left_properties])
 		relations = top_k_relation(node[1],node[0],relations)
@@ -229,7 +229,7 @@ for node in data_triple:
 		continue
 
 '''
-	Run 1 
+	Run 1
 In [7]: 48/119
 Out[7]: 0
 
@@ -241,7 +241,7 @@ Out[9]: 0.21818181818181817
 
 	Run 2
 	49 -- extebded black list
-	Run 3 
+	Run 3
 	49 -- extended run with rdf#type not being part of the black list
 
 '''
@@ -262,4 +262,4 @@ Out[9]: 0.21818181818181817
 			user_response.append(raw_input('correctness:'))
 			user_response.append(node['query']['sparql'])
 			final_response.append(user_response)
-'''
+'''	

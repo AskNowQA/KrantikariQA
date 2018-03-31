@@ -30,12 +30,12 @@ MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 QALD_DIR = './resources/qald-7-train-multilingual.json'
 
 #CHANGE MACROS HERE
-RESULTS_DIR = './resources_v5/results'
-LENGTH_DIR = './resources_v5/lengths'
-EXCEPT_LOG = './resources_v5/except'
-BAD_PATH = './resources_v5/bad_path'
-PARSING_ERROR = './resources_v5/parsing_error'
-BIG_DATA = './resources_v5/big_data'
+RESULTS_DIR = './resources_v6/results'
+LENGTH_DIR = './resources_v6/lengths'
+EXCEPT_LOG = './resources_v6/except'
+BAD_PATH = './resources_v6/bad_path'
+PARSING_ERROR = './resources_v6/parsing_error'
+BIG_DATA = './resources_v6/big_data'
 
 short_forms = {
 	'dbo:': 'http://dbpedia.org/ontology/',
@@ -50,7 +50,7 @@ PREDICATE_BLACKLIST = K.PREDICATE_BLACKLIST
 
 class Krantikari_v2:
 
-	def __init__(self, _question, _entities, _dbpedia_interface, _model_interpreter, _qald=False, _training = False):
+	def __init__(self, _question, _entities, _dbpedia_interface, _model_interpreter, _qald=False, _training = False, _ask = False ):
 		"""
 			This function inputs one question, and topic entities, and returns a SPARQL query (or s'thing else)
 
@@ -75,6 +75,7 @@ class Krantikari_v2:
 		self.question = _question
 		self.entities = _entities
 		self.qald = _qald
+		self.ask = _ask
 
 		# Useful objects
 		self.dbp = _dbpedia_interface
@@ -160,6 +161,16 @@ class Krantikari_v2:
 				data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i]])
 			temp['path'] = data_temp
 			return temp
+		if id == 4:
+			temp = {}
+			temp['te1'] = te1
+			temp['te2'] = te2
+			answer = dbp.get_answer(SPARQL)  # -,+
+			data_temp = []
+			for i in xrange(len(answer['r1'])):
+				data_temp.append(['+', answer['r1'][i] ])
+			temp['path'] = data_temp
+			return temp
 
 
 	@classmethod
@@ -183,6 +194,26 @@ class Krantikari_v2:
 		data.append(cls.get_something(SPARQL1, te1, te2, 1, dbp))
 		# data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
 		data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
+		# data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
+		# data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
+		# data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
+		return data
+
+	@classmethod
+	def ask_query(cls, te1, te2, dbp):
+		te1 = "<" + te1 + ">"
+		te2 = "<" + te2 + ">"
+		data = []
+		SPARQLASK = '''SELECT DISTINCT ?r1  WHERE { %(te1)s ?r1 %(te2)s . } '''
+		# SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
+		# SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+
+		SPARQL1 = SPARQLASK % {'te1': te1, 'te2': te2}
+		# SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
+		# SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+		data.append(cls.get_something(SPARQL1, te1, te2, 4, dbp))
+		# data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
+		# data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
 		# data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
 		# data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
 		# data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
@@ -661,7 +692,11 @@ class Krantikari_v2:
 			self.best_path = 0  # @TODO: FIX THIS ONCE WE IMPLEMENT DIS!
 			NO_PATHS = True
 			pprint(_entities)
-			results = self.two_topic_entity(_entities[0],_entities[1],self.dbp)
+			if not self.ask:
+				results = self.two_topic_entity(_entities[0],_entities[1],self.dbp)
+			else:
+				results = self.ask_query(_entities[0], _entities[1], self.dbp)
+
 			self.data['hop-1-properties'] = []
 			self.data['hop-2-properties'] =[]
 			final_results = []
@@ -683,12 +718,11 @@ class Krantikari_v2:
 						self.data['hop-2-properties'].append(paths)
 						#@TODO: Check for two triple about hop-2-properties.
 						final_results.append(_temp_path)
-
-
 			for path in final_results:
 				if path not in self.training_paths:
 					self.training_paths.append(path)
 			self.data['hop-2-properties'] = [list(item) for item in	 set(tuple(row) for row in self.data['hop-2-properties'])]
+
 		# ###########
 		# Paths have been generated and ranked.
 		#   Now verify the state fail variables and decide what to do

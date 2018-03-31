@@ -1,15 +1,289 @@
-from __future__ import print_function
-
 import os
 import numpy as np
-
+import sys
 from abc import abstractmethod
-from keras.engine import Input
-from keras.layers import merge, Embedding, Dropout, Conv1D, Lambda, LSTM, Dense, concatenate, TimeDistributed, \
-    GlobalAveragePooling1D, GlobalMaxPooling1D
-from keras import backend as K
-from keras.models import Model
-import keras
+import torch
+from torch import nn
+import pickle
+import math
+from keras.preprocessing.sequence import pad_sequences
+import pandas as pd
+from torch.autograd import Variable
+from torch.utils.data import Dataset, DataLoader
+from sklearn.utils import shuffle
+
+DEBUG = True
+DATA_DIR = './data/training/pairwise'
+RESOURCE_DIR = './resources'
+EPOCHS = 300
+BATCH_SIZE = 880 # Around 11 splits for full training dataset
+LEARNING_RATE = 0.001
+LOSS = 'categorical_crossentropy'
+NEGATIVE_SAMPLES = 1000
+
+
+class TunableEmbedding(nn.Module):
+    def cudafy(self, x):
+        return x.cuda(self.gpu) if self.gpu is not None else x
+
+
+    def __init__(self, vectors, dim_in, dim_out, dim_tune=5000, dropout=0.0, gpu=0):
+        self.dim_in = dim_in
+        self.dim_out = dim_out
+
+        self.embed = nn.Embedding(
+            dim_in,
+            dim_out
+        )
+        self.embed = nn.Dropout(dropout)(self.embed)
+
+        self.tune = nn.Embedding(
+            dim_tune,
+            dim_out
+        )
+        self.tune = nn.Dropout(dropout)(self.tune)
+        self.mod_ids = lambda sent: sent % (dim_tune-1)+1
+
+        self.embeddings = [self.embed, self.tune]
+        self.initialize_embeddings()
+
+        if gpu is not None:
+            self.cuda(gpu)
+
+
+    def normalize_embeddings(self):
+        for e in self.embeddings:
+            e.weight.data.renorm_(p=2, dim=0, maxnorm=1)
+
+
+
+    def initialize_embeddings(self):
+        r = 6/np.sqrt(self.dim_out)
+
+        for e in self.embeddings:
+            e.weight.data.uniform_(-r, r)
+
+        self.normalize_embeddings()
+
+    def forward(self, sentence):
+        mod_sent = self.mod_ids(sentence)
+        tuning = self.tune(mod_sent)
+        pretrained = self.embed(sentence)
+        vectors = torch.sum(tuning, pretrained)
+        return vectors
+
+class ScoreModel(nn.Network):
+    def __init__(self, vocabulary_size, hidden_size, gpu=0, dropout=0.5):
+        self.gpu = gpu
+        self.dropout = dropout
+        self.hidden_size = hidden_size
+
+        self.embed = TunableEmbedding(vocabulary_size, hidden_size, dropout=dropout)
+        self.encode = nn.LSTM(hidden_size, hidden_size, batch_first=True, bidirectional=True, dropout=dropout)
+
+        if gpu is not None:
+            self.cuda(gpu)
+
+    def encode(self, x):
+        embeddings = self.embed(x)
+        _, (h, _) = self.encode(embeddings)
+        h = h.resize(-1, 2*self.hidden_size)
+        return h
+
+    def forward(self, question, path):
+        question = self.encode(question)
+        path = self.encode(path)
+        return torch.sum(question*path, -1)
+
+class PairwiseRankingModel(nn.Network):
+    def cudafy(self, x):
+        return x.cuda(self.gpu) if self.gpu is not None else x
+
+    def __init__(self, vocabulary_size, hidden_size, gpu=0, dropout=0.5):
+        self.gpu = gpu
+        self.dropout = dropout
+        self.hidden_size = hidden_size
+
+        self.score = ScoreModel(vocabulary_size, hidden_size, gpu, dropout)
+
+        if gpu is not None:
+            self.cuda(gpu)
+
+    def forward(self, question, pos_path, neg_path):
+        pos_score = self.score(question, pos_path)
+        neg_score = self.score(question, neg_path)
+        zero = self.cudafy(torch.FloatTensor([0.0]))
+        criterion = torch.mean(torch.max(Variable(zero), 1.0 - pos_score + neg_score))
+        return criterion
+
+
+
+def get_glove_embeddings():
+    from utils.embeddings_interface import __check_prepared__
+    __check_prepared__('glove')
+
+    from utils.embeddings_interface import glove_embeddings
+    return glove_embeddings
+
+
+def load_data(file, max_sequence_length):
+    glove_embeddings = get_glove_embeddings()
+
+    try:
+        with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy")) as idx:
+            dataset = np.load(data)
+            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
+            index = np.load(idx)
+            vectors = glove_embeddings[index]
+            return vectors, questions, pos_paths, neg_paths
+    except:
+        with open(os.path.join(RESOURCE_DIR, file)) as fp:
+            dataset = pickle.load(fp)
+            questions = [i[0] for i in dataset]
+            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+            pos_paths = [i[1] for i in dataset]
+            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+            neg_paths = [i[2] for i in dataset]
+            neg_paths = [path for paths in neg_paths for path in paths]
+            neg_paths = pad_sequences(neg_paths, maxlen=max_sequence_length, padding='post')
+
+            all = np.concatenate([questions, pos_paths, neg_paths], axis=0)
+            mapped_all, index = pd.factorize(all.flatten(), sort=True)
+            mapped_all = mapped_all.reshape((-1, max_sequence_length))
+            vectors = glove_embeddings[index]
+
+            questions, pos_paths, neg_paths = np.split(mapped_all, [questions.shape[0], questions.shape[0]*2])
+            neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_sequence_length))
+
+            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy"), "w") as idx:
+                np.savez(data, questions, pos_paths, neg_paths)
+                np.save(idx, index)
+
+            return vectors, questions, pos_paths, neg_paths
+
+
+class TrainingDataset(Dataset):
+    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
+        self.dummy_y = np.zeros(batch_size)
+        self.firstDone = False
+        self.max_length = max_length
+        self.neg_paths_per_epoch = neg_paths_per_epoch
+
+        self.questions = np.reshape(np.repeat(np.reshape(questions,
+                                            (questions.shape[0], 1, questions.shape[1])),
+                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+
+        self.pos_paths = np.reshape(np.repeat(np.reshape(pos_paths,
+                                            (pos_paths.shape[0], 1, pos_paths.shape[1])),
+                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+
+        self.neg_paths = neg_paths
+
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
+                                            (-1, self.max_length))
+
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return math.ceil(len(self.questions) / self.batch_size)
+
+    def __getitem__(self, idx):
+        index = lambda x: torch.from_numpy(x[idx * self.batch_size:(idx + 1) * self.batch_size])
+        batch_questions = index(self.questions_shuffled)
+        batch_pos_paths = index(self.pos_paths_shuffled)
+        batch_neg_paths = index(self.neg_paths_shuffled)
+
+        return ([batch_questions, batch_pos_paths, batch_neg_paths], self.dummy_y)
+
+class ValidationDataset(Dataset):
+    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
+        self.dummy_y = np.zeros(batch_size)
+        self.firstDone = False
+        self.max_length = max_length
+        self.neg_paths_per_epoch = neg_paths_per_epoch
+
+        self.questions = np.reshape(np.repeat(np.reshape(questions,
+                                            (questions.shape[0], 1, questions.shape[1])),
+                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
+
+        self.pos_paths = np.reshape(pos_paths,
+                                            (pos_paths.shape[0], 1, pos_paths.shape[1]))
+        self.neg_paths = neg_paths
+        neg_paths_sampled = self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :]
+        self.all_paths = np.reshape(np.concatenate([self.pos_paths, neg_paths_sampled], axis=1), (-1, self.max_length))
+
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return math.ceil(len(self.questions) / self.batch_size)
+
+    def __getitem__(self, idx):
+        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
+        batch_questions = index(self.questions)
+        batch_all_paths = index(self.all_paths)
+
+        return ([batch_questions, batch_all_paths, np.zeros_like(batch_all_paths)], self.dummy_y)
+
+
+def main():
+    gpu = sys.argv[1]
+
+    """
+        Data Time!
+    """
+    # Pull the data up from disk
+    max_length = 50
+
+    vectors, questions, pos_paths, neg_paths = load_data("id_results.pickle", max_length)
+
+    np.random.seed(0) # Random train/test splits stay the same between runs
+
+    # Divide the data into diff blocks
+    split_point = lambda x: int(len(x) * .80)
+
+    def train_split(x):
+        return x[:split_point(x)]
+    def test_split(x):
+        return x[split_point(x):]
+
+    train_pos_paths = train_split(pos_paths)
+    train_neg_paths = train_split(neg_paths)
+    train_questions = train_split(questions)
+
+    test_pos_paths = test_split(pos_paths)
+    test_neg_paths = test_split(neg_paths)
+    test_questions = test_split(questions)
+
+    neg_paths_per_epoch_train = 10
+    neg_paths_per_epoch_test = 1000
+    dummy_y_train = np.zeros(len(train_questions)*neg_paths_per_epoch_train)
+    dummy_y_test = np.zeros(len(test_questions)*(neg_paths_per_epoch_test+1))
+
+    print train_questions.shape
+    print train_pos_paths.shape
+    print train_neg_paths.shape
+
+    print test_questions.shape
+    print test_pos_paths.shape
+    print test_neg_paths.shape
+
+    neg_paths_per_epoch_train = 10
+    neg_paths_per_epoch_test = 1000
+
+    trainLoader = DataLoader(TrainingDataset(train_questions, train_pos_paths, train_neg_paths,
+                                                  max_length, neg_paths_per_epoch_train, BATCH_SIZE))
+    validLoader = DataLoader(ValidationDataset(train_questions, train_pos_paths, train_neg_paths,
+                                                  max_length, neg_paths_per_epoch_test, 9999))
+
+
+
+    model = PairwiseRankingModel()
+    optimizer = optim.Adam(model.parameters())
+
+
 
 
 class QARankingModel:

@@ -2,6 +2,7 @@
 	Some scripts to do somethings. I will update it once I write something.
 '''
 import pickle
+import os.path
 from progressbar import ProgressBar
 from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
@@ -17,7 +18,7 @@ short_forms = {
 dump_location = './resources_v5/'
 
 
-relations_dict = {}
+
 relations_list = []
 
 print "loading the data from ", dump_location
@@ -26,6 +27,15 @@ big_data = pickle.load(open('resources_v5/big_data.pickle'))
 dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 print "done loading the data"
+
+'''
+	Check if the 'relations.pickle' location exists.
+
+'''
+if os.path.isfile(dump_location + 'relations.pickle'):
+	relations_dict = pickle.load(open(dump_location + 'relations.pickle'))
+else:
+	relations_dict = {}
 
 # data['hop-1-properties']
 progbar = ProgressBar()
@@ -51,16 +61,18 @@ for data in iterator:
 	relations_list = relations_list + r
 	relations_list = list(set(relations_list))
 
-counter = 0
+counter = len(relations_dict)
+
 for rel in relations_list:
 	'''
 		['ID','SF','SF Tokenized','SF ID']
 	'''
-	surface_form = dbp.get_label(rel)
-	surface_form_tokenized = nlutils.tokenize(surface_form)
-	surface_form_tokenized_id = embeddings_interface.vocabularize(surface_form_tokenized)
-	relations_dict[rel] = [counter,surface_form,surface_form_tokenized,surface_form_tokenized_id]
-	counter = counter + 1
+	if rel not in relations_dict.keys():
+		surface_form = dbp.get_label(rel)
+		surface_form_tokenized = nlutils.tokenize(surface_form)
+		surface_form_tokenized_id = embeddings_interface.vocabularize(surface_form_tokenized)
+		relations_dict[rel] = [counter,surface_form,surface_form_tokenized,surface_form_tokenized_id]
+		counter = counter + 1
 
 print "dumping the file", dump_location
 
@@ -105,6 +117,4 @@ print "done with idfying and now saving in the dump location: ", dump_location
 pickle.dump(id_big_data,open(dump_location + 'id_big_data.pickle','w+'))
 
 print "done"
-
-
 

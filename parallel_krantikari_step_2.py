@@ -13,6 +13,14 @@ from utils import natural_language_utilities as nlutils
 
 MAX_FALSE_PATHS = 1000
 
+
+def random_choice(path,size):
+	path_length = len(path)
+	a = -1
+	temp = [a for a in xrange(0,len(path))]
+	temp =  np.random.choice(temp,size)
+	return [path[i] for i in temp]
+
 DIR = './resources_v5/'
 def return_combined_result():
 	#@TODO: Handle big data properly
@@ -29,7 +37,7 @@ def return_combined_result():
 		temp_parsing_errors.append(pickle.load(open(DIR + 'parsing_error' + str(file) + '.pickle')))
 		temp_bad_paths.append(pickle.load(open(DIR + 'bad_path' + str(file) + '.pickle')))
 		temp_excepts.append(pickle.load(open(DIR + 'except' + str(file) + '.pickle')))
-		# temp_bigdata.append(pickle.load(open(DIR + 'big_data' + str(file) + '.pickle')))
+		temp_bigdata.append(pickle.load(open(DIR + 'big_data' + str(file) + '.pickle')))
 	results = [y for result in temp_results for y in result]
 	parsing_errors = [y for result in temp_parsing_errors for y in result]
 	bad_paths = [y for result in temp_bad_paths for y in result]
@@ -92,7 +100,8 @@ def main():
 			# actual_length_false_path.append(len(id_fps))
 
 			# Makes the number of Negative Samples constant
-			id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+			# id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+			id_fps = random_choice(id_fps,size=MAX_FALSE_PATHS)
 
 			# Make neat matrices.
 			id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
@@ -185,8 +194,8 @@ def hop_based():
 			# actual_length_false_path.append(len(id_fps))
 
 			# Makes the number of Negative Samples constant
-			id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
-
+			# id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+			id_fps = random_choice(id_fps, size=MAX_FALSE_PATHS)
 			# Make neat matrices.
 			id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
 		except:
@@ -252,8 +261,8 @@ def hop_based_alternative():
 			# actual_length_false_path.append(len(id_fps))
 
 			# Makes the number of Negative Samples constant
-			id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
-
+			# id_fps = np.random.choice(id_fps,size=MAX_FALSE_PATHS)
+			id_fps = random_choice(id_fps, size=MAX_FALSE_PATHS)
 			# Make neat matrices.
 			id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
 		except:

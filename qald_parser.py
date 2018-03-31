@@ -24,12 +24,14 @@
 import json
 import pickle
 import warnings
+from pprint import pprint
 
 from utils.dbpedia_interface import DBPedia
 from utils import natural_language_utilities as nlutils
 
 
 # Some macros
+DEBUG = True
 RAW_QALD_DIR = './resources/qald-7-train-multilingual.json'
 PARSED_QALD_DIR = './resources/qald-7-train-parsed.pickle'
 
@@ -75,7 +77,7 @@ def __fill_double_triple_data__(_triples, _path):
                     -> entity there
                         -> chain path (easy peasy)
     """
-    topic_entity = []
+    topic_entities = []
     first_variable = ''
 
     if not (nlutils.is_dbpedia_uri(_triples[0]['subject']) or nlutils.is_dbpedia_uri(_triples[0]['object'])):
@@ -83,10 +85,10 @@ def __fill_double_triple_data__(_triples, _path):
 
     # Okay so now we have a topic entity, lets store it somewhere
     if nlutils.is_dbpedia_uri(_triples[0]['subject']):
-        topic_entity, first_variable = nlutils.is_dbpedia_shorthand(_triples[0]['subject'], _convert=True), [ _triples[0]['object'] ]
+        topic_entities, first_variable = nlutils.is_dbpedia_shorthand(_triples[0]['subject'], _convert=True), [ _triples[0]['object'] ]
         _path.append('+' + nlutils.is_dbpedia_shorthand(_triples[0]['predicate'], _convert=True))
     elif nlutils.is_dbpedia_uri(_triples[0]['object']):
-        topic_entity, first_variable = nlutils.is_dbpedia_shorthand(_triples[0]['object'], _convert=True), [ _triples[0]['subject'] ]
+        topic_entities, first_variable = nlutils.is_dbpedia_shorthand(_triples[0]['object'], _convert=True), [ _triples[0]['subject'] ]
         _path.append('-' + nlutils.is_dbpedia_shorthand(_triples[0]['predicate'], _convert=True))
     else:
         warnings.warn("qald_parser.__fill_double_triple_data__: Apparently there is no topic entity in all the SPARQL "
@@ -100,21 +102,54 @@ def __fill_double_triple_data__(_triples, _path):
     #   or ent_2 p2 first_v
     # @TODO: verify if I have covered all bases here
 
-    # # Check if there an entity in Triple 2
-    # if nlutils.is_dbpedia_uri(_triples[1]['subject']) or nlutils.is_dbpedia_uri(_triples[1]['object']):
-    #
-    #     # There is. Now verify if the other entity is the same as first_variable
-    #     if _triples[1]['subject'] == first_variable:
-    #
-    #         # [path] + <pred2>
-    #
+    # Check if there an entity in Triple 2
+    if nlutils.is_dbpedia_uri(_triples[1]['subject']) or nlutils.is_dbpedia_uri(_triples[1]['object']):
 
+        # There is. Now verify if the other entity is the same as first_variable
+        if _triples[1]['subject'] == first_variable:
 
+            # [path] + <pred2>
+            topic_entities.append(nlutils.is_dbpedia_shorthand(_triples[1]['object'], _convert=True))
+            _path.append('+' + nlutils.is_dbpedia_shorthand(_triples[1]['predicate'], _convert=True))
 
+        elif _triples[1]['object'] == first_variable:
 
+            # [path] - <pred2>
+            topic_entities.append(nlutils.is_dbpedia_shorthand(_triples[1]['subject'], _convert=True))
+            _path.append('-' + nlutils.is_dbpedia_shorthand(_triples[1]['predicate'], _convert=True))
 
+        else:
 
-    return None, None
+            # This makes no sense. In a query with two triples, we can't have two different variables and two entities
+            warnings.warn(
+                "qald_parser.__fill_double_triple_data__: Apparently there are two topic entities AND two entities "
+                + "in this SPARQL query. Someone royally forked up. Dying now.")
+            return None, None
+
+    else:
+
+        '''
+        There is no entity in the second triple. Then we have two variables.
+
+            - If x rel uri
+                - path will be [path] + rel
+            - If uri rel x
+                - path will be [path] - rel
+
+            ASSUME THAT FIRST VARIABLE IS X *NOT* URI
+        '''
+        if _triples[1]['subject'] == first_variable:
+            _path.append('+' + nlutils.is_dbpedia_shorthand(_triples[1]['predicate'], _convert=True))
+
+        elif _triples[1]['object'] == first_variable:
+            _path.append('-' + nlutils.is_dbpedia_shorthand(_triples[1]['predicate'], _convert=True))
+
+        else:
+            warnings.warn(
+                "qald_parser.__fill_double_triple_data__: Looks like an invalid SPARQL. Returning nones")
+            return None, None
+
+    return _path, topic_entities
 
 
 def get_true_path(sparql):
@@ -130,7 +165,7 @@ def get_true_path(sparql):
     :return:
     """
     constraints = {}
-    entity = ''
+    entity = []
     path = []
 
     # Booleans to make life easy
@@ -175,10 +210,11 @@ def get_true_path(sparql):
             path, entity = __fill_double_triple_data__(_triples=sparql['where']['triples'], _path=path)
 
     elif len(sparql['where']['triples']) == 3:
+        warnings.warn("No code in place for queries with three triples")
         pass
 
     else:
-
+        warnings.warn("No code in place for queries with more than three triples")
         pass
 
     # Before any return condition, check if anything is None. If so, something somewhere forked up and handle it well.
@@ -209,7 +245,11 @@ def run():
         # # Get answer for the query
         # ans = dbp.get_answer(q_raw['query']['sparql'])
 
-        true_path = get_true_path(q_parsed)
+        true_path, topic_entities = get_true_path(q_parsed)
         # false_paths = get_false_paths(ans, true_path)
 
+        if DEBUG:
+            pprint(true_path)
+            pprint("\n")
+            pprint(topic_entities)
         pass

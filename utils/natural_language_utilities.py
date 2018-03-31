@@ -2,19 +2,25 @@ import validators
 import string
 import re
 import os.path
+import warnings
 from urlparse import urlparse
 
 # SOME MACROS
 STOPWORDLIST = 'resources/atire_puurula.txt'
-KNOWN_SHORTHANDS = ['dbo', 'dbp', 'rdf', 'rdfs', 'dbr', 'foaf', 'geo']
-DBP_SHORTHANDS = {'dbo': 'http://dbpedia.org/ontology/', 'dbp': 'http://dbpedia.org/property',
-                  'dbr': 'http://dbpedia.org/resource'}
+KNOWN_SHORTHANDS = ['dbo', 'dbp', 'rdf', 'rdfs', 'dbr', 'foaf', 'geo', 'res']
+DBP_SHORTHANDS = {'dbo': 'http://dbpedia.org/ontology/', 'dbp': 'http://dbpedia.org/property/',
+                  'dbr': 'http://dbpedia.org/resource/', 'res': 'http://dbpedia.org/resource/'}
 # @TODO Import the above list from http://dbpedia.org/sparql?nsdecl
 
 # Few regex to convert camelCase to _ i.e DonaldTrump to donald trump
 first_cap_re = re.compile('(.)([A-Z][a-z]+)')
 all_cap_re = re.compile('([a-z0-9])([A-Z])')
 stopwords = open(STOPWORDLIST).read().split('\n')
+
+
+# Better warning formatting. Ignore.
+def better_warning(message, category, filename, lineno, file=None, line=None):
+    return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
 
 
 def has_url(_string):
@@ -76,7 +82,7 @@ def is_clean_url(_string):
         return False
 
 
-def has_shorthand(_string):
+def is_shorthand(_string):
     splitted_string = _string.split(':')
 
     if len(splitted_string) == 1:
@@ -92,29 +98,45 @@ def has_shorthand(_string):
     return False
 
 
+def is_dbpedia_uri(_string):
+
+    # Check if it is a DBpedia shorthand
+    if is_dbpedia_shorthand(_string=_string, _convert=False):
+        return True
+
+    elif _string.startswith('http://dbpedia.org/'):
+        return True
+
+    return False
+
+
 def is_dbpedia_shorthand(_string, _convert=True):
 
-    if not has_shorthand(_string):
-        return None
+    if not is_shorthand(_string):
+        return _string if _convert else False
 
     splitted_string = _string.split(':')
 
     if len(splitted_string) == 1:
-        return None
+        warnings.warn("nlutils.is_dbpedia_shorthand: Invalid string: %s \n "
+                      + "Please check it yourself, and extrapolate what breaks!")
+        return _string if _convert else False
 
     if splitted_string[0] in DBP_SHORTHANDS.keys():
         # Validate the right side of the ':'
         if '/' in splitted_string[1]:
-            return None
+            warnings.warn("nlutils.is_dbpedia_shorthand: Invalid string: %s \n "
+                          + "Please check it yourself, and extrapolate what breaks!")
+            return _string if _convert else False
 
-        return ''.join([DBP_SHORTHANDS[splitted_string[0]], splitted_string[1]])
+        return ''.join([DBP_SHORTHANDS[splitted_string[0]], splitted_string[1]]) if _convert else True
 
-    return None
+    return _string if _convert else False
 
 
 def has_literal(_string):
-    # Very rudementary logic. Make it better sometime later.
-    if has_url(_string) or has_shorthand(_string):
+    # Very rudimentary logic. Make it better sometime later.
+    if has_url(_string) or is_shorthand(_string):
         return False
     return True
 

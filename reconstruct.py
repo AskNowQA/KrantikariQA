@@ -37,6 +37,7 @@ uri_x_const = '?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?cons_x . ' 
 
 
 relations_dict = pickle.load(open('resources/relations.pickle'))
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 
 
@@ -133,8 +134,6 @@ def reconstruct(ent, core_chain, alternative = False):
 		sparql = sparql_template_3[str(sparql_key)]
 		return sparql % {'r1': str(relations[1]), 'r2': str(relations[3]), 'te1': ent[0],'te2':ent[1]}
 
-
-
 def create_sparql_constraints(sparql):
 	if 'SELECT DISTINCT COUNT(?uri)' not in sparql:
 		sparql_x = sparql.replace('}',x_const).replace('SELECT DISTINCT ?uri', 'SELECT DISTINCT ?cons_x')
@@ -143,7 +142,6 @@ def create_sparql_constraints(sparql):
 		sparql_x = sparql.replace('}', x_const).replace('SELECT DISTINCT COUNT(?uri)', 'SELECT DISTINCT ?cons_x')
 		sparql_uri = sparql.replace('}', uri_const).replace('SELECT DISTINCT COUNT(?uri)', 'SELECT DISTINCT ?cons_uri')
 	return [sparql_x, sparql_uri]
-
 
 def retrive_answers(sparql):
 	if len(sparql) == 2:
@@ -189,320 +187,446 @@ def construct_training_data():
 			"type_uri" : type_uri
 		}
 
+def idfy(training_data_v2,name):
+	MAX_FALSE_PATHS = 270
 
-data_set = json.load(open('resources/data_set.json'))
-new_data = []
-counter = 0
+	id_results = []
 
-for x in data_set:
-	try:
-		data = K.parse_lcquad(x)
-		path = data['path']
-		path = [[p[0], p[1:]] for p in path]
-		path = [x for p in path for x in p]
-		sparql = reconstruct(data['entity'], path, alternative=True)
-		sparqls = create_sparql_constraints(sparql)
-		if len(data['entity']) == 2:
-			sparqls = [sparqls[1]]
-		if len(path) == 2:
-			sparqls = [sparqls[1]]
-		type_x, type_uri = retrive_answers(sparqls)
-		data['constraints_candidates'] = {
-			"type_x": type_x,
-			"type_uri": type_uri
-		}
-		new_data.append(data)
-		print counter
-		counter = counter + 1
-	except:
-		print traceback.print_exc()
-		# raw_input()
-		continue
-
-pickle.dump(new_data,open('resources/rdf-type.pickle','w+'))
-
-rdf = pickle.load(open('resources/rdf-type.pickle'))
-dbp = db_interface.DBPedia(_verbose=True, caching=True)
-
-new_data = []
-t = 0
-for data in rdf:
-	try:
-		temp = data
-		# pprint(data)
-		const = data['constraints']
-		path = ""
+	counter = 0
+	for result in training_data_v2:
+		# Id-fy the entire thing
 		try:
-			path = const['?uri']
-			t= t + 1
+			id_q = embeddings_interface.vocabularize(nlutils.tokenize(result[0]), _embedding="glove")
+			id_tp = embeddings_interface.vocabularize(result[2])
+			id_fps = [embeddings_interface.vocabularize(x) for x in result[3]]
+
+			# Actual length of False Paths
+			# actual_length_false_path.append(len(id_fps))
+
+			# Makes the number of Negative Samples constant
+			# id_fps = np.random.choice(id_fps, size=MAX_FALSE_PATHS)
+			id_fps = random_choice(id_fps, size=MAX_FALSE_PATHS)
+
+			# Make neat matrices.
+			id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
 		except:
-			pass
-		if not path:
+			'''
+				There is some bug in random choice. Need to investigate more on this.
+			'''
+			print traceback.print_exc()
+			raw_input()
+			counter = counter + 1
+	# embeddings_interface.save_out_of_vocab()
+	pickle.dump(id_results, open(DIR + name, 'w+'))
+
+def main():
+	data_set = json.load(open('resources/data_set.json'))
+	new_data = []
+	counter = 0
+
+	for x in data_set:
+		try:
+			data = K.parse_lcquad(x)
+			path = data['path']
+			path = [[p[0], p[1:]] for p in path]
+			path = [x for p in path for x in p]
+			sparql = reconstruct(data['entity'], path, alternative=True)
+			sparqls = create_sparql_constraints(sparql)
+			if len(data['entity']) == 2:
+				sparqls = [sparqls[1]]
+			if len(path) == 2:
+				sparqls = [sparqls[1]]
+			type_x, type_uri = retrive_answers(sparqls)
+			data['constraints_candidates'] = {
+				"type_x": type_x,
+				"type_uri": type_uri
+			}
+			new_data.append(data)
+			print counter
+			counter = counter + 1
+		except:
+			print traceback.print_exc()
+			# raw_input()
+			continue
+
+	pickle.dump(new_data,open('resources/rdf-type.pickle','w+'))
+	rdf = pickle.load(open('resources/rdf-type.pickle'))
+	new_data = []
+	t = 0
+	for data in rdf:
+		try:
+			temp = data
+			# pprint(data)
+			const = data['constraints']
+			path = ""
 			try:
-				path = const['?x']
+				path = const['?uri']
+				t= t + 1
 			except:
 				pass
-		temp['path-constraint'] = path
-		new_data.append(temp)
-		# raw_input()
-	except:
-		continue
+			if not path:
+				try:
+					path = const['?x']
+				except:
+					pass
+			temp['path-constraint'] = path
+			new_data.append(temp)
+			# raw_input()
+		except:
+			continue
 
-error = []
-counter = 0
-for data in new_data:
-	if data['path-constraint'] :
-		if data['path-constraint'] not in data['constraints_candidates']['type_uri'] and data['path-constraint'] not in data['constraints_candidates']['type_x']:
-			counter = counter + 1
-			error.append(data)
+	error = []
+	counter = 0
+	for data in new_data:
+		if data['path-constraint'] :
+			if data['path-constraint'] not in data['constraints_candidates']['type_uri'] and data['path-constraint'] not in data['constraints_candidates']['type_x']:
+				counter = counter + 1
+				error.append(data)
 
-template_dict = {}
+	template_dict = {}
 
-for x in error:
-	if x['sparql_template_id'] in template_dict:
-		template_dict[x['sparql_template_id']] = template_dict[x['sparql_template_id']] + 1
+	for x in error:
+		if x['sparql_template_id'] in template_dict:
+			template_dict[x['sparql_template_id']] = template_dict[x['sparql_template_id']] + 1
+		else:
+			template_dict[x['sparql_template_id']] = 0
+	return rdf
+
+def strategy_1(new_data,id=True):
+	training_data = []
+	training_data_v2 = []
+	true_paths = []
+	false_paths = []
+	for data in new_data:
+		temp = data
+		true_path = ''
+		false_path = []
+		path = path = [[p[0], p[1:]] for p in data['path']]
+		path = [x for p in path for x in p]
+
+		if data['path-constraint'] != "":
+			if '?uri' in data['constraints']:
+				'''
+					Remove the true path from the false path
+				'''
+				try:
+					data['constraints_candidates']['type_uri'].remove(data['path-constraint'])
+				except:
+					print traceback.print_exc()
+					continue
+				#Still need to create this path
+				true_path = path + ['/'] +  ['uri'] + [data['path-constraint']]
+
+			else:
+				try:
+					data['constraints_candidates']['type_x'].remove(data['path-constraint'])
+
+				except:
+					print traceback.print_exc()
+					continue
+				true_path = path + ['/'] + ['x'] +[data['path-constraint']]
+
+			for d in data['constraints_candidates']['type_uri']:
+				false_path.append(path + ['/'] + ['uri'] + [d])
+			for d in data['constraints_candidates']['type_x']:
+				false_path.append(path + ['/'] + ['x'] + [d])
+			temp['true-path'] = true_path
+			temp['false-path'] = false_path
+			label_true_path = []
+			for token in true_path:
+				if token == '/':
+					label_true_path.append('/')
+				else:
+					label_true_path.append(nlutils.tokenize(dbp.get_label(token))[0])
+			temp['label-true-path'] = label_true_path
+			label_false_paths = []
+			for path in false_path:
+				temp_fp = []
+				for token in path:
+					if token == '/':
+						temp_fp.append('/')
+					else:
+						temp_fp.append(nlutils.tokenize(dbp.get_label(token))[0])
+				label_false_paths.append(temp_fp)
+			temp['label-false-path'] = label_false_paths
+			false_paths.append(false_path)
+			true_paths.append(true_path)
+			training_data.append(temp)
+			training_data_v2.append([data[u'corrected_question'],data['entity'],label_true_path,label_false_paths,data['_id']])
+	# pickle.dump(training_data,open('resources/training-rdf-data.pickle','w+'))
+	if id:
+		idfy(training_data_v2, 'training-rdf-data-v1.pickle')
 	else:
-		template_dict[x['sparql_template_id']] = 0
+		pickle.dump(training_data_v2,open(DIR+ 'training-rdf-data-v1.pickle','w+'))
 
+def strategy_2(new_data,id=True):
+	training_data = []
+	training_data_v2 = []
+	true_paths = []
+	false_paths = []
+	for data in new_data:
+		temp = data
+		true_path = ''
+		false_path = []
+		path = path = [[p[0], p[1:]] for p in data['path']]
+		path = [x for p in path for x in p]
 
+		if data['path-constraint'] != "":
+			if '?uri' in data['constraints']:
+				'''
+					Remove the true path from the false path
+				'''
+				try:
+					data['constraints_candidates']['type_uri'].remove(data['path-constraint'])
+				except:
+					print traceback.print_exc()
+					continue
+				#Still need to create this path
+				true_path = ['uri'] + [data['path-constraint']]
 
-
-#########################################################################################
-##########################################################################################
-training_data = []
-training_data_v2 = []
-true_paths = []
-false_paths = []
-for data in new_data:
-	temp = data
-	true_path = ''
-	false_path = []
-	path = path = [[p[0], p[1:]] for p in data['path']]
-	path = [x for p in path for x in p]
-
-	if data['path-constraint'] != "":
-		if '?uri' in data['constraints']:
-			'''
-				Remove the true path from the false path
-			'''
-			try:
-				data['constraints_candidates']['type_uri'].remove(data['path-constraint'])
-			except:
-				print traceback.print_exc()
-				continue
-			#Still need to create this path
-			true_path = path + ['/'] +  ['uri'] + [data['path-constraint']]
-
-		else:
-			try:
-				data['constraints_candidates']['type_x'].remove(data['path-constraint'])
-
-			except:
-				print traceback.print_exc()
-				continue
-			true_path = path + ['/'] + ['x'] +[data['path-constraint']]
-
-		for d in data['constraints_candidates']['type_uri']:
-			false_path.append(path + ['/'] + ['uri'] + [d])
-		for d in data['constraints_candidates']['type_x']:
-			false_path.append(path + ['/'] + ['x'] + [d])
-		temp['true-path'] = true_path
-		temp['false-path'] = false_path
-		label_true_path = []
-		for token in true_path:
-			if token == '/':
-				label_true_path.append('/')
 			else:
-				label_true_path.append(nlutils.tokenize(dbp.get_label(token))[0])
-		temp['label-true-path'] = label_true_path
-		label_false_paths = []
-		for path in false_path:
-			temp_fp = []
-			for token in path:
+				try:
+					data['constraints_candidates']['type_x'].remove(data['path-constraint'])
+
+				except:
+					print traceback.print_exc()
+					continue
+				true_path = ['x'] +[data['path-constraint']]
+
+			for d in data['constraints_candidates']['type_uri']:
+				false_path.append(['uri'] + [d])
+			for d in data['constraints_candidates']['type_x']:
+				false_path.append(['x'] + [d])
+			temp['true-path'] = true_path
+			temp['false-path'] = false_path
+			label_true_path = []
+			for token in true_path:
 				if token == '/':
-					temp_fp.append('/')
+					label_true_path.append('/')
 				else:
-					temp_fp.append(nlutils.tokenize(dbp.get_label(token))[0])
-			label_false_paths.append(temp_fp)
-		temp['label-false-path'] = label_false_paths
-		false_paths.append(false_path)
-		true_paths.append(true_path)
-		training_data.append(temp)
-		training_data_v2.append([data[u'corrected_question'],data['entity'],label_true_path,label_false_paths,data['_id']])
-# pickle.dump(training_data,open('resources/training-rdf-data.pickle','w+'))
-pickle.dump(training_data_v2,open('resources/training-rdf-data.pickle','w+'))
+					label_true_path.append(nlutils.tokenize(dbp.get_label(token))[0])
+			temp['label-true-path'] = label_true_path
+			label_false_paths = []
+			for path in false_path:
+				temp_fp = []
+				for token in path:
+					if token == '/':
+						temp_fp.append('/')
+					else:
+						temp_fp.append(nlutils.tokenize(dbp.get_label(token))[0])
+				label_false_paths.append(temp_fp)
+			temp['label-false-path'] = label_false_paths
+			false_paths.append(false_path)
+			true_paths.append(true_path)
+			training_data.append(temp)
+			training_data_v2.append([data[u'corrected_question'],data['entity'],label_true_path,label_false_paths,data['_id']])
 
-MAX_FALSE_PATHS = 270
+	if id:
+		idfy(training_data_v2, 'training-rdf-data-v2.pickle')
+	else:
+		pickle.dump(training_data_v2,open(DIR+'training-rdf-data-v2.pickle','w+'))
 
-id_results = []
+def strategy_3(new_data,id=True):
+	training_data = []
+	training_data_v2 = []
+	true_paths = []
+	false_paths = []
+	for data in new_data:
+		temp = data
+		true_path = ''
+		false_path = []
+		path = path = [[p[0], p[1:]] for p in data['path']]
+		path = [x for p in path for x in p]
 
-counter = 0
-for result in training_data_v2:
-	# Id-fy the entire thing
-	try:
-		id_q = embeddings_interface.vocabularize(nlutils.tokenize(result[0]), _embedding="glove")
-		id_tp = embeddings_interface.vocabularize(result[2])
-		id_fps = [embeddings_interface.vocabularize(x) for x in result[3]]
+		if data['path-constraint'] != "":
+			if '?uri' in data['constraints']:
+				'''
+					Remove the true path from the false path
+				'''
+				try:
+					data['constraints_candidates']['type_uri'].remove(data['path-constraint'])
+				except:
+					print traceback.print_exc()
+					continue
+				#Still need to create this path
+				true_path = [data['path-constraint']]
 
-		# Actual length of False Paths
-		# actual_length_false_path.append(len(id_fps))
-
-		# Makes the number of Negative Samples constant
-		# id_fps = np.random.choice(id_fps, size=MAX_FALSE_PATHS)
-		id_fps = random_choice(id_fps, size=MAX_FALSE_PATHS)
-
-		# Make neat matrices.
-		id_results.append([id_q, id_tp, id_fps, np.zeros((20, 1))])
-	except:
-		'''
-			There is some bug in random choice. Need to investigate more on this.
-		'''
-		print traceback.print_exc()
-		raw_input()
-		counter = counter + 1
-# embeddings_interface.save_out_of_vocab()
-pickle.dump(id_results, open(DIR + 'rdf_id_results.pickle', 'w+'))
-
-
-############################################################################################################################################
-################################################################################################################
-################################################################################################################
-
-
-training_data = []
-training_data_v2 = []
-true_paths = []
-false_paths = []
-for data in new_data:
-	temp = data
-	true_path = ''
-	false_path = []
-	path = path = [[p[0], p[1:]] for p in data['path']]
-	path = [x for p in path for x in p]
-
-	if data['path-constraint'] != "":
-		if '?uri' in data['constraints']:
-			'''
-				Remove the true path from the false path
-			'''
-			try:
-				data['constraints_candidates']['type_uri'].remove(data['path-constraint'])
-			except:
-				print traceback.print_exc()
-				continue
-			#Still need to create this path
-			true_path = ['uri'] + [data['path-constraint']]
-
-		else:
-			try:
-				data['constraints_candidates']['type_x'].remove(data['path-constraint'])
-
-			except:
-				print traceback.print_exc()
-				continue
-			true_path = ['x'] +[data['path-constraint']]
-
-		for d in data['constraints_candidates']['type_uri']:
-			false_path.append(['uri'] + [d])
-		for d in data['constraints_candidates']['type_x']:
-			false_path.append(['x'] + [d])
-		temp['true-path'] = true_path
-		temp['false-path'] = false_path
-		label_true_path = []
-		for token in true_path:
-			if token == '/':
-				label_true_path.append('/')
 			else:
-				label_true_path.append(nlutils.tokenize(dbp.get_label(token))[0])
-		temp['label-true-path'] = label_true_path
-		label_false_paths = []
-		for path in false_path:
-			temp_fp = []
-			for token in path:
+				try:
+					data['constraints_candidates']['type_x'].remove(data['path-constraint'])
+
+				except:
+					print traceback.print_exc()
+					continue
+				true_path = [data['path-constraint']]
+
+			for d in data['constraints_candidates']['type_uri']:
+				false_path.append([d])
+			for d in data['constraints_candidates']['type_x']:
+				false_path.append([d])
+			temp['true-path'] = true_path
+			temp['false-path'] = false_path
+			label_true_path = []
+			for token in true_path:
 				if token == '/':
-					temp_fp.append('/')
+					label_true_path.append('/')
 				else:
-					temp_fp.append(nlutils.tokenize(dbp.get_label(token))[0])
-			label_false_paths.append(temp_fp)
-		temp['label-false-path'] = label_false_paths
-		false_paths.append(false_path)
-		true_paths.append(true_path)
-		training_data.append(temp)
-		training_data_v2.append([data[u'corrected_question'],data['entity'],label_true_path,label_false_paths,data['_id']])
-# pickle.dump(training_data,open('resources/training-rdf-data.pickle','w+'))
-pickle.dump(training_data_v2,open('resources/training-rdf-data-v2.pickle','w+'))
+					label_true_path.append(nlutils.tokenize(dbp.get_label(token))[0])
+			temp['label-true-path'] = label_true_path
+			label_false_paths = []
+			for path in false_path:
+				temp_fp = []
+				for token in path:
+					if token == '/':
+						temp_fp.append('/')
+					else:
+						temp_fp.append(nlutils.tokenize(dbp.get_label(token))[0])
+				label_false_paths.append(temp_fp)
+			temp['label-false-path'] = label_false_paths
+			false_paths.append(false_path)
+			true_paths.append(true_path)
+			training_data.append(temp)
+			training_data_v2.append([data[u'corrected_question'],data['entity'],label_true_path,label_false_paths,data['_id']])
+	if id:
+		idfy(training_data_v2, 'training-rdf-data-v3.pickle')
+	else:
+		pickle.dump(training_data_v2,open(DIR+'training-rdf-data-v3.pickle','w+'))
 
+def point_wise_strategy_1(data):
+		temp = data
+		true_path = ''
+		false_path = []
+		path = path = [[p[0], p[1:]] for p in data['path']]
+		path = [x for p in path for x in p]
 
+		if data['path-constraint'] != "":
+			if '?uri' in data['constraints']:
+				'''
+					Remove the true path from the false path
+				'''
+				try:
+					data['constraints_candidates']['type_uri'].remove(data['path-constraint'])
+				except:
+					print traceback.print_exc()
+				#Still need to create this path
+				true_path = path + ['/'] +  ['uri'] + [data['path-constraint']]
 
-
-###############################################################################################################################################
-#################################################################################################################################################
-
-
-
-
-
-
-training_data = []
-training_data_v2 = []
-true_paths = []
-false_paths = []
-for data in new_data:
-	temp = data
-	true_path = ''
-	false_path = []
-	path = path = [[p[0], p[1:]] for p in data['path']]
-	path = [x for p in path for x in p]
-
-	if data['path-constraint'] != "":
-		if '?uri' in data['constraints']:
-			'''
-				Remove the true path from the false path
-			'''
-			try:
-				data['constraints_candidates']['type_uri'].remove(data['path-constraint'])
-			except:
-				print traceback.print_exc()
-				continue
-			#Still need to create this path
-			true_path = [data['path-constraint']]
-
-		else:
-			try:
-				data['constraints_candidates']['type_x'].remove(data['path-constraint'])
-
-			except:
-				print traceback.print_exc()
-				continue
-			true_path = [data['path-constraint']]
-
-		for d in data['constraints_candidates']['type_uri']:
-			false_path.append([d])
-		for d in data['constraints_candidates']['type_x']:
-			false_path.append([d])
-		temp['true-path'] = true_path
-		temp['false-path'] = false_path
-		label_true_path = []
-		for token in true_path:
-			if token == '/':
-				label_true_path.append('/')
 			else:
-				label_true_path.append(nlutils.tokenize(dbp.get_label(token))[0])
-		temp['label-true-path'] = label_true_path
-		label_false_paths = []
-		for path in false_path:
-			temp_fp = []
-			for token in path:
-				if token == '/':
-					temp_fp.append('/')
-				else:
-					temp_fp.append(nlutils.tokenize(dbp.get_label(token))[0])
-			label_false_paths.append(temp_fp)
-		temp['label-false-path'] = label_false_paths
-		false_paths.append(false_path)
-		true_paths.append(true_path)
-		training_data.append(temp)
-		training_data_v2.append([data[u'corrected_question'],data['entity'],label_true_path,label_false_paths,data['_id']])
-# pickle.dump(training_data,open('resources/training-rdf-data.pickle','w+'))
-pickle.dump(training_data_v2,open('resources/training-rdf-data-v3.pickle','w+'))
+				try:
+					data['constraints_candidates']['type_x'].remove(data['path-constraint'])
 
+				except:
+					print traceback.print_exc()
+				true_path = path + ['/'] + ['x'] +[data['path-constraint']]
+
+			for d in data['constraints_candidates']['type_uri']:
+				false_path.append(path + ['/'] + ['uri'] + [d])
+			for d in data['constraints_candidates']['type_x']:
+				false_path.append(path + ['/'] + ['x'] + [d])
+			temp['true-path'] = true_path
+			temp['false-path'] = false_path
+			label_true_path = []
+			for token in true_path:
+				if token == '/':
+					label_true_path.append('/')
+				else:
+					label_true_path.append(nlutils.tokenize(dbp.get_label(token))[0])
+			temp['label-true-path'] = label_true_path
+			label_false_paths = []
+			for path in false_path:
+				temp_fp = []
+				for token in path:
+					if token == '/':
+						temp_fp.append('/')
+					else:
+						temp_fp.append(nlutils.tokenize(dbp.get_label(token))[0])
+				label_false_paths.append(temp_fp)
+			temp['label-false-path'] = label_false_paths
+			return temp
+	# 		false_paths.append(false_path)
+	# 		true_paths.append(true_path)
+	# 		training_data.append(temp)
+	# 		training_data_v2.append([data[u'corrected_question'],data['entity'],label_true_path,label_false_paths,data['_id']])
+	# # pickle.dump(training_data,open('resources/training-rdf-data.pickle','w+'))
+	# if id:
+	# 	idfy(training_data_v2, 'training-rdf-data-v1.pickle')
+	# else:
+	# 	pickle.dump(training_data_v2,open(DIR+ 'training-rdf-data-v1.pickle','w+'))
+
+
+
+def point_wise_main(data):
+	new_data = []
+	data_set = [data]
+	for x in data_set:
+		try:
+			data = K.parse_lcquad(x)
+			path = data['path']
+			path = [[p[0], p[1:]] for p in path]
+			path = [x for p in path for x in p]
+			sparql = reconstruct(data['entity'], path, alternative=True)
+			sparqls = create_sparql_constraints(sparql)
+			if len(data['entity']) == 2:
+				sparqls = [sparqls[1]]
+			if len(path) == 2:
+				sparqls = [sparqls[1]]
+			type_x, type_uri = retrive_answers(sparqls)
+			data['constraints_candidates'] = {
+				"type_x": type_x,
+				"type_uri": type_uri
+			}
+			new_data.append(data)
+			print counter
+			counter = counter + 1
+		except:
+			print traceback.print_exc()
+			# raw_input()
+			continue
+
+	pickle.dump(new_data,open('resources/rdf-type.pickle','w+'))
+	rdf = pickle.load(open('resources/rdf-type.pickle'))
+	new_data = []
+	t = 0
+	for data in rdf:
+		try:
+			temp = data
+			# pprint(data)
+			const = data['constraints']
+			path = ""
+			try:
+				path = const['?uri']
+				t= t + 1
+			except:
+				pass
+			if not path:
+				try:
+					path = const['?x']
+				except:
+					pass
+			temp['path-constraint'] = path
+			new_data.append(temp)
+			# raw_input()
+		except:
+			continue
+
+	error = []
+	counter = 0
+	for data in new_data:
+		if data['path-constraint'] :
+			if data['path-constraint'] not in data['constraints_candidates']['type_uri'] and data['path-constraint'] not in data['constraints_candidates']['type_x']:
+				counter = counter + 1
+				error.append(data)
+
+	template_dict = {}
+
+	for x in error:
+		if x['sparql_template_id'] in template_dict:
+			template_dict[x['sparql_template_id']] = template_dict[x['sparql_template_id']] + 1
+		else:
+			template_dict[x['sparql_template_id']] = 0
+	return rdf
+
+new_data = main()
+strategy_1(new_data)
+strategy_2(new_data)
+strategy_3(new_data)

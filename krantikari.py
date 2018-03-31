@@ -1001,6 +1001,25 @@ def parse_lcquad(_data):
             data_node[u'constraints']['count'] = True
         return data_node
 
+    elif _data[u'sparql_template_id'] in [151,152,452,451]:
+        '''
+            #Note that there are no questions of template 152, 452, 451
+            {
+                u'_id': u'af1ad3ef33784711bf9ecd13301e524d',
+                u'corrected_question': u'Does the Toyota Verossa have the front engine design platform?',
+                u'sparql_query': u'ASK WHERE { <http://dbpedia.org/resource/Toyota_Verossa> <http://dbpedia.org/ontology/automobilePlatform> <http://dbpedia.org/resource/Front-engine_design>  . }',
+                u'sparql_template_id': 151,
+                u'verbalized_question': u'Is <Front-engine design> the <automobile platform> of <Toyota Verossa>?'
+            }
+
+        '''
+        data_node = _data
+        triples = get_triples(_data[u'sparql_query'])
+        rel1 = triples[0].split(" ")[1][1:-1]
+        data_node[u'entity'] = [triples[0].split(" ")[0][1:-1], triples[-1].split(" ")[2][1:-1]]
+        data_node[u'path'] = ["+" + rel1]
+        data_node[u'constraints'] = {'ask': True}
+        return data_node
 
 def parse_qald(_data):
 

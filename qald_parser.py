@@ -23,6 +23,7 @@
 """
 import json
 import pickle
+import warnings
 
 from utils.dbpedia_interface import DBPedia
 from utils import natural_language_utilities as nlutils
@@ -32,8 +33,14 @@ from utils import natural_language_utilities as nlutils
 RAW_QALD_DIR = './resources/qald-7-train-multilingual.json'
 PARSED_QALD_DIR = './resources/qald-7-train-parsed.pickle'
 
+
 # Global variables
 dbp = DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
+
+
+# Better warning formatting. Ignore.
+def better_warning(message, category, filename, lineno, file=None, line=None):
+    return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
 
 
 def __fill_single_triple_data__(_triple, _path):
@@ -42,13 +49,13 @@ def __fill_single_triple_data__(_triple, _path):
     if _triple['subject'] == '?':
 
         # Template gon' be: e - r
-        _entity = nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)
+        _entity = [nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)]
         _path.append('-' + nlutils.is_dbpedia_shorthand(_triple['predicate'], _convert=True))
 
     else:
 
         # Template gon' be: e + r
-        _entity = nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)
+        _entity = [nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)]
         _path.append('-' + nlutils.is_dbpedia_shorthand(_triple['predicate'], _convert=True))
 
     return _path, _entity
@@ -68,28 +75,47 @@ def __fill_double_triple_data__(_triples, _path):
                     -> entity there
                         -> chain path (easy peasy)
     """
+    topic_entity = []
+    first_variable = ''
+
+    if not (nlutils.is_dbpedia_uri(_triples[0]['subject']) or nlutils.is_dbpedia_uri(_triples[0]['object'])):
+        _triples = [_triples[1], _triples[0]]
+
+    # Okay so now we have a topic entity, lets store it somewhere
+    if nlutils.is_dbpedia_uri(_triples[0]['subject']):
+        topic_entity, first_variable = nlutils.is_dbpedia_shorthand(_triples[0]['subject'], _convert=True), [ _triples[0]['object'] ]
+        _path.append('+' + nlutils.is_dbpedia_shorthand(_triples[0]['predicate'], _convert=True))
+    elif nlutils.is_dbpedia_uri(_triples[0]['object']):
+        topic_entity, first_variable = nlutils.is_dbpedia_shorthand(_triples[0]['object'], _convert=True), [ _triples[0]['subject'] ]
+        _path.append('-' + nlutils.is_dbpedia_shorthand(_triples[0]['predicate'], _convert=True))
+    else:
+        warnings.warn("qald_parser.__fill_double_triple_data__: Apparently there is no topic entity in all the SPARQL "
+                      + " query. Someone royally forked up. Dying now.")
+        return None, None
+
+    # Based on first_variable, try figuring out the 2nd triple.
+    #   either first_v p2 second_v
+    #   or first_v p2 ent_2
+    #   or second_v p2 first_v
+    #   or ent_2 p2 first_v
+    # @TODO: verify if I have covered all bases here
+
+    # # Check if there an entity in Triple 2
+    # if nlutils.is_dbpedia_uri(_triples[1]['subject']) or nlutils.is_dbpedia_uri(_triples[1]['object']):
+    #
+    #     # There is. Now verify if the other entity is the same as first_variable
+    #     if _triples[1]['subject'] == first_variable:
+    #
+    #         # [path] + <pred2>
+    #
 
 
-    #
-    # # Find the topic entity
-    # for triple in _triples:
-    #
-    #     if entity: break  # Don't bother if you already have a topic entity
-    #
-    #     # Check if it is either a shorthand or a complete url (DBpedia url)
-    #     if nlutils.is_dbpedia_uri(triple['subject']):
-    #
-    #         # Declare this to be the topic entity
-    #         entity = triple['subject']
-    #
-    #     elif nlutils.is_dbpedia_uri(triple['object']):
-    #
-    #         # Declare this to be the topic entity
-    #         entity = triple['object']
-    #
-    #         # We now have a topic entity. Now we want to start creating a path from thereonwards.
+
+
+
 
     return None, None
+
 
 def get_true_path(sparql):
     """
@@ -129,20 +155,17 @@ def get_true_path(sparql):
 
             if triple['predicate'] in ['a', 'rdf:type', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']:
 
+                has_constraint = True
                 # Found it. Figure out what is being constrained.
                 if triple['subject'] in sparql['variables']:
                     constraints['?uri'] = triple['object']  # The constraint is on the uri
                 else:
                     constraints['?x'] = triple['object']
 
-                has_constraint = True
-
         if has_constraint:
 
             # It means that there is only one triple with real data. That can be taken care of easily.
-
             for triple in sparql['where']['triples']:
-
                 if not triple['predicate'] in ['a', 'rdf:type', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']:
                     path, entity = __fill_single_triple_data__(_triple=triple, _path=path)
 
@@ -158,6 +181,8 @@ def get_true_path(sparql):
 
         pass
 
+    # Before any return condition, check if anything is None. If so, something somewhere forked up and handle it well.
+    pass
 
 
 def get_false_paths(entity, truepath):

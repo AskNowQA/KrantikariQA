@@ -18,9 +18,10 @@
                                   u'predicate': u'http://dbpedia.org/ontology/date',
                                   u'subject': u'http://dbpedia.org/resource/Battle_of_Gettysburg'}],
                     u'type': u'bgp'}]}
-
-
 """
+
+# @TODO: - handle ASK | - handle out of scope stuff | - handle the count
+
 import json
 import pickle
 import warnings
@@ -29,12 +30,10 @@ from pprint import pprint
 from utils.dbpedia_interface import DBPedia
 from utils import natural_language_utilities as nlutils
 
-
 # Some macros
 DEBUG = True
 RAW_QALD_DIR = './resources/qald-7-train-multilingual.json'
 PARSED_QALD_DIR = './resources/qald-7-train-parsed.pickle'
-
 
 # Global variables
 dbp = DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
@@ -46,19 +45,22 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 
 def __fill_single_triple_data__(_triple, _path):
-
     # Check whether the s or r is the variable
-    if _triple['subject'] == '?':
+    if str(_triple['subject'][0]) == '?':
 
         # Template gon' be: e - r
         _entity = [nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)]
         _path.append('-' + nlutils.is_dbpedia_shorthand(_triple['predicate'], _convert=True))
 
-    else:
+    elif str(_triple['object'][0]) == '?':
 
         # Template gon' be: e + r
-        _entity = [nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)]
-        _path.append('-' + nlutils.is_dbpedia_shorthand(_triple['predicate'], _convert=True))
+        _entity = [nlutils.is_dbpedia_shorthand(_triple['subject'], _convert=True)]
+        _path.append('+' + nlutils.is_dbpedia_shorthand(_triple['predicate'], _convert=True))
+
+    else:
+        warnings.warn("qald_parser:__fill_single_triple_data: Cannot find a variable anywhere. Something forked up")
+        return None, None
 
     return _path, _entity
 
@@ -76,6 +78,12 @@ def __fill_double_triple_data__(_triples, _path):
                         -> set up signs (confusing ones)
                     -> entity there
                         -> chain path (easy peasy)
+
+            Returns
+                None    : something went wrong
+                -1      : out of scope
+                [ * ]   : regular stuff
+
     """
     topic_entities = []
     first_variable = ''
@@ -85,15 +93,26 @@ def __fill_double_triple_data__(_triples, _path):
 
     # Okay so now we have a topic entity, lets store it somewhere
     if nlutils.is_dbpedia_uri(_triples[0]['subject']):
-        topic_entities, first_variable = nlutils.is_dbpedia_shorthand(_triples[0]['subject'], _convert=True), [ _triples[0]['object'] ]
+        topic_entities, first_variable = [nlutils.is_dbpedia_shorthand(_triples[0]['subject'], _convert=True)], \
+                                         _triples[0]['object']
         _path.append('+' + nlutils.is_dbpedia_shorthand(_triples[0]['predicate'], _convert=True))
     elif nlutils.is_dbpedia_uri(_triples[0]['object']):
-        topic_entities, first_variable = nlutils.is_dbpedia_shorthand(_triples[0]['object'], _convert=True), [ _triples[0]['subject'] ]
+        topic_entities, first_variable = [nlutils.is_dbpedia_shorthand(_triples[0]['object'], _convert=True)], \
+                                         _triples[0]['subject']
         _path.append('-' + nlutils.is_dbpedia_shorthand(_triples[0]['predicate'], _convert=True))
     else:
         warnings.warn("qald_parser.__fill_double_triple_data__: Apparently there is no topic entity in all the SPARQL "
                       + " query. Someone royally forked up. Dying now.")
-        return None, None
+
+        """
+            For the following SPARQL - we can land upon this condition:
+                WHERE {
+                    ?uri dbo:office 'President of the United States' .
+                    ?uri dbo:orderInOffice '16th' . }
+
+            We just flag it as out of scope and go ahead.
+        """
+        return -1, -1
 
     # Based on first_variable, try figuring out the 2nd triple.
     #   either first_v p2 second_v
@@ -130,7 +149,6 @@ def __fill_double_triple_data__(_triples, _path):
 
         '''
         There is no entity in the second triple. Then we have two variables.
-
             - If x rel uri
                 - path will be [path] + rel
             - If uri rel x
@@ -161,6 +179,8 @@ def get_true_path(sparql):
                 for every triple
                     do a huge bunch of complicated logic
 
+        Also, if the question has orderby/filterby, do mention that the question is out of scope
+
     :param sparql:
     :return:
     """
@@ -169,13 +189,28 @@ def get_true_path(sparql):
     path = []
 
     # Booleans to make life easy
-    has_constraint = False
+    has_type_constraint = False
+    out_of_scope = False  # @TODO: put in checks for this.
 
-    if len(sparql['where']['triples']) == 1:
+    # Handling keyerror "triples" i.e. there are no triples to start with
+    try:
+        temp = sparql['where'][0]['triples']
+    except KeyError:
+        warnings.warn("qald_parser.get_true_path: Cannot find any triple to begin with.")
+        return None, None
+    finally:
+        temp = None
 
-        path, entity = __fill_single_triple_data__(_triple=sparql['where']['triples'][0], _path=path)
+    # Detect and handle ASK questions differently.
+    if sparql['queryType'].lower() == 'ask':
+        # @TODO: Write this code.
+        return None, None
 
-    elif len(sparql['where']['triples']) == 2:
+    if len(sparql['where'][0]['triples']) == 1:
+
+        path, entity = __fill_single_triple_data__(_triple=sparql['where'][0]['triples'][0], _path=path)
+
+    elif len(sparql['where'][0]['triples']) == 2:
 
         '''
             -> Find if there is a type constraint
@@ -186,61 +221,88 @@ def get_true_path(sparql):
         '''
 
         # Find (if any) the triple with rdf type constraint
-        for triple in sparql['where']['triples']:
+        for triple in sparql['where'][0]['triples']:
 
             if triple['predicate'] in ['a', 'rdf:type', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']:
 
-                has_constraint = True
+                has_type_constraint = True
                 # Found it. Figure out what is being constrained.
                 if triple['subject'] in sparql['variables']:
                     constraints['?uri'] = triple['object']  # The constraint is on the uri
                 else:
                     constraints['?x'] = triple['object']
 
-        if has_constraint:
+        if has_type_constraint:
 
             # It means that there is only one triple with real data. That can be taken care of easily.
-            for triple in sparql['where']['triples']:
+
+            for triple in sparql['where'][0]['triples']:
                 if not triple['predicate'] in ['a', 'rdf:type', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']:
                     path, entity = __fill_single_triple_data__(_triple=triple, _path=path)
 
         else:
 
             # It is a two triple query, but with no rdf:type constraint and we need to parse it the hard way
-            path, entity = __fill_double_triple_data__(_triples=sparql['where']['triples'], _path=path)
+            path, entity = __fill_double_triple_data__(_triples=sparql['where'][0]['triples'], _path=path)
 
-    elif len(sparql['where']['triples']) == 3:
-        warnings.warn("No code in place for queries with three triples")
-        pass
+    elif len(sparql['where'][0]['triples']) == 3:
+
+        '''
+            Handle this ONLY if one of the triples is an RDF constraint.
+
+            -> Check if we have an rdf constraint here.
+                -> if yes:
+                    - parse it and separate it from the triples. Send the rest to __fill_double_triple_data__
+        '''
+        for triple in sparql['where'][0]['triples']:
+
+            if triple['predicate'] in ['a', 'rdf:type', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']:
+
+                has_type_constraint = True
+
+                # Found it. Figure out what is being constrained.
+                if triple['subject'] in sparql['variables']:
+                    constraints['?uri'] = triple['object']  # The constraint is on the uri
+                else:
+                    constraints['?x'] = triple['object']
+
+                # Pop it out of the list of triples and parse the rest
+                triples = sparql['where'][0]['triples'][:]
+                triples.pop(triples.index(triple))
+
+                path, entity = __fill_double_triple_data__(_triples=triples, _path=path)
+
+        if not has_type_constraint:
+            warnings.warn("No code in place for queries with three triples with *NO* rdf:type constraint")
+            return None, None
 
     else:
         warnings.warn("No code in place for queries with more than three triples")
-        pass
+        return None, None
 
     # Before any return condition, check if anything is None. If so, something somewhere forked up and handle it well.
-    pass
+    return path, entity
 
 
 def get_false_paths(entity, truepath):
-
     return None
 
 
 def run():
-
     # Load QALD
     raw_dataset = json.load(open(RAW_QALD_DIR))['questions']
     parsed_dataset = pickle.load(open(PARSED_QALD_DIR))
-
-    # Basic Pre-Processing
-    raw_dataset = raw_dataset['questions']
 
     # Iterate through every question
     for i in range(len(raw_dataset)):
 
         # Get the QALD question
         q_raw = raw_dataset[i]
-        q_parsed = raw_dataset[i]
+        q_parsed = parsed_dataset[i]
+
+        if DEBUG:
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            print(q_raw['query']['sparql'])
 
         # # Get answer for the query
         # ans = dbp.get_answer(q_raw['query']['sparql'])
@@ -250,6 +312,11 @@ def run():
 
         if DEBUG:
             pprint(true_path)
-            pprint("\n")
             pprint(topic_entities)
+            print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+            # raw_input("Press enter to continue")
         pass
+
+
+if __name__ == "__main__":
+    run()

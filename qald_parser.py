@@ -6,7 +6,7 @@
 
         With the parsed SPARQLs, this will find the true path, and generate their false counterparts as well.
 
-    EXAMPLE of parsed:
+    EXAMPLE of input:
     {
         u'distinct': True,
         u'prefixes': {u'dbo': u'http://dbpedia.org/ontology/',
@@ -18,9 +18,26 @@
                                   u'predicate': u'http://dbpedia.org/ontology/date',
                                   u'subject': u'http://dbpedia.org/resource/Battle_of_Gettysburg'}],
                     u'type': u'bgp'}]}
+
+    EXAMPLE of output:
+    {
+        u'_id': u'7c654505500d49bd835cc07799940fb1',
+        u'constraints': {
+            u'?uri': u'http://dbpedia.org/ontology/Politician',
+            u'count': True},
+        u'corrected_question': u'How many party leaders are there whose parties are headquartered in Berlin?',
+        u'entity': [u'http://dbpedia.org/resource/Berlin'],
+        u'path': [u'-http://dbpedia.org/ontology/headquarter', u'+http://dbpedia.org/ontology/leader'],
+        u'sparql_query': u'SELECT DISTINCT COUNT(?uri) WHERE {
+            ?x <http://dbpedia.org/ontology/headquarter> <http://dbpedia.org/resource/Berlin> .
+            ?x <http://dbpedia.org/ontology/leader> ?uri  .
+            ?uri <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Politician> }',
+        u'sparql_template_id': 405,
+        u'verbalized_question': u'Count the number of <leader> of the <political parties> whose <admin HQ> is <Berlin>.'}
+
 """
 
-# @TODO: - handle ASK | - handle out of scope stuff | - handle the count
+# @TODO: - handle count
 
 import json
 import pickle
@@ -44,7 +61,28 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
 
 
-def __fill_single_triple_data__(_triple, _path):
+def __fill_single_triple_data__(_triple, _path, _ask = False):
+    """
+    :param _triple: the triple from whence we scrape the content
+    :param _path: the path variable which we fill
+    :param _ask: boolean (if we want to handle ask questions)
+    :return:
+        None    : something went wrong
+        -1      : out of scope
+        [ * ]   : regular stuff
+    """
+
+    if _ask:
+        # Check if we have any literal
+        if not (nlutils.is_dbpedia_uri(_triple['subject']) and nlutils.is_dbpedia_uri(_triple['object'])):
+            return -1, -1
+
+        # We don't have any literal
+        _entity = [nlutils.is_dbpedia_shorthand(_triple['subject'], _convert=True),
+                   nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)]
+        _path.append('+' + nlutils.is_dbpedia_shorthand(_triple['predicate'], _convert=True))
+        return _path, _entity
+
     # Check whether the s or r is the variable
     if str(_triple['subject'][0]) == '?':
 
@@ -65,7 +103,7 @@ def __fill_single_triple_data__(_triple, _path):
     return _path, _entity
 
 
-def __fill_double_triple_data__(_triples, _path):
+def __fill_double_triple_data__(_triples, _path, _ask=False):
     """
             There is no entity in triple 1
                 -> check if there's a topic entity on triple 2 and go ahead with it.
@@ -87,6 +125,19 @@ def __fill_double_triple_data__(_triples, _path):
     """
     topic_entities = []
     first_variable = ''
+
+    # if _ask:
+    #     """
+    #         There can be only one variable, i.e. an intermediate variable in these queries. (If at all).
+    #         We are not handling queries with two different triples with no variables.
+    #
+    #         So the only thing we're tackling it e1 p1 ?x . ?x p2 e2. We convert the other variant of this back to this.
+    #     """
+    #     if not nlutils.is_dbpedia_uri(_triples[0]['subject']):
+    #         _triples = [_triples[1], _triples[0]]
+    #
+    #     # Handling Triple 1
+    #     topic_entities
 
     if not (nlutils.is_dbpedia_uri(_triples[0]['subject']) or nlutils.is_dbpedia_uri(_triples[0]['object'])):
         _triples = [_triples[1], _triples[0]]
@@ -140,9 +191,9 @@ def __fill_double_triple_data__(_triples, _path):
         else:
 
             # This makes no sense. In a query with two triples, we can't have two different variables and two entities
-            warnings.warn(
-                "qald_parser.__fill_double_triple_data__: Apparently there are two topic entities AND two entities "
-                + "in this SPARQL query. Someone royally forked up. Dying now.")
+            warnings.warn( "qald_parser.__fill_double_triple_data__: Apparently there are two topic entities AND two "
+                + "entities in this SPARQL query. Someone royally forked up.") if not _ask else warnings.warn(
+                "qald_parser.__fill_double_triple_data__: ASK query has a disjoint graph. WTF." )
             return None, None
 
     else:
@@ -156,6 +207,12 @@ def __fill_double_triple_data__(_triples, _path):
 
             ASSUME THAT FIRST VARIABLE IS X *NOT* URI
         '''
+
+        if _ask:
+            # If this happens, something's wrong. Should not have happened.
+            warnings.warn( "qald_parser.__fill_double_triple_data__: ASK queries can't have two variables.")
+            return None, None
+
         if _triples[1]['subject'] == first_variable:
             _path.append('+' + nlutils.is_dbpedia_shorthand(_triples[1]['predicate'], _convert=True))
 
@@ -163,14 +220,13 @@ def __fill_double_triple_data__(_triples, _path):
             _path.append('-' + nlutils.is_dbpedia_shorthand(_triples[1]['predicate'], _convert=True))
 
         else:
-            warnings.warn(
-                "qald_parser.__fill_double_triple_data__: Looks like an invalid SPARQL. Returning nones")
+            warnings.warn( "qald_parser.__fill_double_triple_data__: Looks like an invalid SPARQL. Returning nones")
             return None, None
 
     return _path, topic_entities
 
 
-def get_true_path(sparql):
+def get_true_path(sparql, raw_sparql):
     """
         Check if there is one or more triples:
             1 Triple:
@@ -190,25 +246,35 @@ def get_true_path(sparql):
 
     # Booleans to make life easy
     has_type_constraint = False
-    out_of_scope = False  # @TODO: put in checks for this.
+    is_ask = False
+    out_of_scope = False
+
+    # For out of scope questions, root em out, return -1 for them.
+    if 'optional' in raw_sparql.lower().replace('{', ' ').replace('.', '').split() or \
+        'union' in raw_sparql.lower().replace('{', ' ').replace('.', '').split() or \
+        'filter' in raw_sparql.lower().replace('{', ' ').replace('.', '').split() or \
+        'order' in raw_sparql.lower().replace('{', ' ').replace('.', '').split():
+
+        warnings.warn("qald_parser.get_true_path: The query is beyond the scope of this script")
+        return -1, -1, {'out-of-scope': True}
 
     # Handling keyerror "triples" i.e. there are no triples to start with
     try:
         temp = sparql['where'][0]['triples']
     except KeyError:
         warnings.warn("qald_parser.get_true_path: Cannot find any triple to begin with.")
-        return None, None
+        return None, None, None
     finally:
         temp = None
 
     # Detect and handle ASK questions differently.
     if sparql['queryType'].lower() == 'ask':
-        # @TODO: Write this code.
-        return None, None
+        is_ask = True
+        constraints['ask'] = True
 
     if len(sparql['where'][0]['triples']) == 1:
 
-        path, entity = __fill_single_triple_data__(_triple=sparql['where'][0]['triples'][0], _path=path)
+        path, entity = __fill_single_triple_data__(_triple=sparql['where'][0]['triples'][0], _path=path, _ask=is_ask)
 
     elif len(sparql['where'][0]['triples']) == 2:
 
@@ -227,9 +293,13 @@ def get_true_path(sparql):
 
                 has_type_constraint = True
                 # Found it. Figure out what is being constrained.
-                if triple['subject'] in sparql['variables']:
-                    constraints['?uri'] = triple['object']  # The constraint is on the uri
-                else:
+                try:
+                    if triple['subject'] in sparql['variables']:
+                        constraints['?uri'] = triple['object']  # The constraint is on the uri
+                    else:
+                        constraints['?x'] = triple['object']
+                except KeyError:
+                    # This is a 2level ASK query with an rdf type constraint. Can only be on interim variable.
                     constraints['?x'] = triple['object']
 
         if has_type_constraint:
@@ -238,12 +308,12 @@ def get_true_path(sparql):
 
             for triple in sparql['where'][0]['triples']:
                 if not triple['predicate'] in ['a', 'rdf:type', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']:
-                    path, entity = __fill_single_triple_data__(_triple=triple, _path=path)
+                    path, entity = __fill_single_triple_data__(_triple=triple, _path=path, _ask=is_ask)
 
         else:
 
             # It is a two triple query, but with no rdf:type constraint and we need to parse it the hard way
-            path, entity = __fill_double_triple_data__(_triples=sparql['where'][0]['triples'], _path=path)
+            path, entity = __fill_double_triple_data__(_triples=sparql['where'][0]['triples'], _path=path, _ask=is_ask)
 
     elif len(sparql['where'][0]['triples']) == 3:
 
@@ -260,25 +330,28 @@ def get_true_path(sparql):
 
                 has_type_constraint = True
 
-                # Found it. Figure out what is being constrained.
-                if triple['subject'] in sparql['variables']:
-                    constraints['?uri'] = triple['object']  # The constraint is on the uri
-                else:
+                try:
+                    if triple['subject'] in sparql['variables']:
+                        constraints['?uri'] = triple['object']  # The constraint is on the uri
+                    else:
+                        constraints['?x'] = triple['object']
+                except KeyError:
+                    # This is a 2level ASK query with an rdf type constraint. Can only be on interim variable.
                     constraints['?x'] = triple['object']
 
                 # Pop it out of the list of triples and parse the rest
                 triples = sparql['where'][0]['triples'][:]
                 triples.pop(triples.index(triple))
 
-                path, entity = __fill_double_triple_data__(_triples=triples, _path=path)
+                path, entity = __fill_double_triple_data__(_triples=triples, _path=path, _ask=is_ask)
 
         if not has_type_constraint:
             warnings.warn("No code in place for queries with three triples with *NO* rdf:type constraint")
-            return None, None
+            return None, None, constraints
 
     else:
         warnings.warn("No code in place for queries with more than three triples")
-        return None, None
+        return None, None, constraints
 
     # Before any return condition, check if anything is None. If so, something somewhere forked up and handle it well.
     return path, entity
@@ -307,14 +380,14 @@ def run():
         # # Get answer for the query
         # ans = dbp.get_answer(q_raw['query']['sparql'])
 
-        true_path, topic_entities = get_true_path(q_parsed)
+        true_path, topic_entities = get_true_path(q_parsed, q_raw)
         # false_paths = get_false_paths(ans, true_path)
 
         if DEBUG:
             pprint(true_path)
             pprint(topic_entities)
             print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
-            # raw_input("Press enter to continue")
+            raw_input("Press enter to continue")
         pass
 
 

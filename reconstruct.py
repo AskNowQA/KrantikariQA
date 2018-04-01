@@ -626,6 +626,9 @@ def point_wise_main(data):
 			template_dict[x['sparql_template_id']] = 0
 	return rdf
 
+
+
+
 new_data = main()
 strategy_1(new_data)
 strategy_2(new_data)

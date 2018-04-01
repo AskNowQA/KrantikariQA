@@ -30,12 +30,12 @@ MODEL_DIR = 'data/training/multi_path_mini/model_00/model.h5'
 QALD_DIR = './resources/qald-7-train-multilingual.json'
 
 #CHANGE MACROS HERE
-RESULTS_DIR = './resources_v6/results'
-LENGTH_DIR = './resources_v6/lengths'
-EXCEPT_LOG = './resources_v6/except'
-BAD_PATH = './resources_v6/bad_path'
-PARSING_ERROR = './resources_v6/parsing_error'
-BIG_DATA = './resources_v6/big_data'
+RESULTS_DIR = './resources_v8/results'
+LENGTH_DIR = './resources_v8/lengths'
+EXCEPT_LOG = './resources_v8/except'
+BAD_PATH = './resources_v8/bad_path'
+PARSING_ERROR = './resources_v8/parsing_error'
+BIG_DATA = './resources_v8/big_data'
 
 short_forms = {
 	'dbo:': 'http://dbpedia.org/ontology/',
@@ -715,13 +715,21 @@ class Krantikari_v2:
 							else:
 								_temp_path.append([path])
 						_temp_path = [y for x in _temp_path for y in x]
-						self.data['hop-2-properties'].append(paths)
+						if self.ask:
+							print "ola"
+							self.data['hop-1-properties'].append(paths)
+						else:
+							self.data['hop-2-properties'].append(paths)
 						#@TODO: Check for two triple about hop-2-properties.
 						final_results.append(_temp_path)
 			for path in final_results:
 				if path not in self.training_paths:
 					self.training_paths.append(path)
-			self.data['hop-2-properties'] = [list(item) for item in	 set(tuple(row) for row in self.data['hop-2-properties'])]
+			if self.ask:
+				self.data['hop-1-properties'] = [list(item) for item in
+												 set(tuple(row) for row in self.data['hop-1-properties'])]
+			else:
+				self.data['hop-2-properties'] = [list(item) for item in	 set(tuple(row) for row in self.data['hop-2-properties'])]
 
 		# ###########
 		# Paths have been generated and ranked.
@@ -839,8 +847,11 @@ def generate_training_data(start,end,qald=False):
 
 
 
-
-			qa = Krantikari_v2(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True)
+			if parsed_data['sparql_template_id'] == 151:
+				qa = Krantikari_v2(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp,
+								   _training=True, _ask=True)
+			else:
+				qa = Krantikari_v2(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True,_ask=False)
 			fps = qa.training_paths
 
 			temp_big_data['uri'] = qa.data

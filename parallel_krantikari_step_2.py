@@ -2,7 +2,7 @@
 	Run this script after completing kranitkari for dataset generation.
 '''
 
-
+import os
 import numpy as np
 from pprint import pprint
 import pickle, json, traceback
@@ -14,14 +14,24 @@ from utils import natural_language_utilities as nlutils
 MAX_FALSE_PATHS = 1000
 
 
+rel = np.asarray([     3, 443091,   1521,      2,  10002])
+
 def random_choice(path,size):
 	path_length = len(path)
+	if len(path) == 0:
+		path.append(rel)
 	a = -1
 	temp = [a for a in xrange(0,len(path))]
 	temp =  np.random.choice(temp,size)
 	return [path[i] for i in temp]
 
-DIR = './resources_v5/'
+DIR = './resources_v8/'
+DIR_FINAL_RESULTS = './resources_v8/final_results/'
+
+if not os.path.exists(DIR_FINAL_RESULTS):
+	os.makedirs(DIR_FINAL_RESULTS)
+
+
 def return_combined_result():
 	#@TODO: Handle big data properly
 	file_name = [250,500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 3000, 3500, 4000, 4500, 5000]
@@ -79,18 +89,25 @@ def return_combined_result():
 	# for e in excepts:
 	# 	id_to_remove.append(e[u'_id'])
 
-	pickle.dump(bigdata,open(DIR + 'big_data.pickle','w+'))
+	pickle.dump(bigdata,open(DIR_FINAL_RESULTS + 'big_data.pickle','w+'))
 
 	new_results = [r for r in results if r[-1] not in id_to_remove]
+	print "length of results are ", str(len(new_results))
 	return new_results
-def main():
+
+
+
+
+
+def main(_new_results):
 	MAX_FALSE_PATHS = 1000
-	new_results = return_combined_result()
+	new_results = _new_results
 	id_results = []
 
 	counter = 0
 	for result in new_results:
 		# Id-fy the entire thing
+
 		try:
 			id_q = embeddings_interface.vocabularize(nlutils.tokenize(result[0]), _embedding="glove")
 			id_tp = embeddings_interface.vocabularize(result[2])
@@ -110,11 +127,13 @@ def main():
 				There is some bug in random choice. Need to investigate more on this.
 			'''
 			counter = counter + 1
-	embeddings_interface.save_out_of_vocab()
-	pickle.dump(id_results,open(DIR + 'id_results.pickle','w+'))
+	# embeddings_interface.save_out_of_vocab()
+	print "problems @main ", str(counter)
+	print "id reuslts are of length @main ", str(len(id_results))
+	pickle.dump(id_results,open(DIR_FINAL_RESULTS + 'id_results.pickle','w+'))
 
 
-def hop_based():
+def hop_based(_new_results):
 	'''
 		This creates a hop based dataset.
 		For example Who is the wife of president of America ?
@@ -123,7 +142,7 @@ def hop_based():
 			[q,[president wife],[fp, containg only two hop]
 	'''
 	MAX_FALSE_PATHS = 1000
-	results = return_combined_result()
+	results = _new_results
 	new_results = []
 	for result in results:
 		if result[2].count('+') + result[2].count('-') == 1:
@@ -203,10 +222,11 @@ def hop_based():
 				There is some bug in random choice. Need to investigate more on this.
 			'''
 			counter = counter + 1
-	print counter
-	embeddings_interface.save_out_of_vocab()
-	pickle.dump(id_results, open(DIR + 'id_results_hop.pickle', 'w+'))
-def hop_based_alternative():
+	print "problems @hop ", str(counter)
+	# embeddings_interface.save_out_of_vocab()
+	print "id reuslts are of length @hop ", str(len(id_results))
+	pickle.dump(id_results, open(DIR_FINAL_RESULTS + 'id_results_hop.pickle', 'w+'))
+def hop_based_alternative(_new_results):
 	'''
 		This creates a hop based dataset.
 		For example Who is the wife of president of America ?
@@ -215,7 +235,7 @@ def hop_based_alternative():
 			[q,[president wife],[fp, containg only two hop]
 	'''
 	MAX_FALSE_PATHS = 1000
-	results = return_combined_result()
+	results = _new_results
 	new_results = []
 	for result in results:
 		if result[2].count('+') + result[2].count('-') == 1:
@@ -270,10 +290,17 @@ def hop_based_alternative():
 				There is some bug in random choice. Need to investigate more on this.
 			'''
 			counter = counter + 1
-	print counter
+	print "problems @hop based alternative", str(counter)
 	'''
 		Saaving out of vocab things
 	'''
-	embeddings_interface.save_out_of_vocab()
-	pickle.dump(id_results, open(DIR + 'id_results_hop_alternative.pickle', 'w+'))
-main()
+	# embeddings_interface.save_out_of_vocab()
+	print "id reuslts are of length @hop alternative ", str(len(id_results))
+	pickle.dump(id_results, open(DIR_FINAL_RESULTS + 'id_results_hop_alternative.pickle', 'w+'))
+
+
+
+results = return_combined_result()
+main(results)
+hop_based_alternative(results)
+hop_based(results)

@@ -1,8 +1,11 @@
 '''
 	Some scripts to do somethings. I will update it once I write something.
 '''
+import time
+import json
 import pickle
 import os.path
+import traceback
 from progressbar import ProgressBar
 from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
@@ -15,15 +18,14 @@ short_forms = {
 	'dbp:': 'http://dbpedia.org/property/'
 }
 
-dump_location = './resources_v5/'
-
+dump_location = './resources_v8/'
 
 
 relations_list = []
 
 print "loading the data from ", dump_location
 
-big_data = pickle.load(open('resources_v5/big_data.pickle'))
+big_data = pickle.load(open('./resources_v8/final_results/big_data.pickle'))
 dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 print "done loading the data"
@@ -36,6 +38,8 @@ if os.path.isfile(dump_location + 'relations.pickle'):
 	relations_dict = pickle.load(open(dump_location + 'relations.pickle'))
 else:
 	relations_dict = {}
+
+print "length of big data file is ", str(len(big_data))
 
 # data['hop-1-properties']
 progbar = ProgressBar()
@@ -55,7 +59,7 @@ for data in iterator:
 	relations = relations + hop_1
 	hop_2 = data['uri']['hop-2-properties']
 	for rel in hop_2:
-		# temp_rel = [rel[1],rel[3]]
+		# temp_rel = [rel[1],rel[3]]ss
 		relations = relations + [rel[1]] + [rel[3]]
 	r = list(set(relations))
 	relations_list = relations_list + r
@@ -76,13 +80,14 @@ for rel in relations_list:
 
 print "dumping the file", dump_location
 
+print "length of unique relations", str(len(relations_dict))
 
 pickle.dump(relations_dict,open(dump_location + 'relations.pickle','w+'))
 
 print "saving the dump locations"
 
 
-embeddings_interface.save_out_of_vocab()
+# embeddings_interface.save_out_of_vocab()
 
 print "done saving "
 
@@ -98,23 +103,33 @@ for data in big_data:
 	data['uri']['hop-1-properties'] = hop1
 	hop2 = [[r[0], relations_dict[r[1]][0], r[2], relations_dict[r[3]][0]] for r in data['uri']['hop-2-properties']]
 	data['uri']['hop-2-properties'] = hop2
+
 	'''
 		Remove the true path from the data['uri']. If not found removing the datapoint
 	'''
 	try:
 		if len(path_id) == 1:
-			new_path_id = [str(path_id[0]),int(path_id[1:])]
+			new_path_id = [str(path_id[0][0]),int(path_id[0][1:])]
 			data['uri']['hop-1-properties'].remove(new_path_id)
 		else:
 			new_path_id = [str(path_id[0][0]),int(path_id[0][1:]), str(path_id[1][0]),int(path_id[1][1:])]
 			data['uri']['hop-2-properties'].remove(new_path_id)
 	except:
+		print "ola"
+		print traceback.print_exc()
 		continue
+	data.pop('label-data')
+	data['uri']['question-id'] = data['uri']['question-id'].tolist()
 	id_big_data.append(data)
 
 print "done with idfying and now saving in the dump location: ", dump_location
 
+print "the length if id big data file is ", str(len(id_big_data))
+
+start = time.clock()
 pickle.dump(id_big_data,open(dump_location + 'id_big_data.pickle','w+'))
-
+print time.clock() - start
+start = time.clock()
+json.dump(id_big_data,open(dump_location+'id_big_data.json','w+'))
+print time.clock() - start
 print "done"
-

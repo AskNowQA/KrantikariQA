@@ -12,7 +12,7 @@ from keras.preprocessing.sequence import pad_sequences
 from network import custom_loss as loss_fn
 from network import rank_precision_metric
 
-DEFAULT_MODEL_DIR = 'data/training/pairwise/model_51'
+DEFAULT_MODEL_DIR = 'data/training/pairwise/model_30'
 
 
 class ModelInterpreter:
@@ -23,15 +23,13 @@ class ModelInterpreter:
             @TODO: Describe most major functions here.
 
         """
-        pass
-        # metric = rank_precision_metric(10)
-        # # Find and load the model from disk.
-        # with K.tf.device('/gpu:' + _gpu):
-        #     K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
-        #     self.model = load_model(os.path.join(_model_dir, 'model.h5'), custom_objects={'custom_loss': loss_fn,
-        #                                                                                   'rank_precision_metric':
-        #                                                                                       metric})
-        # self._parse_model_inputs()
+        # pass
+        metric = rank_precision_metric(10)
+        # Find and load the model from disk.
+        with K.tf.device('/gpu:' + _gpu):
+            K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+            self.model = load_model(os.path.join(_model_dir, 'model.h5'), custom_objects={'custom_loss':custom_loss, 'metric':metric})
+        self._parse_model_inputs()
 
     def _parse_model_inputs(self):
         """
@@ -82,7 +80,7 @@ class ModelInterpreter:
         dummy_paths = np.zeros((len(_id_ps), self.max_path_len))
 
         # Pass to model.
-        similarities = self.model.predict([padded_ques, padded_paths, dummy_paths])
+        similarities = self.model.predict([padded_ques, padded_paths, dummy_paths], batch_size=10000)
 
         # Reshape from an array of n arrays of 1 element [[i],[j],[k]] -> [i,j,k]
         similarities = np.transpose(similarities)[0]
@@ -103,7 +101,7 @@ class ModelInterpreter:
 
 if __name__ == "__main__":
 
-    model_interpreter = ModelInterpreter()
+    model_interpreter = ModelInterpreter("1")
     vq = np.random.rand(15, 300)
     vps = [ np.random.rand(9, 300) for x in range(6)]
     model_interpreter.rank(vq, vps)

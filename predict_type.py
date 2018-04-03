@@ -2,8 +2,9 @@
     This file contains parsing and model code for predicting the rdf:type relation (whether or not we have an rdf:type
         and on which variable)
 """
-import os
 import re
+import os
+import sys
 import json
 import pickle
 import numpy as np
@@ -13,6 +14,7 @@ from keras.models import Model
 from keras import regularizers
 from keras.utils import to_categorical
 from keras.layers import Embedding, Flatten
+import keras.backend.tensorflow_backend as K
 from keras.preprocessing.sequence import pad_sequences
 from keras.layers import Conv1D, MaxPooling1D, Embedding
 from keras.layers import Dense, Input, GlobalMaxPooling1D, Reshape, Flatten, Dropout, LSTM, Bidirectional
@@ -71,7 +73,7 @@ def get_y(_datum):
         return np.asarray([0, 0, 0])
 
     elif uri_matcher:
-        return np.asarray([0, 1, 0])
+        return np.asarray([1, 0, 0])
 
     elif x_matcher:
         return np.asarray([1, 0, 0])
@@ -272,55 +274,59 @@ if __name__ == "__main__":
     """
         Start the training part
     """
-    # Construct a common embedding layer
-    embedding_layer = Embedding(len(vocab_dict),
-                                EMBEDDING_DIM,
-                                weights=[embeddings_mat],
-                                input_length=max_len,
-                                trainable=False)
+    gpu = sys.argv[1]
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
-    # Train
-    cnn_model = cnn_model(embedding_layer, train_X, train_Y, max_len)
-    rnn_model = rnn_model(embedding_layer, train_X, train_Y, max_len)
-    rnn_cnn_model = rnn_cnn_model(embedding_layer, train_X, train_Y, max_len)
+    with K.tf.device('/gpu:' + gpu):
+        # Construct a common embedding layer
+        embedding_layer = Embedding(len(vocab_dict),
+                                    EMBEDDING_DIM,
+                                    weights=[embeddings_mat],
+                                    input_length=max_len,
+                                    trainable=False)
 
-    # Predict
-    cnn_model_predict = cnn_model.predict(test_X)
-    rnn_model_predict = rnn_model.predict(test_X)
-    rnn_cnn_model_predict = rnn_cnn_model.predict(test_X)
+        # Train
+        cnn_model = cnn_model(embedding_layer, train_X, train_Y, max_len)
+        rnn_model = rnn_model(embedding_layer, train_X, train_Y, max_len)
+        rnn_cnn_model = rnn_cnn_model(embedding_layer, train_X, train_Y, max_len)
 
-    # Evaluate
-    result = 0
-    for i in xrange(len(cnn_model_predict)):
-        if np.argmax(cnn_model_predict[i]) == np.argmax(test_Y[i]) or np.argmax(rnn_model_predict[i]) == np.argmax(
-                test_Y[i]):
-            result = result + 1
+        # Predict
+        cnn_model_predict = cnn_model.predict(test_X)
+        rnn_model_predict = rnn_model.predict(test_X)
+        rnn_cnn_model_predict = rnn_cnn_model.predict(test_X)
 
-    print "combined results are ", result
+        # Evaluate
+        result = 0
+        for i in xrange(len(cnn_model_predict)):
+            if np.argmax(cnn_model_predict[i]) == np.argmax(test_Y[i]) or np.argmax(rnn_model_predict[i]) == np.argmax(
+                    test_Y[i]):
+                result = result + 1
 
-    result = 0
-    for i in xrange(len(cnn_model_predict)):
-        if np.argmax(cnn_model_predict[i]) == np.argmax(test_Y[i]):
-            result = result + 1
-    print "cnn model results are ", result
+        print "combined results are ", result
 
-    result = 0
-    for i in xrange(len(rnn_model_predict)):
-        if np.argmax(rnn_model_predict[i]) == np.argmax(test_Y[i]):
-            result = result + 1
-    print "rnn model results are ", result
+        result = 0
+        for i in xrange(len(cnn_model_predict)):
+            if np.argmax(cnn_model_predict[i]) == np.argmax(test_Y[i]):
+                result = result + 1
+        print "cnn model results are ", result
 
-    result = 0
-    for i in xrange(len(rnn_cnn_model_predict)):
-        if np.argmax(rnn_cnn_model_predict[i]) == np.argmax(test_Y[i]):
-            result = result + 1
-    print "rnn model results are ", result
+        result = 0
+        for i in xrange(len(rnn_model_predict)):
+            if np.argmax(rnn_model_predict[i]) == np.argmax(test_Y[i]):
+                result = result + 1
+        print "rnn model results are ", result
 
-    result = 0
-    for i in xrange(len(cnn_model_predict)):
-        if np.argmax(cnn_model_predict[i]) == np.argmax(test_Y[i]) or np.argmax(rnn_model_predict[i]) == np.argmax(
-                test_Y[i]) \
-                or np.argmax(rnn_cnn_model_predict[i]) == np.argmax(test_Y[i]):
-            result = result + 1
+        result = 0
+        for i in xrange(len(rnn_cnn_model_predict)):
+            if np.argmax(rnn_cnn_model_predict[i]) == np.argmax(test_Y[i]):
+                result = result + 1
+        print "rnn model results are ", result
 
-    print "combined results are ", result
+        result = 0
+        for i in xrange(len(cnn_model_predict)):
+            if np.argmax(cnn_model_predict[i]) == np.argmax(test_Y[i]) or np.argmax(rnn_model_predict[i]) == np.argmax(
+                    test_Y[i]) \
+                    or np.argmax(rnn_cnn_model_predict[i]) == np.argmax(test_Y[i]):
+                result = result + 1
+
+        print "combined results are ", result

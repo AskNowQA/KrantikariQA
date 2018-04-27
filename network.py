@@ -634,7 +634,7 @@ def load_data(file, max_sequence_length, relations):
         with open(os.path.join(RESOURCE_DIR, file)) as fp:
             dataset = json.load(fp)
             questions = [i['uri']['question-id'] for i in dataset]
-            # questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
             pos_paths = []
             for i in dataset:
                 path_id = i['parsed-data']['path_id']
@@ -645,7 +645,7 @@ def load_data(file, max_sequence_length, relations):
                 pos_paths.append(positive_path)
 
 
-            # pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
             neg_paths = []
             for i in dataset:
                 negative_paths_id = i['uri']['hop-2-properties'] + i['uri']['hop-1-properties']
@@ -659,9 +659,10 @@ def load_data(file, max_sequence_length, relations):
                         except ValueError:
                             negative_path += relations[int(p)][3].tolist()
                     negative_paths.append(negative_path)
+                np.random.choice(negative_paths,1000)
                 neg_paths.append(negative_paths)
 
-            neg_paths = [i[2] for i in dataset]
+            # neg_paths = [i[2] for i in dataset]
             neg_paths = [path for paths in neg_paths for path in paths]
             neg_paths = pad_sequences(neg_paths, maxlen=max_sequence_length, padding='post')
 

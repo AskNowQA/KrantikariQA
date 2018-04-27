@@ -37,11 +37,14 @@ from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.layers import Merge
 from sklearn.utils import shuffle
 
+from utils import embeddings_interface
+
+
 
 # Some Macros
 DEBUG = True
 DATA_DIR = './data/training/pairwise'
-RESOURCE_DIR = './resources'
+RESOURCE_DIR = './resources_v8'
 EPOCHS = 300
 BATCH_SIZE = 880 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
@@ -187,6 +190,16 @@ def custom_loss(y_true, y_pred):
     return K.sum(diff)
 
 
+def load_relation(relation_file):
+    relations = pickle.load(open(relation_file))
+    inverse_relations = {}
+    for key in relations:
+        value = relations[key]
+        new_key = value[0]
+        value[0] = key
+        inverse_relations[new_key] = value
+
+    return inverse_relations
 def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
     max_length = test_questions.shape[-1]
     questions = np.reshape(np.repeat(np.reshape(test_questions,
@@ -599,7 +612,6 @@ class ValidationCallback(Callback):
 #         self.losses.append(current_loss_value)
 #         # You could also print it out here.
 
-
 def cross_correlation(x):
     a, b = x
     tf = K.tf
@@ -608,7 +620,7 @@ def cross_correlation(x):
     ifft = tf.ifft(tf.conj(a_fft) * b_fft)
     return tf.cast(tf.real(ifft), 'float32')
 
-def load_data(file, max_sequence_length):
+def load_data(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
@@ -618,13 +630,37 @@ def load_data(file, max_sequence_length):
             index = np.load(idx)
             vectors = glove_embeddings[index]
             return vectors, questions, pos_paths, neg_paths
-    except:
+    except (EOFError,IOError) as e:
         with open(os.path.join(RESOURCE_DIR, file)) as fp:
-            dataset = pickle.load(fp)
-            questions = [i[0] for i in dataset]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
-            pos_paths = [i[1] for i in dataset]
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+            dataset = json.load(fp)
+            questions = [i['uri']['question-id'] for i in dataset]
+            # questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+            pos_paths = []
+            for i in dataset:
+                path_id = i['parsed-data']['path_id']
+                positive_path = []
+                for p in path_id:
+                    positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
+                    positive_path += relations[int(p[1:])][3].tolist()
+                pos_paths.append(positive_path)
+
+
+            # pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+            neg_paths = []
+            for i in dataset:
+                negative_paths_id = i['uri']['hop-2-properties'] + i['uri']['hop-1-properties']
+                np.random.shuffle(negative_paths_id)
+                negative_paths = []
+                for neg_path in negative_paths_id:
+                    negative_path = []
+                    for p in neg_path:
+                        try:
+                            negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
+                        except ValueError:
+                            negative_path += relations[int(p)][3].tolist()
+                    negative_paths.append(negative_path)
+                neg_paths.append(negative_paths)
+
             neg_paths = [i[2] for i in dataset]
             neg_paths = [path for paths in neg_paths for path in paths]
             neg_paths = pad_sequences(neg_paths, maxlen=max_sequence_length, padding='post')
@@ -643,12 +679,10 @@ def load_data(file, max_sequence_length):
 
             return vectors, questions, pos_paths, neg_paths
 
-
-
 def main():
 
-    gpu = sys.argv[1]
-    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+    # gpu = sys.argv[1]
+    # os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
 
     """
@@ -656,8 +690,8 @@ def main():
     """
     # Pull the data up from disk
     max_length = 50
-
-    vectors, questions, pos_paths, neg_paths = load_data("id_results_hop_alternative.pickle", max_length)
+    relations = load_relation('resources_v8/relations.pickle')
+    vectors, questions, pos_paths, neg_paths = load_data("id_big_data.json", max_length,relations)
     # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
     # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
     # if pos_paths.shape[1] < questions.shape[1]:
@@ -795,8 +829,6 @@ def main():
     # print "Loss     = ", results[0]
     # print "F1 Score = ", results[1]
     # print "Accuracy = ", results[2]
-
-
 
 
 if __name__ == "__main__":

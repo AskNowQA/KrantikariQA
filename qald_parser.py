@@ -1,5 +1,4 @@
 """
-
     This script intends to make a BIG_DATA counterpart for QALD questions.
         It expects the SPARQLs to be parsed and stored in JSON format
         via: https://github.com/RubenVerborgh/SPARQL.js
@@ -33,8 +32,8 @@
             ?x <http://dbpedia.org/ontology/leader> ?uri  .
             ?uri <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Politician> }',
         u'sparql_template_id': 405,
-        u'verbalized_question': u'Count the number of <leader> of the <political parties> whose <admin HQ> is <Berlin>.'}
-
+        u'verbalized_question': u'Count the number of <leader> of the <political parties> whose <admin HQ> is <Berlin>.'
+    }
 """
 
 # @TODO: - handle count
@@ -131,7 +130,7 @@ def __fill_double_triple_data__(_triples, _path, _ask=False):
     #         There can be only one variable, i.e. an intermediate variable in these queries. (If at all).
     #         We are not handling queries with two different triples with no variables.
     #
-    #         So the only thing we're tackling it e1 p1 ?x . ?x p2 e2. We convert the other variant of this back to this.
+    #         So the only thing we're tackling it e1 p1 ?x . ?x p2 e2. We convert the other variant of this back to this
     #     """
     #     if not nlutils.is_dbpedia_uri(_triples[0]['subject']):
     #         _triples = [_triples[1], _triples[0]]
@@ -191,7 +190,7 @@ def __fill_double_triple_data__(_triples, _path, _ask=False):
         else:
 
             # This makes no sense. In a query with two triples, we can't have two different variables and two entities
-            warnings.warn( "qald_parser.__fill_double_triple_data__: Apparently there are two topic entities AND two "
+            warnings.warn("qald_parser.__fill_double_triple_data__: Apparently there are two topic entities AND two "
                 + "entities in this SPARQL query. Someone royally forked up.") if not _ask else warnings.warn(
                 "qald_parser.__fill_double_triple_data__: ASK query has a disjoint graph. WTF." )
             return None, None
@@ -237,7 +236,8 @@ def get_true_path(sparql, raw_sparql):
 
         Also, if the question has orderby/filterby, do mention that the question is out of scope
 
-    :param sparql:
+    :param sparql: ze parsed SPARQL json
+    :param raw_sparql: ze raw SPARQL string
     :return:
     """
     constraints = {}

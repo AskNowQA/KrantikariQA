@@ -65,8 +65,6 @@ def custom_loss(y_true, y_pred):
     # return K.sum(K.maximum(1.0 - diff, 0.))
     return K.sum(diff)
 
-import torch as t
-
 
 def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
     max_length = test_questions.shape[-1]

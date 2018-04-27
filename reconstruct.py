@@ -9,8 +9,8 @@ from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
 
-BIG_DATA_DIR = 'resources/big_data.pickle'
-DIR = './resources_v5/'
+# BIG_DATA_DIR = 'resources/big_data.pickle'
+DIR = './resources_v8/'
 
 sparql_template_1 = {
 	"-" : 'SELECT DISTINCT ?uri WHERE {?uri <%(r1)s> <%(te1)s> . }',
@@ -28,6 +28,10 @@ sparql_template_3 = {
 	"+-" : 'SELECT DISTINCT ?uri WHERE { <%(te1)s> <%(r1)s> ?uri . <te2> <%(r2)s> ?uri  . }',
 	"--" : 'SELECT DISTINCT ?uri WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . }',
 	"-+" : 'SELECT DISTINCT ?uri WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . }'
+}
+
+sparql_template_ask = {
+	"+" : 'SELECT DISTINCT ?uri WHERE { <%(te1)s> <%(r1)s> <%(te2)s> . }'
 }
 
 x_const = '  ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?cons_x . } '
@@ -125,6 +129,9 @@ def reconstruct(ent, core_chain, alternative = False):
 			sparql = sparql_template_2[str(sparql_key)]
 			return sparql % {'r1' : str(relations[1]), 'r2' : str(relations[3]), 'te1':ent[0]}
 	else:
+		if rel_length == 1:
+			sparql = sparql_template_ask[core_chain[0]]
+			return sparql % {'r1': str(relations[1]), 'te1': ent[0], 'te2' : ent[1]}
 		if '+' in core_chain[1:]:
 			index_of = core_chain[1:].index('+')
 		else:
@@ -232,7 +239,7 @@ def main():
 			path = [x for p in path for x in p]
 			sparql = reconstruct(data['entity'], path, alternative=True)
 			sparqls = create_sparql_constraints(sparql)
-			if len(data['entity']) == 2:
+			if len(data['entity']) == 2 :
 				sparqls = [sparqls[1]]
 			if len(path) == 2:
 				sparqls = [sparqls[1]]
@@ -553,83 +560,62 @@ def point_wise_strategy_1(data):
 	# else:
 	# 	pickle.dump(training_data_v2,open(DIR+ 'training-rdf-data-v1.pickle','w+'))
 
+def runtime_const(x):
+
+	try:
+		data = K.parse_lcquad(x)
+		path = data['path']
+		path = [[p[0], p[1:]] for p in path]
+		path = [x for p in path for x in p]
+		sparql = reconstruct(data['entity'], path, alternative=True)
+		sparqls = create_sparql_constraints(sparql)
+		if len(data['entity']) == 2:
+			sparqls = [sparqls[1]]
+		if len(path) == 2:
+			sparqls = [sparqls[1]]
+		type_x, type_uri = retrive_answers(sparqls)
+		data['constraints_candidates'] = {
+			"type_x": type_x,
+			"type_uri": type_uri
+		}
+		return data['constraints_candidates']
+	except:
+		print traceback.print_exc()
+		return None
+
+#
+# new_data = main()
+# strategy_1(new_data)
+# strategy_2(new_data)
+# strategy_3(new_data)
 
 
-def point_wise_main(data):
-	new_data = []
-	data_set = [data]
-	for x in data_set:
+def generate_constraint(data):
+	'''
+		>This will accept the id_big_data
+		>Create relationships with id mapping.
+	'''
+	#check if the constraint exists
+	const = data['constraints']
+	path = ""
+	try:
+		path = const['?uri']
+	except:
+		pass
+	if not path:
 		try:
-			data = K.parse_lcquad(x)
-			path = data['path']
-			path = [[p[0], p[1:]] for p in path]
-			path = [x for p in path for x in p]
-			sparql = reconstruct(data['entity'], path, alternative=True)
-			sparqls = create_sparql_constraints(sparql)
-			if len(data['entity']) == 2:
-				sparqls = [sparqls[1]]
-			if len(path) == 2:
-				sparqls = [sparqls[1]]
-			type_x, type_uri = retrive_answers(sparqls)
-			data['constraints_candidates'] = {
-				"type_x": type_x,
-				"type_uri": type_uri
-			}
-			new_data.append(data)
-			print counter
-			counter = counter + 1
+			path = const['?x']
 		except:
-			print traceback.print_exc()
-			# raw_input()
-			continue
-
-	pickle.dump(new_data,open('resources/rdf-type.pickle','w+'))
-	rdf = pickle.load(open('resources/rdf-type.pickle'))
-	new_data = []
-	t = 0
-	for data in rdf:
-		try:
-			temp = data
-			# pprint(data)
-			const = data['constraints']
-			path = ""
-			try:
-				path = const['?uri']
-				t= t + 1
-			except:
-				pass
-			if not path:
-				try:
-					path = const['?x']
-				except:
-					pass
-			temp['path-constraint'] = path
-			new_data.append(temp)
-			# raw_input()
-		except:
-			continue
-
-	error = []
-	counter = 0
-	for data in new_data:
-		if data['path-constraint'] :
-			if data['path-constraint'] not in data['constraints_candidates']['type_uri'] and data['path-constraint'] not in data['constraints_candidates']['type_x']:
-				counter = counter + 1
-				error.append(data)
-
-	template_dict = {}
-
-	for x in error:
-		if x['sparql_template_id'] in template_dict:
-			template_dict[x['sparql_template_id']] = template_dict[x['sparql_template_id']] + 1
+			pass
+	if path:
+		constraints_candidates = runtime_const(data['parsed-data'])
+		if not constraints_candidates:
+			return None
 		else:
-			template_dict[x['sparql_template_id']] = 0
-	return rdf
+			if path not in constraints_candidates['type_uri'] and path not in constraints_candidates['type_x']:
+				print "path not in generated candidates"
+				return None
+			else:
+				return constraints_candidates
 
-
-
-
-new_data = main()
-strategy_1(new_data)
-strategy_2(new_data)
-strategy_3(new_data)
+# strategy_1(main())

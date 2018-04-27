@@ -36,6 +36,7 @@ from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.layers import Merge
 from sklearn.utils import shuffle
+from pprint import pprint
 
 from utils import embeddings_interface
 
@@ -115,6 +116,7 @@ def predicted_positives(y_true, y_pred):
     return K.sum(K.round(K.clip(y_pred, 0, 1)))
 
 
+
 def fmeasure(y_true, y_pred):
     """Computes the f-measure, the harmonic mean of precision and recall.
     Here it is only computed as a batch-wise average, not globally.
@@ -188,6 +190,8 @@ def custom_loss(y_true, y_pred):
     diff = y_pred[:,-1]
     # return K.sum(K.maximum(1.0 - diff, 0.))
     return K.sum(diff)
+
+
 
 
 def load_relation(relation_file):
@@ -626,6 +630,7 @@ def load_data(file, max_sequence_length, relations):
     try:
         with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy")) as idx:
             dataset = np.load(data)
+            # dataset = dataset[:10]
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
             index = np.load(idx)
             vectors = glove_embeddings[index]
@@ -633,6 +638,7 @@ def load_data(file, max_sequence_length, relations):
     except (EOFError,IOError) as e:
         with open(os.path.join(RESOURCE_DIR, file)) as fp:
             dataset = json.load(fp)
+            # dataset = dataset[:10]
             questions = [i['uri']['question-id'] for i in dataset]
             questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
             pos_paths = []
@@ -659,7 +665,15 @@ def load_data(file, max_sequence_length, relations):
                         except ValueError:
                             negative_path += relations[int(p)][3].tolist()
                     negative_paths.append(negative_path)
-                np.random.choice(negative_paths,1000)
+                try:
+                    negative_paths = np.random.choice(negative_paths,1000)
+                except ValueError:
+                    if len(negative_paths) == 0:
+                        negative_paths = neg_paths[-1]
+                        print "Using previous question's paths for this since no neg paths for this question."
+                    index = np.random.randint(0, len(negative_paths), 1000)
+                    negative_paths = np.array(negative_paths)
+                    negative_paths = negative_paths[index]
                 neg_paths.append(negative_paths)
 
             # neg_paths = [i[2] for i in dataset]
@@ -682,8 +696,8 @@ def load_data(file, max_sequence_length, relations):
 
 def main():
 
-    # gpu = sys.argv[1]
-    # os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+    gpu = sys.argv[1]
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
 
     """
@@ -752,9 +766,9 @@ def main():
         # holographic_forward = Dense(1, activation='sigmoid')
         # final_forward = Dense(1, activation='sigmoid')
 
-        embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.4)
-        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.4)
-	#encode = LSTM(max_length)(encode)
+        embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.6)
+        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.5)
+#encode = LSTM(max_length)(encode)
         # attend = _Attention(max_length, nr_hidden, dropout=0.4, L2=0.01)
         # align = _SoftAlignment(max_length, nr_hidden)
         # compare = _Comparison(max_length, nr_hidden, dropout=0.4, L2=0.01)

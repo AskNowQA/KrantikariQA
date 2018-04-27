@@ -126,9 +126,9 @@ print "done with idfying and now saving in the dump location: ", dump_location
 
 print "the length if id big data file is ", str(len(id_big_data))
 
-start = time.clock()
-pickle.dump(id_big_data,open(dump_location + 'id_big_data.pickle','w+'))
-print time.clock() - start
+# start = time.clock()
+# pickle.dump(id_big_data,open(dump_location + 'id_big_data.pickle','w+'))
+# print time.clock() - start
 start = time.clock()
 json.dump(id_big_data,open(dump_location+'id_big_data.json','w+'))
 print time.clock() - start

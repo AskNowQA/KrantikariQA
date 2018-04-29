@@ -443,7 +443,7 @@ class _Attention(object):
             att_ji = K.batch_dot(AB[1], K.permute_dimensions(AB[0], (0, 2, 1)))
             return K.permute_dimensions(att_ji,(0, 2, 1))
         return merge(
-                [self.model(sent1), self.model(sent2)],
+                [self.model(sent1), self.model(c)],
                 mode=_outer,
                 output_shape=(self.max_length, self.max_length))
 
@@ -651,7 +651,6 @@ def load_data(file, max_sequence_length, relations):
                 pos_paths.append(positive_path)
 
 
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
             neg_paths = []
             for i in dataset:
                 negative_paths_id = i['uri']['hop-2-properties'] + i['uri']['hop-1-properties']
@@ -677,8 +676,43 @@ def load_data(file, max_sequence_length, relations):
                 neg_paths.append(negative_paths)
 
             # neg_paths = [i[2] for i in dataset]
+            #####################
+            #Removing duplicates#
+            #####################
+            temp = neg_paths[0][0]
+            for i in xrange(0, len(pos_paths)):
+                to_remove = []
+                for j in range(0,len(neg_paths[i])):
+                    if np.array_equal(pos_paths[i], neg_paths[i][j]):
+                        # to_remove.append(j)
+                        if j != 0:
+                            if not np.array_equal(pos_paths[i], neg_paths[i][j-1]):
+                                neg_paths[i][j] = neg_paths[i][j-1]
+                            else:
+                                if j- 2 != 0:
+                                    neg_paths[i][j] = neg_paths[i][j-2]
+                                else:
+                                    try:
+                                        neg_paths[i][j] = neg_paths[i][j+1]
+                                    except IndexError:
+                                        neg_paths[i][j] = neg_paths[i][j-1]
+                        else:
+                            if not np.array_equal(pos_paths[i], neg_paths[i][j + 1]):
+                                neg_paths[i][j] = neg_paths[i][j+1]
+                            else:
+                                try:
+                                    neg_paths[i][j] = neg_paths[i][j+2]
+                                except IndexError:
+                                    neg_paths[i][j] = neg_paths[i][j+1]
+
+
+                # neg_paths[i] = np.delete(neg_paths[i], to_remove) if to_remove else neg_paths[i]
+            # for index in to_remove:
+
+
             neg_paths = [path for paths in neg_paths for path in paths]
             neg_paths = pad_sequences(neg_paths, maxlen=max_sequence_length, padding='post')
+            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
 
             all = np.concatenate([questions, pos_paths, neg_paths], axis=0)
             mapped_all, index = pd.factorize(all.flatten(), sort=True)
@@ -704,9 +738,30 @@ def main():
         Data Time!
     """
     # Pull the data up from disk
-    max_length = 50
+    max_length = 25
     relations = load_relation('resources_v8/relations.pickle')
     vectors, questions, pos_paths, neg_paths = load_data("id_big_data.json", max_length,relations)
+
+    counter = 0
+    for i in xrange(0, len(pos_paths)):
+        temp = -1
+        for neg in neg_paths[i]:
+            temp = temp + 1
+            if np.array_equal(pos_paths[i], neg):
+                # print i, temp
+                # print neg
+                # print pos_paths[i]
+                counter = counter + 1
+                # raw_input()
+                break
+    if counter > 0:
+        print counter
+        print "critical condition entered"
+        pickle.dump(questions,open('./resources_v8/questions_new.pickle','w+'))
+        pickle.dump(vectors,open('./resources_v8/vectors_new.pickle','w+'))
+        pickle.dump(pos_paths,open('./resources_v8/positive_paths_new.pickle','w+'))
+        pickle.dump(neg_paths,open('./resources_v8/negative_paths_new.pickle','w+'))
+        print "done with dumping everything"
     # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
     # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
     # if pos_paths.shape[1] < questions.shape[1]:
@@ -766,9 +821,9 @@ def main():
         # holographic_forward = Dense(1, activation='sigmoid')
         # final_forward = Dense(1, activation='sigmoid')
 
-        embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.6)
-        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.5)
-#encode = LSTM(max_length)(encode)
+        embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
+        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.3)
+        # encode = LSTM(max_length)(encode)
         # attend = _Attention(max_length, nr_hidden, dropout=0.4, L2=0.01)
         # align = _SoftAlignment(max_length, nr_hidden)
         # compare = _Comparison(max_length, nr_hidden, dropout=0.4, L2=0.01)

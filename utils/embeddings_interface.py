@@ -41,7 +41,9 @@ glove_location = \
 
 OUT_OF_VOCAB = 'resources/out_of_vocab.pickle'
 MAX_GLOVE_LENGTH = 0
+SPECIAL_CHARACTERS = ['PAD', 'UNK', '+', '-', '/','uri','x']
 out_of_vocab = []   #keeps track of all the out of vocab words
+
 
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
@@ -114,20 +116,20 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 glove_vocab = {}
 
                 # Push Special chars artificially.
-                glove_vocab['PAD'] = 0
-                glove_vocab['UNK'] = 1
-                glove_vocab['+'] = 2
-                glove_vocab['-'] = 3
-                glove_vocab['/'] = 4
-                glove_vocab['uri'] = 5
-                glove_vocab['x'] = 6
+                glove_vocab[SPECIAL_CHARACTERS[0]] = 0
+                glove_vocab[SPECIAL_CHARACTERS[1]] = 1
+                glove_vocab[SPECIAL_CHARACTERS[2]] = 2
+                glove_vocab[SPECIAL_CHARACTERS[3]] = 3
+                glove_vocab[SPECIAL_CHARACTERS[4]] = 4
+                glove_vocab[SPECIAL_CHARACTERS[5]] = 5
+                glove_vocab[SPECIAL_CHARACTERS[6]] = 6
 
                 f = open(os.path.join(glove_location['dir'], glove_location['raw']))
                 counter = 7
                 for line in f:
                     values = line.split()
                     word = values[0]
-                    if word in ['PAD', 'UNK', '+', '-', '/','uri','x']:
+                    if word in SPECIAL_CHARACTERS:
                         continue
                     glove_vocab[word] = counter
                     counter += 1
@@ -191,6 +193,23 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 values = line.split()
                 word = values[0]
                 coefs = np.asarray(values[1:], dtype='float32')
+
+                # Special Character Check
+                if word in SPECIAL_CHARACTERS:
+                    if word == "+":
+                        coefs= np.repeat(1, 300)
+                    elif word == "-":
+                        coefs = np.repeat(-1, 300)
+                    elif word == "/":
+                        coefs = np.repeat(0.5, 300)
+                    elif word == "PAD":
+                        coefs = np.zeros(300, dtype=np.float32)
+                    elif word == "x":
+                        coefs = np.repeat(2, 300)
+                    elif word == "uri":
+                        coefs = np.repeat(-2, 300)
+
+
                 glove_embeddings[glove_vocab[word]] = coefs
                 # try:
                 #     glove_embeddings[glove_vocab[word]] = coefs
@@ -203,6 +222,9 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 #     except:
                 #         glove_embeddings[glove_vocab[word]] = np.random.rand(1, 300)
             f.close()
+
+            # Manually inject unk embedding
+            glove_embeddings[1] = np.repeat(-0.5, 300)
 
             # Now store them to disk
             np.save(os.path.join(glove_location['dir'], glove_location['parsed']), glove_embeddings)
@@ -277,21 +299,6 @@ def vectorize(_tokens, _report_unks=False, _encode_special_chars=False, _embeddi
             token_embedding = np.repeat(-0.5, 300)
 
         finally:
-
-            if _encode_special_chars:
-                # If you want path dividers like +, - or / to be treated specially
-                if token == "+":
-                    token_embedding = np.repeat(1, 300)
-                elif token == "-":
-                    token_embedding = np.repeat(-1, 300)
-                elif token == "/":
-                    token_embedding = np.repeat(0.5, 300)
-                elif token == "PAD":
-                    token_embedding = np.zeros(300, dtype=np.float32)
-                elif token == "x":
-                    token_embedding = np.repeat(2, 300)
-                elif token == "uri":
-                    token_embedding = np.repeat(-2, 300)
 
             op += [token_embedding]
 

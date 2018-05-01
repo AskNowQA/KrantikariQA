@@ -306,7 +306,7 @@ class CustomModelCheckpoint(Callback):
                         if self.save_weights_only:
                             self.model.save_weights(filepath, overwrite=True)
                         else:
-                            smart_save_model(model)
+                            smart_save_model(self.model)
                             # self.model.save(filepath, overwrite=True)
                     else:
                         if self.verbose > 0:
@@ -318,8 +318,8 @@ class CustomModelCheckpoint(Callback):
                 if self.save_weights_only:
                     self.model.save_weights(filepath, overwrite=True)
                 else:
-                    smart_save_model(model)
-                    self.model.save(filepath, overwrite=True)
+                    smart_save_model(self.model)
+                    # self.model.save(filepath, overwrite=True)
 
 
 class TrainingDataGenerator(Sequence):
@@ -653,7 +653,7 @@ def load_data(file, max_sequence_length, relations):
     except (EOFError,IOError) as e:
         with open(os.path.join(RESOURCE_DIR, file)) as fp:
             dataset = json.load(fp)
-            # dataset = dataset[:10]
+            dataset = dataset[:10]
             questions = [i['uri']['question-id'] for i in dataset]
             questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
             pos_paths = []
@@ -728,13 +728,16 @@ def load_data(file, max_sequence_length, relations):
             neg_paths = [path for paths in neg_paths for path in paths]
             neg_paths = pad_sequences(neg_paths, maxlen=max_sequence_length, padding='post')
             pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-
+            pickle.dump(pos_paths,open('./resources_v8/pos_before.pickle','w+'))
             all = np.concatenate([questions, pos_paths, neg_paths], axis=0)
             mapped_all, index = pd.factorize(all.flatten(), sort=True)
+            pickle.dump(index,open('./resources_v8/index.pickle','w+'))
+            pickle.dump(mapped_all,open('./resources_v8/mapped_all.pickle','w+'))
             mapped_all = mapped_all.reshape((-1, max_sequence_length))
             vectors = glove_embeddings[index]
 
             questions, pos_paths, neg_paths = np.split(mapped_all, [questions.shape[0], questions.shape[0]*2])
+            pickle.dump(pos_paths, open('./resources_v8/pos_after.pickle','w+'))
             neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_sequence_length))
 
             with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy"), "w") as idx:
@@ -887,12 +890,12 @@ def main_parikh(_gpu):
         validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
                                                   max_length, neg_paths_per_epoch_test, 9999)
 
-        smart_save_model(model)
+        # smart_save_model(model)
         json_desc, dir = get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
         checkpointer = CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,\
-            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=2)
+            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=10)
 
         model.fit_generator(training_generator, epochs=EPOCHS, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
@@ -1055,12 +1058,12 @@ def main_bidirectional(_gpu):
         validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
                                                   max_length, neg_paths_per_epoch_test, 9999)
 
-        smart_save_model(model)
+        # smart_save_model(model)
         json_desc, dir = get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
         checkpointer = CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,\
-            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=2)
+            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=10)
 
         model.fit_generator(training_generator, epochs=EPOCHS, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')

@@ -191,9 +191,6 @@ def custom_loss(y_true, y_pred):
     # return K.sum(K.maximum(1.0 - diff, 0.))
     return K.sum(diff)
 
-
-
-
 def load_relation(relation_file):
     relations = pickle.load(open(relation_file))
     inverse_relations = {}
@@ -204,6 +201,7 @@ def load_relation(relation_file):
         inverse_relations[new_key] = value
 
     return inverse_relations
+
 def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
     max_length = test_questions.shape[-1]
     questions = np.reshape(np.repeat(np.reshape(test_questions,
@@ -443,7 +441,7 @@ class _Attention(object):
             att_ji = K.batch_dot(AB[1], K.permute_dimensions(AB[0], (0, 2, 1)))
             return K.permute_dimensions(att_ji,(0, 2, 1))
         return merge(
-                [self.model(sent1), self.model(c)],
+                [self.model(sent1), self.model(sent2)],
                 mode=_outer,
                 output_shape=(self.max_length, self.max_length))
 
@@ -530,6 +528,20 @@ class _GlobalSumPooling1D(Layer):
             return K.sum(x, axis=1)
 
 class _BiRNNEncoding(object):
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0):
+        self.model = Sequential()
+        self.model.add(Bidirectional(LSTM(units, return_sequences=True,
+                                         dropout_W=dropout, dropout_U=dropout),
+                                         input_shape=(max_length, embedding_dims)))
+        #self.model.add(LSTM(units, return_sequences=False,
+        #                                 dropout_W=dropout, dropout_U=dropout))
+        self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
+        self.model.add(TimeDistributed(Dropout(0.2)))
+
+    def __call__(self, sentence):
+        return self.model(sentence)
+
+class _simple_BiRNNEncoding(object):
     def __init__(self, max_length, embedding_dims, units, dropout=0.0):
         self.model = Sequential()
         self.model.add(Bidirectional(LSTM(units, return_sequences=False,
@@ -728,12 +740,9 @@ def load_data(file, max_sequence_length, relations):
 
             return vectors, questions, pos_paths, neg_paths
 
-def main():
+def main_parikh(_gpu):
 
-    gpu = sys.argv[1]
-    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
-
-
+    gpu = _gpu
     """
         Data Time!
     """
@@ -745,23 +754,20 @@ def main():
     counter = 0
     for i in xrange(0, len(pos_paths)):
         temp = -1
-        for neg in neg_paths[i]:
-            temp = temp + 1
-            if np.array_equal(pos_paths[i], neg):
-                # print i, temp
-                # print neg
-                # print pos_paths[i]
-                counter = counter + 1
-                # raw_input()
-                break
-    if counter > 0:
-        print counter
-        print "critical condition entered"
-        pickle.dump(questions,open('./resources_v8/questions_new.pickle','w+'))
-        pickle.dump(vectors,open('./resources_v8/vectors_new.pickle','w+'))
-        pickle.dump(pos_paths,open('./resources_v8/positive_paths_new.pickle','w+'))
-        pickle.dump(neg_paths,open('./resources_v8/negative_paths_new.pickle','w+'))
-        print "done with dumping everything"
+        for j in xrange(0,len(neg_paths[i])):
+            if np.array_equal(pos_paths[i], neg_paths[i][j]):
+                if j == 0:
+                    neg_paths[i][j] = neg_paths[i][j+10]
+                else:
+                    neg_paths[i][j] = neg_paths[i][0]
+    # if counter > 0:
+    #     print counter
+    #     print "critical condition entered"
+    #     pickle.dump(questions,open('./resources_v8/questions_new.pickle','w+'))
+    #     pickle.dump(vectors,open('./resources_v8/vectors_new.pickle','w+'))
+    #     pickle.dump(pos_paths,open('./resources_v8/positive_paths_new.pickle','w+'))
+    #     pickle.dump(neg_paths,open('./resources_v8/negative_paths_new.pickle','w+'))
+    #     print "done with dumping everything"
     # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
     # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
     # if pos_paths.shape[1] < questions.shape[1]:
@@ -822,11 +828,179 @@ def main():
         # final_forward = Dense(1, activation='sigmoid')
 
         embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
-        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.3)
+        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.5)
         # encode = LSTM(max_length)(encode)
-        # attend = _Attention(max_length, nr_hidden, dropout=0.4, L2=0.01)
+        attend = _Attention(max_length, nr_hidden, dropout=0.6, L2=0.01)
+        align = _SoftAlignment(max_length, nr_hidden)
+        compare = _Comparison(max_length, nr_hidden, dropout=0.6, L2=0.01)
+        entail = _Entailment(nr_hidden, 1, dropout=0.4, L2=0.01)
+
+        def getScore(ques, path):
+            x_ques_embedded = embed(ques)
+            x_path_embedded = embed(path)
+
+            ques_encoded = encode(x_ques_embedded)
+            path_encoded = encode(x_path_embedded)
+
+            # holographic_score = holographic_forward(Lambda(lambda x: cross_correlation(x)) ([ques_encoded, path_encoded]))
+            # dot_score = dot([ques_encoded, path_encoded], axes=-1)
+            # l1_score = Lambda(lambda x: K.abs(x[0]-x[1]))([ques_encoded, path_encoded])
+
+            # return final_forward(concatenate([holographic_score, dot_score, l1_score], axis=-1))
+            # return dot_score
+
+            #
+            attention = attend(ques_encoded, path_encoded)
+
+            align_ques = align(path_encoded, attention)
+            align_path = align(ques_encoded, attention, transpose=True)
+
+            feats_ques = compare(ques_encoded, align_ques)
+            feats_path = compare(path_encoded, align_path)
+
+            return entail(feats_ques, feats_path)
+
+        pos_score = getScore(x_ques, x_pos_path)
+        neg_score = getScore(x_ques, x_neg_path)
+
+        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
+
+        output = concatenate([pos_score, neg_score, loss], axis=-1)
+
+        # Model time!
+        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+            outputs=[output])
+
+        print(model.summary())
+
+        model.compile(optimizer=OPTIMIZER,
+                      loss=custom_loss)
+
+        # Prepare training data
+        training_input = [train_questions, train_pos_paths, train_neg_paths]
+
+        training_generator = TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                  max_length, neg_paths_per_epoch_train, BATCH_SIZE)
+        validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                  max_length, neg_paths_per_epoch_test, 9999)
+
+
+        json_desc, dir = get_smart_save_path(model)
+        model_save_path = os.path.join(dir, 'model.h5')
+
+        checkpointer = CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,\
+            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=2)
+
+        model.fit_generator(training_generator, epochs=EPOCHS, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
+            # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
+    # ])
+
+
+
+        # Prepare test data
+
+        print "Precision (hits@1) = ", rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000)
+
+    # print "Evaluation Complete"
+    # print "Loss     = ", results[0]
+    # print "F1 Score = ", results[1]
+    # print "Accuracy = ", results[2]
+
+
+def main_bidirectional(_gpu):
+
+
+    """
+        Data Time!
+    """
+    # Pull the data up from disk
+    gpu = _gpu
+    max_length = 25
+    relations = load_relation('resources_v8/relations.pickle')
+    vectors, questions, pos_paths, neg_paths = load_data("id_big_data.json", max_length,relations)
+
+    counter = 0
+    for i in xrange(0, len(pos_paths)):
+        temp = -1
+        for j in xrange(0,len(neg_paths[i])):
+            if np.array_equal(pos_paths[i], neg_paths[i][j]):
+                if j == 0:
+                    neg_paths[i][j] = neg_paths[i][j+10]
+                else:
+                    neg_paths[i][j] = neg_paths[i][0]
+    # if counter > 0:
+    #     print counter
+    #     print "critical condition entered"
+    #     pickle.dump(questions,open('./resources_v8/questions_new.pickle','w+'))
+    #     pickle.dump(vectors,open('./resources_v8/vectors_new.pickle','w+'))
+    #     pickle.dump(pos_paths,open('./resources_v8/positive_paths_new.pickle','w+'))
+    #     pickle.dump(neg_paths,open('./resources_v8/negative_paths_new.pickle','w+'))
+    #     print "done with dumping everything"
+    # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
+    # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
+    # if pos_paths.shape[1] < questions.shape[1]:
+    #     pos_paths = pad(pos_paths)
+    #     neg_paths = pad(neg_paths)
+    # else:
+    #     questions = pad(questions)
+
+    # Shuffle these matrices together @TODO this!
+    np.random.seed(0) # Random train/test splits stay the same between runs
+
+    # Divide the data into diff blocks
+    split_point = lambda x: int(len(x) * .80)
+
+    def train_split(x):
+        return x[:split_point(x)]
+    def test_split(x):
+        return x[split_point(x):]
+
+    train_pos_paths = train_split(pos_paths)
+    train_neg_paths = train_split(neg_paths)
+    train_questions = train_split(questions)
+
+    test_pos_paths = test_split(pos_paths)
+    test_neg_paths = test_split(neg_paths)
+    test_questions = test_split(questions)
+
+    neg_paths_per_epoch_train = 10
+    neg_paths_per_epoch_test = 1000
+    dummy_y_train = np.zeros(len(train_questions)*neg_paths_per_epoch_train)
+    dummy_y_test = np.zeros(len(test_questions)*(neg_paths_per_epoch_test+1))
+
+    print train_questions.shape
+    print train_pos_paths.shape
+    print train_neg_paths.shape
+
+    print test_questions.shape
+    print test_pos_paths.shape
+    print test_neg_paths.shape
+
+    with K.tf.device('/gpu:' + gpu):
+        neg_paths_per_epoch_train = 10
+        neg_paths_per_epoch_test = 1000
+        K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+        """
+            Model Time!
+        """
+        max_length = train_questions.shape[1]
+        # Define input to the models
+        x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
+        x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
+        x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
+
+        embedding_dims = vectors.shape[1]
+        nr_hidden = 128
+
+        # holographic_forward = Dense(1, activation='sigmoid')
+        # final_forward = Dense(1, activation='sigmoid')
+
+        embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
+        encode = _simple_BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.5)
+        # encode = LSTM(max_length)(encode)
+        # attend = _Attention(max_length, nr_hidden, dropout=0.6, L2=0.01)
         # align = _SoftAlignment(max_length, nr_hidden)
-        # compare = _Comparison(max_length, nr_hidden, dropout=0.4, L2=0.01)
+        # compare = _Comparison(max_length, nr_hidden, dropout=0.6, L2=0.01)
         # entail = _Entailment(nr_hidden, 1, dropout=0.4, L2=0.01)
 
         def getScore(ques, path):
@@ -845,13 +1019,13 @@ def main():
 
             #
             # attention = attend(ques_encoded, path_encoded)
-            #
+			#
             # align_ques = align(path_encoded, attention)
             # align_path = align(ques_encoded, attention, transpose=True)
-            #
+			#
             # feats_ques = compare(ques_encoded, align_ques)
             # feats_path = compare(path_encoded, align_path)
-            #
+
             # return entail(feats_ques, feats_path)
 
         pos_score = getScore(x_ques, x_pos_path)
@@ -883,7 +1057,7 @@ def main():
         model_save_path = os.path.join(dir, 'model.h5')
 
         checkpointer = CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,\
-            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=10)
+            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=2)
 
         model.fit_generator(training_generator, epochs=EPOCHS, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
             # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
@@ -895,11 +1069,11 @@ def main():
 
         print "Precision (hits@1) = ", rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000)
 
-    # print "Evaluation Complete"
-    # print "Loss     = ", results[0]
-    # print "F1 Score = ", results[1]
-    # print "Accuracy = ", results[2]
-
-
 if __name__ == "__main__":
-    main()
+    gpu = sys.argv[1]
+    model = sys.argv[2]
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+    if model == "b"
+        main_bidirectional(gpu)
+    else:
+        main_parikh(gpu)

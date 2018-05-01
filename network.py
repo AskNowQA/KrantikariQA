@@ -171,6 +171,7 @@ def smart_save_model(model):
 
     :return: None
     """
+    if DEBUG: print "@smart save model called"
     json_desc, l_dir = get_smart_save_path(model)
     path = os.path.join(l_dir, 'model.h5')
     if DEBUG:
@@ -305,7 +306,8 @@ class CustomModelCheckpoint(Callback):
                         if self.save_weights_only:
                             self.model.save_weights(filepath, overwrite=True)
                         else:
-                            self.model.save(filepath, overwrite=True)
+                            smart_save_model(model)
+                            # self.model.save(filepath, overwrite=True)
                     else:
                         if self.verbose > 0:
                             print('\nEpoch %05d: %s did not improve' %
@@ -316,6 +318,7 @@ class CustomModelCheckpoint(Callback):
                 if self.save_weights_only:
                     self.model.save_weights(filepath, overwrite=True)
                 else:
+                    smart_save_model(model)
                     self.model.save(filepath, overwrite=True)
 
 
@@ -884,7 +887,7 @@ def main_parikh(_gpu):
         validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
                                                   max_length, neg_paths_per_epoch_test, 9999)
 
-
+        smart_save_model(model)
         json_desc, dir = get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
@@ -1052,7 +1055,7 @@ def main_bidirectional(_gpu):
         validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
                                                   max_length, neg_paths_per_epoch_test, 9999)
 
-
+        smart_save_model(model)
         json_desc, dir = get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
@@ -1073,7 +1076,7 @@ if __name__ == "__main__":
     gpu = sys.argv[1]
     model = sys.argv[2]
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
-    if model == "b"
-        main_bidirectional(gpu)
-    else:
+    if model == "p":
         main_parikh(gpu)
+    else:
+        main_bidirectional(gpu)

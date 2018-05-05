@@ -11,17 +11,18 @@ import os
 from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
 
-gpu = '1'
+gpu = '0'
 os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
 import sys
 import json
 import math
 import pickle
-from progressbar import ProgressBar
 import numpy as np
 import pandas as pd
 from keras import optimizers
+from progressbar import ProgressBar
+import data_preparation_rdf_type as drt
 import keras.backend.tensorflow_backend as K
 from keras.preprocessing.sequence import pad_sequences
 
@@ -251,6 +252,109 @@ def create_data_big_data(data,keras=True):
     question = data['parsed-data']['corrected_question']
     return [question,true_path,false_paths,id_paths]
 
+def rel_id_to_rel(rel,relations):
+    '''
+
+
+    :param rel:
+    :param relations: The relation lookup is inverse here
+    :return:
+    '''
+    occurrences = []
+    for key in relations:
+        value = relations[key]
+        if np.array_equal(value[3],np.asarray(rel)):
+            occurrences.append(value)
+    if len(occurrences) == 1:
+        return occurrences[0][-1]
+    else:
+        '''
+            prefers ontology over properties
+        '''
+        if 'property' in occurrences[0][3]:
+            return occurrences[1][0]
+        else:
+            return occurrences[0][0]
+
+def return_sign(sign):
+    if sign == 2:
+        return '+'
+    else:
+        return '-'
+
+def id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True):
+    '''
+
+
+	:param path_id:  array([   3, 3106,    3,  647]) - corechain wihtout entity
+	:param vocab: from continuous id space to discrete id space.
+	:param relations: inverse relation lookup dictionary
+	:return: paths
+	'''
+
+    # mapping from discrete space to continuous space.
+    path_id = np.asarray([reverse_vocab[i] for i in path_id])
+    #find all the relations in the given paths
+
+    if core_chain:
+        '''
+            Identify the length. Is it one hop or two.
+            The assumption is '+' is 2 and '-' is 3
+        '''
+        rel_length = 1
+        if 2 in path_id[1:].tolist() or 3 in path_id[1:].tolist():
+            rel_length = 2
+
+        if rel_length == 2:
+                sign_1 = path_id[0]
+                try:
+                    index_sign_2 = path_id[1:].tolist().index(2) + 1
+                except ValueError:
+                    index_sign_2 = path_id[1:].tolist().index(3) + 1
+                rel_1,rel_2 = path_id[1:index_sign_2],path_id[index_sign_2+1:]
+                rel_1 = rel_id_to_rel(rel_1,relations)
+                rel_2 = rel_id_to_rel(rel_2,relations)
+                sign_2 = index_sign_2
+                path = [return_sign(sign_1),rel_1,return_sign(sign_2),rel_2]
+                return path
+        else:
+            sign_1 = path_id[0]
+            rel_1 = path_id[1:]
+            rel_1 = rel_id_to_rel(rel_1,relations)
+            path = [return_sign(sign_1),rel_1]
+            return path
+    else:
+        variable = path_id[0]
+        sign_1 = path_id[1]
+        rel_1 = rel_id_to_rel(path_id[2:],relations)
+        pass
+
+
+def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, core_chain = True):
+    data = data['parsed-data']
+    path = id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True)
+    sparql = drt.reconstruct(data['entity'], path, alternative=True)
+    sparqls = drt.create_sparql_constraints(sparql)
+    if len(data['entity']) == 2:
+        sparqls = [sparqls[1]]
+    if len(path) == 2:
+        sparqls = [sparqls[1]]
+    type_x, type_uri = drt.retrive_answers(sparqls)
+
+    # Remove the "actual" constraint from this list (so that we only create negative samples)
+    try:
+        type_x = [x for x in type_x if x not in data['constraints']['x']]
+    except KeyError:
+        pass
+
+    try:
+        type_uri = [x for x in type_uri if x not in data['constraints']['uri']]
+    except KeyError:
+        pass
+
+    type_x_candidates, type_uri_candidates = drt.create_valid_paths(type_x, type_uri)
+    return type_x_candidates+type_uri_candidates
+
 
 def load_relation(relation_file):
     relations = pickle.load(open(relation_file))
@@ -259,6 +363,7 @@ def load_relation(relation_file):
         value = relations[key]
         new_key = value[0]
         value[0] = key
+        value.append(new_key)
         inverse_relations[new_key] = value
 
     return inverse_relations
@@ -281,7 +386,9 @@ with K.tf.device('/gpu:' + gpu):
     from keras.models import load_model
     metric = rank_precision_metric(10)
     model_corechain = load_model("./data/training/pairwise/model_32/model.h5", {'custom_loss':custom_loss, 'metric':metric})
-    # model_rdf_type_check = load_model("./data/training/rdf/model_00/model.h5", {'custom_loss':custom_loss, 'metric':metric})
+    model_rdf_type_check = load_model("./data/training/rdf/model_00/model.h5", {'custom_loss':custom_loss, 'metric':metric})
+    model_rdf_type_existence = load_model("./data/training/type-existence/model_00/model.h5")
+    model_question_intent = load_model("./data/training/intent/model_00/model.h5")
 
 
 def rdf_type_check(question,model_rdf_type_check, max_length = 30):
@@ -311,9 +418,17 @@ def remove_positive_path(positive_path, negative_paths):
     return positive_path, np.asarray(new_negative_paths)
 
 
-id_data = json.load(open('resources_v8/id_big_data.json'))
+
+
+
+id_data = pickle.load(open('resources_v8/id_big_data.json'))
 vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
 relations = load_relation('resources_v8/relations.pickle')
+
+
+reverse_vocab = {}
+for keys in vocab:
+    reverse_vocab[vocab[keys]] = keys
 
 id_data_test = test_split(id_data)
 id_data_train = train_split(id_data)
@@ -328,6 +443,10 @@ iterator = progbar(id_data_train)
 print "the length of train data is ", len(id_data_test)
 core_chain_counter = 0
 for data in iterator:
+
+    #some macros which would be useful for constructing sparqls
+    rdf_type = True
+
     #Padded version of question.
     question = np.asarray(data['uri']['question-id'])
     # questions = pad_sequences([question], maxlen=max_length, padding='post')
@@ -377,11 +496,62 @@ for data in iterator:
     if len(negative_paths) == 0:
         core_chain_counter = core_chain_counter + 1
     else:
+        '''
+            The output is made by stacking positive path over negative paths.
+        '''
         output = rank_precision_runtime(model_corechain, question, positive_path,
                                         negative_paths, 10000, max_length)
         if np.argmax(output) == 0:
             core_chain_counter = core_chain_counter +  1
             print core_chain_counter
+
+        best_path_index = np.argmax(output)
+        if best_path_index == 0:
+            best_path = positive_path
+        else:
+            best_path = negative_paths[best_path_index-1]
+
+
+    '''
+        predicting the intent of the question.
+            List, Ask, Count.
+    '''
+    intent = np.argmax(model_question_intent.predict(question))
+    if intent == 2:
+        intent = "list"
+    elif intent == 1:
+        intent = "count"
+    else:
+        intent = "ask"
+
+    '''
+        predicting the existence of rdf type constraints.
+    '''
+
+    rdf_constraints = model_rdf_type_existence.predict(question)
+
+    if rdf_constraints == 2:
+        rdf_constraints = False
+    else:
+        rdf_constraints = True
+
+    if rdf_constraints:
+        rdf_candidates = rdf_type_candidates(data, best_path, vocab, relations, reverse_vocab, core_chain=True)
+
+        '''
+			Predicting the rdf type constraints for the best core chain.
+		'''
+        if rdf_candidates:
+            output = rank_precision_runtime(model_rdf_type_check, question, rdf_candidates[0],
+                                            rdf_candidates, 180, max_length)
+            rdf_path = rdf_candidates[np.argmax(output[1:])]
+            if rdf_type:
+
+        else:
+            rdf_type = False
+
+
+
 
 print "the final counter value is ", str(core_chain_counter)
 print "the total number of question evaluated are ", len(id_data_train)

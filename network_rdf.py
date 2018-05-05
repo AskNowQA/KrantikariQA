@@ -44,8 +44,9 @@ from utils import natural_language_utilities as nlutils
 
 # Some Macros
 DEBUG = True
-DATA_DIR = './data/training/pairwise'
-RESOURCE_DIR = './resources_v8'
+DATA_DIR = './data/training/rdf'
+RESOURCE_DIR = './resources_v8/rdf'
+ID_DIR = './resources_v8'
 EPOCHS = 300
 BATCH_SIZE = 180 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
@@ -68,7 +69,7 @@ def load_data(file, max_sequence_length, relations):
     try:
 
         # @TODO THIS BLOCK
-        # with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RESOURCE_DIR, file + ".vocab.pickle")) as idx:
+        # with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz")) as data, open(os.path.join('./resources_v8', file + ".vocab.pickle")) as idx:
         #     dataset = np.load(data)
         #     # dataset = dataset[:10]
         #     questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
@@ -78,8 +79,8 @@ def load_data(file, max_sequence_length, relations):
         raise EOFError
 
     except (EOFError,IOError) as e:
-        with open(os.path.join(RESOURCE_DIR, file)) as fp:
-            dataset = pickle.load(fp)
+        with open(os.path.join(ID_DIR, file)) as fp:
+            dataset = json.load(fp)
             # dataset = dataset[:10]
 
             # Empty arrays
@@ -112,8 +113,14 @@ def load_data(file, max_sequence_length, relations):
 
                 # Negative Path
                 unpadded_neg_path = datum["rdf-type-constraints"]
+                unpadded_neg_path = n.remove_positive_path(pos_path, unpadded_neg_path)
                 np.random.shuffle(unpadded_neg_path)
                 unpadded_neg_path = pad_sequences(unpadded_neg_path, maxlen=max_sequence_length, padding='post')
+
+                '''
+                    Remove positive path from negative paths.
+                '''
+
                 try:
                     neg_path = np.random.choice(unpadded_neg_path,200)
                 except ValueError:
@@ -157,9 +164,9 @@ def load_data(file, max_sequence_length, relations):
             uniques = np.unique(all)
 
 
-            # ###########################################################
-            # Map to new ID space all those which are not a part of vocab
-            # ###########################################################
+            # ############################################################
+            # Map to new ID space all those which are not a part of vocab#
+            # ############################################################
 
             index = len(vocab)
 
@@ -182,14 +189,11 @@ def load_data(file, max_sequence_length, relations):
             # Create slimmer, better, faster, vectors file.
             vectors = glove_embeddings[uniques]
 
-            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(RESOURCE_DIR, file + ".vocab.pickle"), "w") as idx:
+            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join('./resources_v8', file + ".vocab.pickle"), "w") as idx:
                 np.savez(data, questions, pos_paths, neg_paths)
                 pickle.dump(vocab,idx)
 
             return vectors, questions, pos_paths, neg_paths
-
-
-
 
 if __name__ == "__main__":
     gpu = sys.argv[1]
@@ -197,6 +201,7 @@ if __name__ == "__main__":
     max_length = 25
     relations = n.load_relation('resources_v8/relations.pickle')
     dbp = db_interface.DBPedia(_verbose=True, caching=False)
+    n.DATA_DIR = DATA_DIR
     n.NEGATIVE_SAMPLES = 200
     n.BATCH_SIZE = 300
     vectors, questions, pos_paths, neg_paths = load_data("id_big_data.json", max_length, relations)

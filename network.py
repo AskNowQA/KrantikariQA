@@ -639,21 +639,33 @@ def cross_correlation(x):
     ifft = tf.ifft(tf.conj(a_fft) * b_fft)
     return tf.cast(tf.real(ifft), 'float32')
 
+def remove_positive_path(positive_path, negative_paths):
+    counter = 0
+    new_negative_paths = []
+    for i in range(0, len(negative_paths)):
+        if not np.array_equal(negative_paths[i], positive_path):
+            new_negative_paths.append(np.asarray(negative_paths[i]))
+        else:
+            counter += 1
+            print counter
+    return new_negative_paths
+
+
 def load_data(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy")) as idx:
+        with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RESOURCE_DIR, file + ".vocab.pickle")) as idx:
             dataset = np.load(data)
             # dataset = dataset[:10]
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            index = np.load(idx)
-            vectors = glove_embeddings[index]
+            vocab = pickle.load(idx)
+            vectors = glove_embeddings[vocab.keys()]
             return vectors, questions, pos_paths, neg_paths
     except (EOFError,IOError) as e:
         with open(os.path.join(RESOURCE_DIR, file)) as fp:
             dataset = json.load(fp)
-            dataset = dataset[:10]
+            # dataset = dataset[:10]
             questions = [i['uri']['question-id'] for i in dataset]
             questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
             pos_paths = []
@@ -667,8 +679,9 @@ def load_data(file, max_sequence_length, relations):
 
 
             neg_paths = []
-            for i in dataset:
-                negative_paths_id = i['uri']['hop-2-properties'] + i['uri']['hop-1-properties']
+            for i in range(0,len(dataset)):
+                datum = dataset[i]
+                negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
                 np.random.shuffle(negative_paths_id)
                 negative_paths = []
                 for neg_path in negative_paths_id:
@@ -679,70 +692,50 @@ def load_data(file, max_sequence_length, relations):
                         except ValueError:
                             negative_path += relations[int(p)][3].tolist()
                     negative_paths.append(negative_path)
+                negative_paths = remove_positive_path(pos_paths[i],negative_paths)
                 try:
                     negative_paths = np.random.choice(negative_paths,1000)
                 except ValueError:
                     if len(negative_paths) == 0:
                         negative_paths = neg_paths[-1]
                         print "Using previous question's paths for this since no neg paths for this question."
-                    index = np.random.randint(0, len(negative_paths), 1000)
-                    negative_paths = np.array(negative_paths)
-                    negative_paths = negative_paths[index]
+                    else:
+                        index = np.random.randint(0, len(negative_paths), 1000)
+                        negative_paths = np.array(negative_paths)
+                        negative_paths = negative_paths[index]
                 neg_paths.append(negative_paths)
 
-            # neg_paths = [i[2] for i in dataset]
-            #####################
-            #Removing duplicates#
-            #####################
-            temp = neg_paths[0][0]
-            for i in xrange(0, len(pos_paths)):
-                to_remove = []
-                for j in range(0,len(neg_paths[i])):
-                    if np.array_equal(pos_paths[i], neg_paths[i][j]):
-                        # to_remove.append(j)
-                        if j != 0:
-                            if not np.array_equal(pos_paths[i], neg_paths[i][j-1]):
-                                neg_paths[i][j] = neg_paths[i][j-1]
-                            else:
-                                if j- 2 != 0:
-                                    neg_paths[i][j] = neg_paths[i][j-2]
-                                else:
-                                    try:
-                                        neg_paths[i][j] = neg_paths[i][j+1]
-                                    except IndexError:
-                                        neg_paths[i][j] = neg_paths[i][j-1]
-                        else:
-                            if not np.array_equal(pos_paths[i], neg_paths[i][j + 1]):
-                                neg_paths[i][j] = neg_paths[i][j+1]
-                            else:
-                                try:
-                                    neg_paths[i][j] = neg_paths[i][j+2]
-                                except IndexError:
-                                    neg_paths[i][j] = neg_paths[i][j+1]
-
-
-                # neg_paths[i] = np.delete(neg_paths[i], to_remove) if to_remove else neg_paths[i]
-            # for index in to_remove:
-
-
-            neg_paths = [path for paths in neg_paths for path in paths]
-            neg_paths = pad_sequences(neg_paths, maxlen=max_sequence_length, padding='post')
+            for i in xrange(0,len(neg_paths)):
+                neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
+            neg_paths = np.asarray(neg_paths)
             pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-            pickle.dump(pos_paths,open('./resources_v8/pos_before.pickle','w+'))
-            all = np.concatenate([questions, pos_paths, neg_paths], axis=0)
-            mapped_all, index = pd.factorize(all.flatten(), sort=True)
-            pickle.dump(index,open('./resources_v8/index.pickle','w+'))
-            pickle.dump(mapped_all,open('./resources_v8/mapped_all.pickle','w+'))
-            mapped_all = mapped_all.reshape((-1, max_sequence_length))
-            vectors = glove_embeddings[index]
+            all = np.concatenate([questions, pos_paths], axis=0)
 
-            questions, pos_paths, neg_paths = np.split(mapped_all, [questions.shape[0], questions.shape[0]*2])
-            pickle.dump(pos_paths, open('./resources_v8/pos_after.pickle','w+'))
-            neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_sequence_length))
+            # ###################
+            # Map to new ID space
+            # ###################
 
-            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy"), "w") as idx:
+            uniques = np.unique(all)
+            vocab = {}
+
+            # Create Vocabulary
+            for i in range(len(uniques)):
+                vocab[uniques[i]] = i
+
+            # Map everything
+            for i in range(len(questions)):
+                questions[i] = np.asarray([vocab[key] for key in questions[i]])
+                pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+
+                for j in range(len(neg_paths[i])):
+                    neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
+
+            # Create slimmer, better, faster, vectors file.
+            vectors = glove_embeddings[uniques]
+
+            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(RESOURCE_DIR, file + ".vocab.pickle"), "w") as idx:
                 np.savez(data, questions, pos_paths, neg_paths)
-                np.save(idx, index)
+                pickle.dump(vocab,idx)
 
             return vectors, questions, pos_paths, neg_paths
 
@@ -913,8 +906,7 @@ def main_parikh(_gpu):
     # print "Accuracy = ", results[2]
 
 
-def main_bidirectional(_gpu):
-
+def main_bidirectional(_gpu,vectors, questions, pos_paths, neg_paths ):
 
     """
         Data Time!
@@ -922,8 +914,6 @@ def main_bidirectional(_gpu):
     # Pull the data up from disk
     gpu = _gpu
     max_length = 25
-    relations = load_relation('resources_v8/relations.pickle')
-    vectors, questions, pos_paths, neg_paths = load_data("id_big_data.json", max_length,relations)
 
     counter = 0
     for i in xrange(0, len(pos_paths)):
@@ -934,23 +924,9 @@ def main_bidirectional(_gpu):
                     neg_paths[i][j] = neg_paths[i][j+10]
                 else:
                     neg_paths[i][j] = neg_paths[i][0]
-    # if counter > 0:
-    #     print counter
-    #     print "critical condition entered"
-    #     pickle.dump(questions,open('./resources_v8/questions_new.pickle','w+'))
-    #     pickle.dump(vectors,open('./resources_v8/vectors_new.pickle','w+'))
-    #     pickle.dump(pos_paths,open('./resources_v8/positive_paths_new.pickle','w+'))
-    #     pickle.dump(neg_paths,open('./resources_v8/negative_paths_new.pickle','w+'))
-    #     print "done with dumping everything"
-    # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
-    # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
-    # if pos_paths.shape[1] < questions.shape[1]:
-    #     pos_paths = pad(pos_paths)
-    #     neg_paths = pad(neg_paths)
-    # else:
-    #     questions = pad(questions)
-
-    # Shuffle these matrices together @TODO this!
+    if counter > 0:
+        print counter
+        print "critical condition needs to be entered"
     np.random.seed(0) # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
@@ -998,17 +974,8 @@ def main_bidirectional(_gpu):
         embedding_dims = vectors.shape[1]
         nr_hidden = 128
 
-        # holographic_forward = Dense(1, activation='sigmoid')
-        # final_forward = Dense(1, activation='sigmoid')
-
         embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
         encode = _simple_BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.5)
-        # encode = LSTM(max_length)(encode)
-        # attend = _Attention(max_length, nr_hidden, dropout=0.6, L2=0.01)
-        # align = _SoftAlignment(max_length, nr_hidden)
-        # compare = _Comparison(max_length, nr_hidden, dropout=0.6, L2=0.01)
-        # entail = _Entailment(nr_hidden, 1, dropout=0.4, L2=0.01)
-
         def getScore(ques, path):
             x_ques_embedded = embed(ques)
             x_path_embedded = embed(path)
@@ -1022,17 +989,6 @@ def main_bidirectional(_gpu):
 
             # return final_forward(concatenate([holographic_score, dot_score, l1_score], axis=-1))
             return dot_score
-
-            #
-            # attention = attend(ques_encoded, path_encoded)
-			#
-            # align_ques = align(path_encoded, attention)
-            # align_path = align(ques_encoded, attention, transpose=True)
-			#
-            # feats_ques = compare(ques_encoded, align_ques)
-            # feats_path = compare(path_encoded, align_path)
-
-            # return entail(feats_ques, feats_path)
 
         pos_score = getScore(x_ques, x_pos_path)
         neg_score = getScore(x_ques, x_neg_path)
@@ -1075,11 +1031,15 @@ def main_bidirectional(_gpu):
 
         print "Precision (hits@1) = ", rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000)
 
+
 if __name__ == "__main__":
     gpu = sys.argv[1]
     model = sys.argv[2]
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+    max_length = 25
+    relations = load_relation('resources_v8/relations.pickle')
+    vectors, questions, pos_paths, neg_paths = load_data("id_big_data.json", max_length, relations)
     if model == "p":
         main_parikh(gpu)
     else:
-        main_bidirectional(gpu)
+        main_bidirectional(gpu,vectors, questions, pos_paths, neg_paths)

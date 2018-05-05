@@ -1,5 +1,5 @@
 '''
-	This will re-construct SPARQL given core-chain and topic entites.
+	This file adds rdf-type constraints over the id_big_data file.
 '''
 import os
 import numpy as np
@@ -183,10 +183,6 @@ def retrive_answers(sparql):
 					x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
 		return type_x, type_uri
 
-
-
-
-
 def generate_candidates(_datum):
 	"""
 
@@ -225,7 +221,6 @@ def generate_candidates(_datum):
 
 	return type_x, type_uri
 
-
 def create_valid_paths(_x, _uri):
 	"""
 		Given the candidates of rdf type, this fn creates formatted paths.
@@ -260,18 +255,11 @@ def create_valid_paths(_x, _uri):
 
 	return type_x_candidates,type_uri_candidates
 
-
-
-
-
-
-
 def run():
 	"""
 		Main script which calls and does everything.
-	:return: Poop
+	:return: nothing
 	"""
-
 	raw_data = json.load(open(BIG_DATA_DIR))
 
 	for i in range(0,len(raw_data)):
@@ -279,6 +267,11 @@ def run():
 		type_x_candidates, type_uri_candidates = create_valid_paths(x,uri)
 		raw_data[i]['rdf-type-constraints'] = type_x_candidates + type_uri_candidates
 		print i
+
+	for i in range(0,len(raw_data)):
+		for j in range(0,len(raw_data[i]['rdf-type-constraints'])):
+			raw_data[i]['rdf-type-constraints'][j] = raw_data[i]['rdf-type-constraints'][j].tolist()
+
 	json.dump(raw_data,open(BIG_DATA_DIR,'w+'))
 
 

@@ -184,6 +184,9 @@ def retrive_answers(sparql):
 		return type_x, type_uri
 
 
+
+
+
 def generate_candidates(_datum):
 	"""
 

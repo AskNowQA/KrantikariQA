@@ -7,57 +7,90 @@
 
 from __future__ import absolute_import
 
+# Generic imporrts
 import os
-from utils import embeddings_interface
-from utils import natural_language_utilities as nlutils
-
-gpu = '0'
-os.environ['CUDA_VISIBLE_DEVICES'] = gpu
-
 import sys
 import json
 import math
 import pickle
+import warnings
 import numpy as np
 import pandas as pd
-from keras import optimizers
 from progressbar import ProgressBar
-from utils import embeddings_interface
-import data_preparation_rdf_type as drt
+
+# Keras Imports
+from keras import optimizers
+from keras.models import load_model
 import keras.backend.tensorflow_backend as K
-from utils import dbpedia_interface as db_interface
 from keras.preprocessing.sequence import pad_sequences
+
+# Local imports
+import data_preparation_rdf_type as drt
+from utils import embeddings_interface
+from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
 
 
 # Some Macros
 DEBUG = True
-DATA_DIR = './data/training/pairwise'
+MAX_SEQ_LENGTH = 25
+LOC_RDF_TYPE_LOOKUP = 'resources_v8/rdf_type_lookup.json'
+
+# NN Macros
 EPOCHS = 300
 BATCH_SIZE = 880 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
-LOSS = 'categorical_crossentropy'
 NEGATIVE_SAMPLES = 1000
+LOSS = 'categorical_crossentropy'
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
-LOC_RDF_TYPE_LOOKUP = 'resources_v8/rdf_type_lookup.json'
+DATA_DIR = './data/training/pairwise'
 
-relations = pickle.load(open('resources_v8/relations.pickle'))
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+# Configure at every run!
+GPU = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = GPU
 
-reverse_relations = {}
-for keys in relations:
-    reverse_relations[relations[keys][0]] = [keys] + relations[keys][1:]
+# Set the seed to clamp the stochastic nature.
+np.random.seed(42) # Random train/test splits stay the same between runs
+
+"""
+    SPARQL Templates to be used to reconstruct SPARQLs from query graphs
+"""
+sparql_1hop_template = {
+    "-" : '%(ask)s %(count)s WHERE {?uri <%(r1)s> <%(te1)s> . %(rdf)s }',
+    "+" : '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . %(rdf)s }'
+}
+
+sparql_2hop_1ent_template = {
+    "++" : '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?x . ?x <%(r2)s> ?uri  . %(rdf)s }',
+    "-+" : '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?x <%(r2)s> ?uri  . %(rdf)s }',
+    "--" : '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?uri <%(r2)s> ?x  . %(rdf)s }',
+    "+-" : '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?x . ?uri <%(r2)s> ?x  . %(rdf)s }'
+}
+
+sparql_2hop_2ent_template = {
+    "+-" : '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . <te2> <%(r2)s> ?uri  . %(rdf)s }',
+    "--" : '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . %(rdf)s }',
+    "-+" : '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . %(rdf)s }'
+}
+
+rdf_constraint_template = ' ?(var)s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <?(uri)s> . '
+
+
+# Better warning formatting. Ignore.
+def better_warning(message, category, filename, lineno, file=None, line=None):
+    return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
 
 
 def custom_loss(y_true, y_pred):
-    '''
-        max margin loss
-    '''
+    """
+        Max-Margin Loss
+    """
     # y_pos = y_pred[0]
     # y_neg= y_pred[1]
     diff = y_pred[:,-1]
     # return K.sum(K.maximum(1.0 - diff, 0.))
     return K.sum(diff)
+
 
 def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
     max_length = test_questions.shape[-1]
@@ -74,6 +107,7 @@ def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_pa
 
     precision = float(len(np.where(np.argmax(outputs, axis=1)==0)[0]))/outputs.shape[0]
     return precision
+
 
 def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_length=50):
     '''
@@ -104,6 +138,7 @@ def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_leng
     results = model.predict([question, paths, np.zeros_like(paths)], batch_size=batch_size)[:,0]
     return results
 
+
 def rank_precision_metric(neg_paths_per_epoch):
     def metric(y_true, y_pred):
         scores = y_pred[:, 0]
@@ -114,12 +149,19 @@ def rank_precision_metric(neg_paths_per_epoch):
         return precision
     return metric
 
+
 def get_glove_embeddings():
+    """
+        Get to use the glove embedding as a local var.
+        Prepare embeddings if not done already.
+    :return: np mat
+    """
     from utils.embeddings_interface import __check_prepared__
     __check_prepared__('glove')
 
     from utils.embeddings_interface import glove_embeddings
     return glove_embeddings
+
 
 def cross_correlation(x):
     a, b = x
@@ -130,115 +172,10 @@ def cross_correlation(x):
     return tf.cast(tf.real(ifft), 'float32')
 
 
-
-def load_data(file, max_sequence_length, relations):
-    glove_embeddings = get_glove_embeddings()
-
-    try:
-        with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy")) as idx:
-            dataset = np.load(data)
-            # dataset = dataset[:10]
-            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            index = np.load(idx)
-            vectors = glove_embeddings[index]
-            return vectors, questions, pos_paths, neg_paths
-    except (EOFError,IOError) as e:
-        with open(os.path.join(RESOURCE_DIR, file)) as fp:
-            dataset = json.load(fp)
-            # dataset = dataset[:10]
-            questions = [i['uri']['question-id'] for i in dataset]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
-            pos_paths = []
-            for i in dataset:
-                path_id = i['parsed-data']['path_id']
-                positive_path = []
-                for p in path_id:
-                    positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                    positive_path += relations[int(p[1:])][3].tolist()
-                pos_paths.append(positive_path)
-
-
-            neg_paths = []
-            for i in dataset:
-                negative_paths_id = i['uri']['hop-2-properties'] + i['uri']['hop-1-properties']
-                np.random.shuffle(negative_paths_id)
-                negative_paths = []
-                for neg_path in negative_paths_id:
-                    negative_path = []
-                    for p in neg_path:
-                        try:
-                            negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
-                        except ValueError:
-                            negative_path += relations[int(p)][3].tolist()
-                    negative_paths.append(negative_path)
-                try:
-                    negative_paths = np.random.choice(negative_paths,1000)
-                except ValueError:
-                    if len(negative_paths) == 0:
-                        negative_paths = neg_paths[-1]
-                        print "Using previous question's paths for this since no neg paths for this question."
-                    index = np.random.randint(0, len(negative_paths), 1000)
-                    negative_paths = np.array(negative_paths)
-                    negative_paths = negative_paths[index]
-                neg_paths.append(negative_paths)
-
-            # neg_paths = [i[2] for i in dataset]
-            #####################
-            #Removing duplicates#
-            #####################
-            temp = neg_paths[0][0]
-            for i in xrange(0, len(pos_paths)):
-                to_remove = []
-                for j in range(0,len(neg_paths[i])):
-                    if np.array_equal(pos_paths[i], neg_paths[i][j]):
-                        # to_remove.append(j)
-                        if j != 0:
-                            if not np.array_equal(pos_paths[i], neg_paths[i][j-1]):
-                                neg_paths[i][j] = neg_paths[i][j-1]
-                            else:
-                                if j- 2 != 0:
-                                    neg_paths[i][j] = neg_paths[i][j-2]
-                                else:
-                                    try:
-                                        neg_paths[i][j] = neg_paths[i][j+1]
-                                    except IndexError:
-                                        neg_paths[i][j] = neg_paths[i][j-1]
-                        else:
-                            if not np.array_equal(pos_paths[i], neg_paths[i][j + 1]):
-                                neg_paths[i][j] = neg_paths[i][j+1]
-                            else:
-                                try:
-                                    neg_paths[i][j] = neg_paths[i][j+2]
-                                except IndexError:
-                                    neg_paths[i][j] = neg_paths[i][j+1]
-
-
-                # neg_paths[i] = np.delete(neg_paths[i], to_remove) if to_remove else neg_paths[i]
-            # for index in to_remove:
-
-
-            neg_paths = [path for paths in neg_paths for path in paths]
-            neg_paths = pad_sequences(neg_paths, maxlen=max_sequence_length, padding='post')
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-
-            all = np.concatenate([questions, pos_paths, neg_paths], axis=0)
-            mapped_all, index = pd.factorize(all.flatten(), sort=True)
-            mapped_all = mapped_all.reshape((-1, max_sequence_length))
-            vectors = glove_embeddings[index]
-
-            questions, pos_paths, neg_paths = np.split(mapped_all, [questions.shape[0], questions.shape[0]*2])
-            neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_sequence_length))
-
-            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy"), "w") as idx:
-                np.savez(data, questions, pos_paths, neg_paths)
-                np.save(idx, index)
-
-            return vectors, questions, pos_paths, neg_paths
-
-def create_data_big_data(data,keras=True):
-    '''
+def create_data_big_data(data, keras=True):
+    """
         The function takes id version of big data node and transforms it to version required by Keras network code.
-    '''
+    """
 
     false_paths = []
     true_path = []
@@ -257,14 +194,15 @@ def create_data_big_data(data,keras=True):
     question = data['parsed-data']['corrected_question']
     return [question,true_path,false_paths,id_paths]
 
-def rel_id_to_rel(rel,relations):
-    '''
+
+def rel_id_to_rel(rel, relations):
+    """
 
 
     :param rel:
     :param relations: The relation lookup is inverse here
     :return:
-    '''
+    """
     occurrences = []
     for key in relations:
         value = relations[key]
@@ -281,21 +219,23 @@ def rel_id_to_rel(rel,relations):
         else:
             return occurrences[0][0]
 
+
 def return_sign(sign):
     if sign == 2:
         return '+'
     else:
         return '-'
 
+
 def id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True):
     '''
 
 
-	:param path_id:  array([   3, 3106,    3,  647]) - corechain wihtout entity
-	:param vocab: from continuous id space to discrete id space.
-	:param relations: inverse relation lookup dictionary
-	:return: paths
-	'''
+    :param path_id:  array([   3, 3106,    3,  647]) - corechain wihtout entity
+    :param vocab: from continuous id space to discrete id space.
+    :param relations: inverse relation lookup dictionary
+    :return: paths
+    '''
 
     # mapping from discrete space to continuous space.
     path_id = np.asarray([reverse_vocab[i] for i in path_id])
@@ -420,24 +360,14 @@ def create_true_positive_rdf_path(data):
         pos_path[i] = vocab[pos_path[i]]
     return pos_path
 
-# Shuffle these matrices together @TODO this!
-np.random.seed(0) # Random train/test splits stay the same between runs
+
 
 # Divide the data into diff blocks
 split_point = lambda x: int(len(x) * .80)
-
 def train_split(x):
     return x[:split_point(x)]
 def test_split(x):
     return x[split_point(x):]
-
-with K.tf.device('/gpu:' + gpu):
-    from keras.models import load_model
-    metric = rank_precision_metric(10)
-    model_corechain = load_model("./data/training/pairwise/model_32/model.h5", {'custom_loss':custom_loss, 'metric':metric})
-    model_rdf_type_check = load_model("./data/training/rdf/model_00/model.h5", {'custom_loss':custom_loss, 'metric':metric})
-    model_rdf_type_existence = load_model("./data/training/type-existence/model_00/model.h5")
-    model_question_intent = load_model("./data/training/intent/model_00/model.h5")
 
 
 def rdf_type_check(question,model_rdf_type_check, max_length = 30):
@@ -503,7 +433,6 @@ def convert_path_to_text(path):
     return [var, dbo_class]
 
 
-
 def construct_paths(data):
     '''
     :param data: a data node of id_big_data
@@ -557,8 +486,6 @@ def construct_paths(data):
     return question,positive_path,negative_paths
 
 
-
-
 def question_intent(padded_question):
     '''
         predicting the intent of the question.
@@ -567,6 +494,7 @@ def question_intent(padded_question):
     intent = np.argmax(model_question_intent.predict(padded_question))
     return ['ask', 'count', 'list'][intent]
 
+
 def rdf_constraint_check(padded_question):
     '''
         predicting the existence of rdf type constraints.
@@ -574,46 +502,180 @@ def rdf_constraint_check(padded_question):
     return np.argmax(model_rdf_type_existence.predict(padded_question))
 
 
-def padded_question(question):
-    '''
+def pad_question(question):
+    """
 
     :param question: continuous space id question
     :return: padded question
-    '''
-    padded_question = np.zeros(max_length)
-    padded_question[:min(max_length, len(question))] = question[:min(max_length, len(question))]
+    """
+    padded_question = np.zeros(MAX_SEQ_LENGTH)
+    padded_question[:min(MAX_SEQ_LENGTH, len(question))] = question[:min(MAX_SEQ_LENGTH, len(question))]
     padded_question = padded_question.reshape((1, padded_question.shape[0]))
     return padded_question
 
-id_data = json.load(open('resources_v8/id_big_data.json'))
+plus_id, minus_id = None, None # These are vocab IDs
+def reconstruct_corechain(_chain):
+    """
+        Expects a corechain made of continous IDs, and returns it in its text format (uri form)
+        @TODO: TEST!
+    :param _chain: list of ints
+    :return: str: list of strs
+    """
+    global plus_id, minus_id
+
+    # Find the plus and minus ID.
+    if not (plus_id and minus_id):
+        plus_id = embeddings_interface.vocabularize(['+'])
+        minus_id = embeddings_interface.vocabularize(['-'])
+
+    corechain_vocabbed = [reverse_vocab[key] for key in _chain]
+
+    # Find the hop-length of the corechain
+    length = sum([ 1 for id in corechain_vocabbed if id in [plus_id, minus_id]])
+
+    if length == 1:
+
+        # Just one predicate. Find its uri
+        uri = rel_id_to_rel(corechain_vocabbed[1:])
+        sign = '+' if corechain_vocabbed[0] == plus_id else '-'
+        signs = [sign]
+        uris = [uri]
+
+    elif length == 2:
+
+        # Find the index of the second sign
+        index_second_sign = None
+        for i in range(1, len(corechain_vocabbed)):
+            if corechain_vocabbed[i] in [plus_id, minus_id]:
+                index_second_sign = i
+                break
+
+        first_sign = '+' if corechain_vocabbed[0] == plus_id else '-'
+        second_sign = '+' if corechain_vocabbed[index_second_sign] == plus_id else '-'
+        first_uri = rel_id_to_rel(corechain_vocabbed[1:index_second_sign])
+        second_uri = rel_id_to_rel(corechain_vocabbed[index_second_sign+1:])
+
+        signs = [first_sign, second_sign]
+        uris = [first_uri, second_uri]
+
+    else:
+        # warnings.warn("Corechain length is unexpected. Help!")
+        return [], []
+
+    return uris, signs
+
+
+def query_graph_to_sparql(_graph):
+    """
+        Expects a dict containing:
+            best_path,
+            intent,
+            rdf_constraint,
+            rdf_constraint_type,
+            rdf_best_path
+
+        Returns a composted SPARQL.
+
+        1. Convert everything to strings.
+
+    :param _graph: (see above)
+    :return: str: SPARQL.
+    """
+    sparql_value = {}
+
+    # Find entities
+    entities = _graph['entities']
+
+    # Convert the corechain to glove embeddings
+    corechain_signs, corechain_uris = reconstruct_corechain(_graph['best_path'])
+
+    # Construct the stuff outside the where clause
+    sparql_value["ask"] = 'ASK' if _graph['intent'] == 'ask' else 'SELECT DISTINCT'
+    sparql_value["count"] = 'COUNT(?uri)' if _graph['intent'] == 'count' else '?uri'
+
+    # Check if we need an RDF constraint.
+    if _graph['rdf_constraint']:
+
+        rdf_constraint_values = {}
+        rdf_constraint_values['var'] = _graph['rdf_constraint_type']
+        rdf_constraint_values['uri'] = convert_path_to_text(rdf_candidates[np.argmax(output[1:])])[1]
+
+        sparql_value["rdf"] = rdf_constraint_template % rdf_constraint_values
+
+    else:
+        sparql_value["rdf"] = ''
+
+    # Find the particular template based on the signs
+    signs_key = ''.join(corechain_signs)
+
+    # Select tempalte + put in entites and predicates.
+    if len(signs_key) == 1:
+        sparql_template = sparql_1hop_template[signs_key]
+        sparql_value["te1"] = _graph['entities'][0]
+        sparql_value["r1"] = corechain_uris[0]
+    else:
+
+        sparql_value["r1"] = corechain_uris[0]
+        sparql_value["r2"] = corechain_uris[1]
+
+        # Check if entities are one or two
+        if len(_graph['entities']) == 1:
+            sparql_template = sparql_2hop_1ent_template[signs_key]
+            sparql_value["te1"] = _graph['entities'][0]
+        else:
+            sparql_template = sparql_2hop_2ent_template[signs_key]
+            sparql_value["te1"] = _graph['entities'][0]
+            sparql_value["te2"] = _graph['entities'][1]
+
+    # Now to put the magic together
+    sparql = sparql_template % sparql_value
+    return sparql
+
+
+# Global variables
+# relations = pickle.load(open('resources_v8/relations.pickle'))
+dbp = db_interface.DBPedia(_verbose=True, caching=False)
 vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
 relations = load_relation('resources_v8/relations.pickle')
+reverse_relations = {}
+for keys in relations:
+    reverse_relations[relations[keys][0]] = [keys] + relations[keys][1:]
 reverse_rdf_dict = load_reverse_rdf_type()
-
 reverse_vocab = {}
 for keys in vocab:
     reverse_vocab[vocab[keys]] = keys
 
+# Load the main data
+id_data = json.load(open('resources_v8/id_big_data.json'))
+
+# Split it.
 id_data_test = test_split(id_data)
 id_data_train = train_split(id_data)
 
+# Load all model
+with K.tf.device('/gpu:' + GPU):
+    metric = rank_precision_metric(10)
+    model_corechain = load_model("./data/training/pairwise/model_32/model.h5", {'custom_loss':custom_loss, 'metric':metric})
+    model_rdf_type_check = load_model("./data/training/rdf/model_00/model.h5", {'custom_loss':custom_loss, 'metric':metric})
+    model_rdf_type_existence = load_model("./data/training/type-existence/model_00/model.h5")
+    model_question_intent = load_model("./data/training/intent/model_00/model.h5")
+
+
 core_chain_correct = []
-max_length = 25
 
 progbar = ProgressBar()
 iterator = progbar(id_data_train)
 
+if DEBUG: print("the length of train data is ", len(id_data_test))
 
-print "the length of train data is ", len(id_data_test)
 core_chain_counter = 0
 for data in iterator:
 
-    #some macros which would be useful for constructing sparqls
-    sparql_reconstruction = {}
+    # Some macros which would be useful for constructing sparqls
+    query_graph = {}
     rdf_type = True
 
     question, positive_path, negative_paths = construct_paths(data)
-
 
     if len(negative_paths) == 0:
         best_path = positive_path
@@ -622,10 +684,10 @@ for data in iterator:
             The output is made by stacking positive path over negative paths.
         '''
         output = rank_precision_runtime(model_corechain, question, positive_path,
-                                        negative_paths, 10000, max_length)
+                                        negative_paths, 10000, MAX_SEQ_LENGTH)
         if np.argmax(output) == 0:
             core_chain_counter = core_chain_counter +  1
-            print core_chain_counter
+            print(core_chain_counter)
 
         best_path_index = np.argmax(output)
         if best_path_index == 0:
@@ -633,36 +695,37 @@ for data in iterator:
         else:
             best_path = negative_paths[best_path_index-1]
 
-    #best path is in continuous id space.
-    sparql_reconstruction['best_path'] = best_path
+    # Best path is in continuous id space.
+    query_graph['best_path'] = best_path
 
-    padded_question = padded_question(question)
+    padded_question = pad_question(question)
 
-    #Predecting the intent
+    # Predicting the intent
     intent = question_intent(padded_question)
-    if DEBUG: print "Intent of the question is : ", str(intent)
-    sparql_reconstruction['intent'] = intent
+    if DEBUG: print("Intent of the question is : ", str(intent))
+    query_graph['intent'] = intent
 
-    # Predecting the rdf-constraint
+    # Predicting the rdf-constraint
     rdf_constraint = rdf_constraint_check(padded_question)
-    if DEBUG: print "Rdf constraint of the question is : ", str(rdf_constraint)
-    sparql_reconstruction['rdf_constraint'] = False if rdf_constraint == 2 else sparql_reconstruction['rdf_constraint'] = True
+    if DEBUG: print("Rdf constraint of the question is : ", str(rdf_constraint))
+    query_graph['rdf_constraint'] = False if rdf_constraint == 2 else query_graph['rdf_constraint'] = True
 
-    sparql_reconstruction['rdf_constraint_type'] = ['x','uri','none'][rdf_constraint]
+    query_graph['rdf_constraint_type'] = ['x', 'uri', 'none'][rdf_constraint]
+    query_graph['entities'] = data['parsed-data']['entity']
 
     if rdf_constraint != 2:
 
         rdf_candidates = rdf_type_candidates(data, best_path, vocab, relations, reverse_vocab, only_x=rdf_constraint == 0,
                                              core_chain=True)
         '''
-			Predicting the rdf type constraints for the best core chain.
-		'''
+            Predicting the rdf type constraints for the best core chain.
+        '''
         if rdf_candidates:
             output = rank_precision_runtime(model_rdf_type_check, question, rdf_candidates[0],
-                                            rdf_candidates, 180, max_length)
+                                            rdf_candidates, 180, MAX_SEQ_LENGTH)
             # rdf_best_path = convert_path_to_text(rdf_candidates[np.argmax(output[1:])])
-            sparql_reconstruction['rdf_best_path'] = rdf_candidates[np.argmax(output[1:])+1]
+            query_graph['rdf_best_path'] = rdf_candidates[np.argmax(output[1:]) + 1]
         else:
-            sparql_reconstruction['rdf_best_path'] = []
+            query_graph['rdf_best_path'] = []
 
-    print sparql_reconstruction
+    print query_graph

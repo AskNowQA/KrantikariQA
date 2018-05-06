@@ -28,7 +28,7 @@ np.random.seed(42)
 DEBUG = True
 MAX_SEQ_LENGTH = 25
 RAW_DATASET_LOC = './resources_v8/id_big_data.json'
-DATA_DIR = './data/intent'
+DATA_DIR = './data/training/intent'
 
 # Model Macros
 EPOCHS = 300

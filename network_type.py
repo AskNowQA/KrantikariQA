@@ -28,7 +28,7 @@ np.random.seed(42)
 DEBUG = True
 MAX_SEQ_LENGTH = 25
 RAW_DATASET_LOC = './resources_v8/id_big_data.json'
-DATA_DIR = './data/type-existence'
+DATA_DIR = './data/training/type-existence'
 
 # Model Macros
 EPOCHS = 300
@@ -73,10 +73,10 @@ def get_y(_datum):
     """
 
     # Check for ask
-    if u'uri' in _datum['parsed-data']['constraints'].keys():
+    if u'?uri' in _datum['parsed-data']['constraints'].keys():
         return np.asarray([0, 1, 0])
 
-    if u'x' in _datum['parsed-data']['constraints'].keys():
+    if u'?x' in _datum['parsed-data']['constraints'].keys():
         return np.asarray([1, 0, 0])
 
     return np.asarray([0, 0, 1])

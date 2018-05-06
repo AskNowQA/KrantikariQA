@@ -56,21 +56,44 @@ np.random.seed(42) # Random train/test splits stay the same between runs
     SPARQL Templates to be used to reconstruct SPARQLs from query graphs
 """
 sparql_1hop_template = {
-    "-" : '%(ask)s %(count)s WHERE {?uri <%(r1)s> <%(te1)s> . %(rdf)s }',
-    "+" : '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . %(rdf)s }'
+    "-": '%(ask)s %(count)s WHERE { { ?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s> } UNION '
+                                 + '{ ?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s> } . %(rdf)s }',
+    "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri } UNION '
+                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri } . %(rdf)s }'
 }
 
 sparql_2hop_1ent_template = {
-    "++" : '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?x . ?x <%(r2)s> ?uri  . %(rdf)s }',
-    "-+" : '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?x <%(r2)s> ?uri  . %(rdf)s }',
-    "--" : '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?uri <%(r2)s> ?x  . %(rdf)s }',
-    "+-" : '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?x . ?uri <%(r2)s> ?x  . %(rdf)s }'
+    "++": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
+                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} . '
+                                  + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION'
+                                  + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} . %(rdf)s }',
+    "-+": '%(ask)s %(count)s WHERE { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
+                                  + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} .'
+                                  + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
+                                  + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} . %(rdf)s }',
+    "--": '%(ask)s %(count)s WHERE { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
+                                  + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} .'
+                                  + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} . %(rdf)s }',
+    "+-": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
+                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} .'
+                                  + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} . %(rdf)s }'
 }
 
 sparql_2hop_2ent_template = {
-    "+-" : '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . <te2> <%(r2)s> ?uri  . %(rdf)s }',
-    "--" : '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . %(rdf)s }',
-    "-+" : '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . %(rdf)s }'
+    "+-": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri} UNION '
+                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} . '
+                                  + '{<%(te2)s> <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
+                                  + '{<%(te2)s> <http://dbpedia.org/ontology/%(r2)s> ?uri} . %(rdf)s }',
+    "--": '%(ask)s %(count)s WHERE { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
+                                  + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} . '
+                                  + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION '
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} . %(rdf)s }',
+    "-+": '%(ask)s %(count)s WHERE { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
+                                  + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} .'
+                                  + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} . %(rdf)s }'
 }
 
 rdf_constraint_template = ' ?%(var)s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <%(uri)s> . '
@@ -612,10 +635,10 @@ def query_graph_to_sparql(_graph):
     if len(signs_key) == 1:
         sparql_template = sparql_1hop_template[signs_key]
         sparql_value["te1"] = _graph['entities'][0]
-        sparql_value["r1"] = corechain_uris[0]
+        sparql_value["r1"] = corechain_uris[0].split('/')[-1]
     else:
-        sparql_value["r1"] = corechain_uris[0]
-        sparql_value["r2"] = corechain_uris[1]
+        sparql_value["r1"] = corechain_uris[0].split('/')[-1]
+        sparql_value["r2"] = corechain_uris[1].split('/')[-1]
 
         # Check if entities are one or two
         if len(_graph['entities']) == 1:
@@ -631,7 +654,7 @@ def query_graph_to_sparql(_graph):
     return sparql
 
 
-def eval_sparql(test_sparql,true_sparql,type):
+def evaluate(test_sparql, true_sparql, type):
     '''
         Fmeasure for ask and count are 0/1.
         Also assumes the variable to be always uri.
@@ -704,7 +727,7 @@ if DEBUG: print("the length of train data is ", len(id_data_test))
 
 core_chain_counter = 0
 results = []
-avg = 0
+avg = []
 for data in iterator:
 
     # Some macros which would be useful for constructing sparqls
@@ -768,7 +791,7 @@ for data in iterator:
 
     type = query_graph['intent']
 
-    f,p,r = eval_sparql(sparql,data['parsed-data']['sparql_query'],type)
+    f,p,r = evaluate(sparql, data['parsed-data']['sparql_query'], type)
 
     results.append([f,p,r])
     avg.append(f)

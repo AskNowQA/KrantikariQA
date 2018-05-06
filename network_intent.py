@@ -67,9 +67,9 @@ def get_x(_datum):
 
 def get_y(_datum):
     """
-        Legend: 001: list
-                010: count
-                100: ask
+        Legend: 010: ask
+                100: count
+                001: list
     """
 
     # Check for ask

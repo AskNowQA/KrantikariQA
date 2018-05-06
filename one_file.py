@@ -373,7 +373,7 @@ def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, c
     #     pass
 
     type_x_candidates, type_uri_candidates = drt.create_valid_paths(type_x, type_uri)
-    return type_x_candidates
+    # return type_x_candidates
     # Convert them to continous IDs.
     for i in range(len(type_x_candidates)):
         for j in range(len(type_x_candidates[i])):
@@ -384,8 +384,8 @@ def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, c
             type_uri_candidates[i][j] = vocab[type_uri_candidates[i][j]]
 
     # Return based on given input.
-    return type_x_candidates
-    return type_x_candidates if only_x else type_uri_candidates
+    return type_x_candidates+type_uri_candidates
+    # return type_x_candidates if only_x else type_uri_candidates
 
 
 def load_relation(relation_file):
@@ -401,7 +401,24 @@ def load_relation(relation_file):
     return inverse_relations
 
 
+def create_true_positive_rdf_path(data):
+    '''
+        Creates true rdf-type constraint, if it exists.
+        :param data: One specific node of id_data.
+        :return: None if no true rdf-type constraint; else returns rdf-type constraint in continuous id space.
+    '''
 
+    datum = data
+    if '?x' in datum['parsed-data']['constraints'].keys():
+        pos_path = "x + " + dbp.get_label(datum['parsed-data']['constraints']['?x'])
+    elif '?uri' in datum['parsed-data']['constraints'].keys():
+        pos_path = "uri + " + dbp.get_label(datum['parsed-data']['constraints']['?uri'])
+    else:
+        return None
+    pos_path = embeddings_interface.vocabularize(nlutils.tokenize(pos_path))
+    for i in range(0,len(pos_path)):
+        pos_path[i] = vocab[pos_path[i]]
+    return pos_path
 
 # Shuffle these matrices together @TODO this!
 np.random.seed(0) # Random train/test splits stay the same between runs
@@ -485,6 +502,89 @@ def convert_path_to_text(path):
 
     return [var, dbo_class]
 
+
+
+def construct_paths(data):
+    '''
+    :param data: a data node of id_big_data
+    :return: unpadded , continous id spaced question, positive path, negative paths
+    '''
+    question = np.asarray(data['uri']['question-id'])
+    # questions = pad_sequences([question], maxlen=max_length, padding='post')
+
+    # inverse id version of positive path and creating a numpy version
+    positive_path_id = data['parsed-data']['path_id']
+    positive_path = []
+    for path in positive_path_id:
+        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(path[0])]
+        positive_path += relations[int(path[1:])][3].tolist()
+    positive_path = np.asarray(positive_path)
+    # padded_positive_path = pad_sequences([positive_path], maxlen=max_length, padding='post')
+
+    # negative paths from id to surface form id
+    negative_paths_id = data['uri']['hop-2-properties'] + data['uri']['hop-1-properties']
+    negative_paths = []
+    for neg_path in negative_paths_id:
+        negative_path = []
+        for path in neg_path:
+            try:
+                negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(path)]
+            except ValueError:
+                negative_path += relations[int(path)][3].tolist()
+        negative_paths.append(np.asarray(negative_path))
+    negative_paths = np.asarray(negative_paths)
+    # negative paths padding
+    # padded_negative_paths = pad_sequences(negative_paths, maxlen=max_length, padding='post')
+
+    # explicitly remove any positive path from negative path
+    positive_path, negative_paths = remove_positive_path(positive_path, negative_paths)
+
+    # remap all the id's to the continous id space.
+
+    # passing all the elements through vocab
+    question = np.asarray([vocab[key] for key in question])
+    positive_path = np.asarray([vocab[key] for key in positive_path])
+    for i in range(0, len(negative_paths)):
+        # temp = []
+        for j in xrange(0, len(negative_paths[i])):
+            try:
+                negative_paths[i][j] = vocab[negative_paths[i][j]]
+            except:
+                negative_paths[i][j] = vocab[0]
+                # negative_paths[i] = np.asarray(temp)
+                # negative_paths[i] = np.asarray([vocab[key] for key in negative_paths[i] if key in vocab.keys()])
+
+    return question,positive_path,negative_paths
+
+
+
+
+def question_intent(padded_question):
+    '''
+        predicting the intent of the question.
+            List, Ask, Count.
+    '''
+    intent = np.argmax(model_question_intent.predict(padded_question))
+    return ['ask', 'count', 'list'][intent]
+
+def rdf_constraint_check(padded_question):
+    '''
+        predicting the existence of rdf type constraints.
+    '''
+    return np.argmax(model_rdf_type_existence.predict(padded_question))
+
+
+def padded_question(question):
+    '''
+
+    :param question: continuous space id question
+    :return: padded question
+    '''
+    padded_question = np.zeros(max_length)
+    padded_question[:min(max_length, len(question))] = question[:min(max_length, len(question))]
+    padded_question = padded_question.reshape((1, padded_question.shape[0]))
+    return padded_question
+
 id_data = json.load(open('resources_v8/id_big_data.json'))
 vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
 relations = load_relation('resources_v8/relations.pickle')
@@ -509,56 +609,14 @@ core_chain_counter = 0
 for data in iterator:
 
     #some macros which would be useful for constructing sparqls
+    sparql_reconstruction = {}
     rdf_type = True
 
-    #Padded version of question.
-    question = np.asarray(data['uri']['question-id'])
-    # questions = pad_sequences([question], maxlen=max_length, padding='post')
+    question, positive_path, negative_paths = construct_paths(data)
 
-    #inverse id version of positive path and creating a numpy version
-    positive_path_id = data['parsed-data']['path_id']
-    positive_path = []
-    for path in positive_path_id:
-        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(path[0])]
-        positive_path += relations[int(path[1:])][3].tolist()
-    positive_path = np.asarray(positive_path)
-    # padded_positive_path = pad_sequences([positive_path], maxlen=max_length, padding='post')
 
-    #negative paths from id to surface form id
-    negative_paths_id = data['uri']['hop-2-properties'] + data['uri']['hop-1-properties']
-    negative_paths = []
-    for neg_path in negative_paths_id:
-        negative_path = []
-        for path in neg_path:
-            try:
-                negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(path)]
-            except ValueError:
-                negative_path += relations[int(path)][3].tolist()
-        negative_paths.append(np.asarray(negative_path))
-    negative_paths = np.asarray(negative_paths)
-    #negative paths padding
-    # padded_negative_paths = pad_sequences(negative_paths, maxlen=max_length, padding='post')
-
-    #explicitly remove any positive path from negative path
-    positive_path,negative_paths = remove_positive_path(positive_path,negative_paths)
-
-    #remap all the id's to the continous id space.
-
-    #passing all the elements through vocab
-    question = np.asarray([vocab[key] for key in question])
-    positive_path = np.asarray([vocab[key] for key in positive_path])
-    for i in range(0,len(negative_paths)):
-        # temp = []
-        for j in xrange(0,len(negative_paths[i])):
-            try:
-                negative_paths[i][j] = vocab[negative_paths[i][j]]
-            except:
-                negative_paths[i][j] = vocab[0]
-                # negative_paths[i] = np.asarray(temp)
-                # negative_paths[i] = np.asarray([vocab[key] for key in negative_paths[i] if key in vocab.keys()])
-    #@TODO
     if len(negative_paths) == 0:
-        core_chain_counter = core_chain_counter + 1
+        best_path = positive_path
     else:
         '''
             The output is made by stacking positive path over negative paths.
@@ -575,56 +633,36 @@ for data in iterator:
         else:
             best_path = negative_paths[best_path_index-1]
 
+    #best path is in continuous id space.
+    sparql_reconstruction['best_path'] = best_path
 
-    '''
-        predicting the intent of the question.
-            List, Ask, Count.
-    '''
-    padded_question = np.zeros(max_length)
-    padded_question[:min(max_length,len(question))] = question[:min(max_length,len(question))]
-    padded_question = padded_question.reshape((1,padded_question.shape[0]))
-    intent = np.argmax(model_question_intent.predict(padded_question))
-    intent = ['ask', 'count','list'][intent]
+    padded_question = padded_question(question)
+
+    #Predecting the intent
+    intent = question_intent(padded_question)
     if DEBUG: print "Intent of the question is : ", str(intent)
+    sparql_reconstruction['intent'] = intent
 
-    '''
-        predicting the existence of rdf type constraints.
-    '''
-
-    rdf_constraint = np.argmax(model_rdf_type_existence.predict(padded_question))
+    # Predecting the rdf-constraint
+    rdf_constraint = rdf_constraint_check(padded_question)
     if DEBUG: print "Rdf constraint of the question is : ", str(rdf_constraint)
+    sparql_reconstruction['rdf_constraint'] = False if rdf_constraint == 2 else sparql_reconstruction['rdf_constraint'] = True
 
-
-    if rdf_constraint == 2:
-        rdf_constraint = False
-    else:
-        rdf_constraint = True
+    sparql_reconstruction['rdf_constraint_type'] = ['x','uri','none'][rdf_constraint]
 
     if rdf_constraint != 2:
-        rdf_candidates = rdf_type_candidates(data, best_path, vocab, relations, reverse_vocab, only_x=True,
+
+        rdf_candidates = rdf_type_candidates(data, best_path, vocab, relations, reverse_vocab, only_x=rdf_constraint == 0,
                                              core_chain=True)
-        # rdf_candidates = rdf_type_candidates(data, best_path, vocab, relations, reverse_vocab, only_x=rdf_constraint == 0,
-        #                                      core_chain=True)
         '''
 			Predicting the rdf type constraints for the best core chain.
 		'''
         if rdf_candidates:
             output = rank_precision_runtime(model_rdf_type_check, question, rdf_candidates[0],
                                             rdf_candidates, 180, max_length)
-            rdf_best_path = convert_path_to_text(rdf_candidates[np.argmax(output[1:])])
-            if rdf_type:
-                pass # @TODO
-
+            # rdf_best_path = convert_path_to_text(rdf_candidates[np.argmax(output[1:])])
+            sparql_reconstruction['rdf_best_path'] = rdf_candidates[np.argmax(output[1:])+1]
         else:
-            rdf_type = False
+            sparql_reconstruction['rdf_best_path'] = []
 
-
-
-
-print "the final counter value is ", str(core_chain_counter)
-print "the total number of question evaluated are ", len(id_data_train)
-
-output = rank_precision_runtime(model_corechain, question, negative_path[32],
-                                a, 10000, max_length)
-
-
+    print sparql_reconstruction

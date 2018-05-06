@@ -22,9 +22,12 @@ import numpy as np
 import pandas as pd
 from keras import optimizers
 from progressbar import ProgressBar
+from utils import embeddings_interface
 import data_preparation_rdf_type as drt
 import keras.backend.tensorflow_backend as K
+from utils import dbpedia_interface as db_interface
 from keras.preprocessing.sequence import pad_sequences
+from utils import natural_language_utilities as nlutils
 
 
 # Some Macros
@@ -36,8 +39,10 @@ LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
 NEGATIVE_SAMPLES = 1000
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
+LOC_RDF_TYPE_LOOKUP = 'resources_v8/rdf_type_lookup.json'
 
 relations = pickle.load(open('resources_v8/relations.pickle'))
+dbp = db_interface.DBPedia(_verbose=True, caching=False)
 
 reverse_relations = {}
 for keys in relations:
@@ -330,30 +335,57 @@ def id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True):
         pass
 
 
-def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, core_chain = True):
+def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, core_chain = True):
+    '''
+        Takes in path ID (continous IDs, not glove vocab).
+        And return type candidates (in continous IDs)
+            based on whether we want URI or X candidates
+    :param data:
+    :param path_id:
+    :param vocab:
+    :param relations:
+    :param reverse_vocab:
+    :param core_chain:
+    :return:
+    '''
+
+    #@TODO: Only generate specific candidates
     data = data['parsed-data']
     path = id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True)
     sparql = drt.reconstruct(data['entity'], path, alternative=True)
     sparqls = drt.create_sparql_constraints(sparql)
+
     if len(data['entity']) == 2:
         sparqls = [sparqls[1]]
     if len(path) == 2:
         sparqls = [sparqls[1]]
     type_x, type_uri = drt.retrive_answers(sparqls)
 
-    # Remove the "actual" constraint from this list (so that we only create negative samples)
-    try:
-        type_x = [x for x in type_x if x not in data['constraints']['x']]
-    except KeyError:
-        pass
-
-    try:
-        type_uri = [x for x in type_uri if x not in data['constraints']['uri']]
-    except KeyError:
-        pass
+    # # Remove the "actual" constraint from this list (so that we only create negative samples)
+    # try:
+    #     type_x = [x for x in type_x if x not in data['constraints']['x']]
+    # except KeyError:
+    #     pass
+    #
+    # try:
+    #     type_uri = [x for x in type_uri if x not in data['constraints']['uri']]
+    # except KeyError:
+    #     pass
 
     type_x_candidates, type_uri_candidates = drt.create_valid_paths(type_x, type_uri)
-    return type_x_candidates+type_uri_candidates
+    return type_x_candidates
+    # Convert them to continous IDs.
+    for i in range(len(type_x_candidates)):
+        for j in range(len(type_x_candidates[i])):
+            type_x_candidates[i][j] = vocab[type_x_candidates[i][j]]
+
+    for i in range(len(type_uri_candidates)):
+        for j in range(len(type_uri_candidates[i])):
+            type_uri_candidates[i][j] = vocab[type_uri_candidates[i][j]]
+
+    # Return based on given input.
+    return type_x_candidates
+    return type_x_candidates if only_x else type_uri_candidates
 
 
 def load_relation(relation_file):
@@ -418,13 +450,45 @@ def remove_positive_path(positive_path, negative_paths):
     return positive_path, np.asarray(new_negative_paths)
 
 
+def load_reverse_rdf_type():
+    rdf_type = json.load(open(LOC_RDF_TYPE_LOOKUP))
+    rdf = {}
+    for classes in rdf_type:
+        rdf[classes] = embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(classes)))
+    return rdf
 
 
+def convert_path_to_text(path):
+    """
+        Function used to convert a path (of continous IDs) to a text path.
+        Eg. [ 5, 3, 420] : [uri, dbo:Poop]
 
-id_data = pickle.load(open('resources_v8/id_big_data.json'))
+    :param path: list of strings
+    :return: list of text
+    """
+
+    # First we need to convert path to glove vocab
+    path = [reverse_vocab[x] for x in path]
+
+    # Then to convert this to text
+    var = ''
+    for key in embeddings_interface.glove_vocab.keys():
+        if embeddings_interface.glove_vocab[key] == path[0]:
+            var = key
+            break
+
+    dbo_class = ''
+    for key in reverse_rdf_dict.keys():
+        if list(reverse_rdf_dict[key]) == list(path[2:]):
+            dbo_class = key
+            break
+
+    return [var, dbo_class]
+
+id_data = json.load(open('resources_v8/id_big_data.json'))
 vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
 relations = load_relation('resources_v8/relations.pickle')
-
+reverse_rdf_dict = load_reverse_rdf_type()
 
 reverse_vocab = {}
 for keys in vocab:
@@ -480,7 +544,7 @@ for data in iterator:
 
     #remap all the id's to the continous id space.
 
-    #check if negative path is empty
+    #passing all the elements through vocab
     question = np.asarray([vocab[key] for key in question])
     positive_path = np.asarray([vocab[key] for key in positive_path])
     for i in range(0,len(negative_paths)):
@@ -490,9 +554,9 @@ for data in iterator:
                 negative_paths[i][j] = vocab[negative_paths[i][j]]
             except:
                 negative_paths[i][j] = vocab[0]
-        # negative_paths[i] = np.asarray(temp)
-        # negative_paths[i] = np.asarray([vocab[key] for key in negative_paths[i] if key in vocab.keys()])
-
+                # negative_paths[i] = np.asarray(temp)
+                # negative_paths[i] = np.asarray([vocab[key] for key in negative_paths[i] if key in vocab.keys()])
+    #@TODO
     if len(negative_paths) == 0:
         core_chain_counter = core_chain_counter + 1
     else:
@@ -516,36 +580,40 @@ for data in iterator:
         predicting the intent of the question.
             List, Ask, Count.
     '''
-    intent = np.argmax(model_question_intent.predict(question))
-    if intent == 2:
-        intent = "list"
-    elif intent == 1:
-        intent = "count"
-    else:
-        intent = "ask"
+    padded_question = np.zeros(max_length)
+    padded_question[:min(max_length,len(question))] = question[:min(max_length,len(question))]
+    padded_question = padded_question.reshape((1,padded_question.shape[0]))
+    intent = np.argmax(model_question_intent.predict(padded_question))
+    intent = ['ask', 'count','list'][intent]
+    if DEBUG: print "Intent of the question is : ", str(intent)
 
     '''
         predicting the existence of rdf type constraints.
     '''
 
-    rdf_constraints = model_rdf_type_existence.predict(question)
+    rdf_constraint = np.argmax(model_rdf_type_existence.predict(padded_question))
+    if DEBUG: print "Rdf constraint of the question is : ", str(rdf_constraint)
 
-    if rdf_constraints == 2:
-        rdf_constraints = False
+
+    if rdf_constraint == 2:
+        rdf_constraint = False
     else:
-        rdf_constraints = True
+        rdf_constraint = True
 
-    if rdf_constraints:
-        rdf_candidates = rdf_type_candidates(data, best_path, vocab, relations, reverse_vocab, core_chain=True)
-
+    if rdf_constraint != 2:
+        rdf_candidates = rdf_type_candidates(data, best_path, vocab, relations, reverse_vocab, only_x=True,
+                                             core_chain=True)
+        # rdf_candidates = rdf_type_candidates(data, best_path, vocab, relations, reverse_vocab, only_x=rdf_constraint == 0,
+        #                                      core_chain=True)
         '''
 			Predicting the rdf type constraints for the best core chain.
 		'''
         if rdf_candidates:
             output = rank_precision_runtime(model_rdf_type_check, question, rdf_candidates[0],
                                             rdf_candidates, 180, max_length)
-            rdf_path = rdf_candidates[np.argmax(output[1:])]
+            rdf_best_path = convert_path_to_text(rdf_candidates[np.argmax(output[1:])])
             if rdf_type:
+                pass # @TODO
 
         else:
             rdf_type = False
@@ -556,6 +624,7 @@ for data in iterator:
 print "the final counter value is ", str(core_chain_counter)
 print "the total number of question evaluated are ", len(id_data_train)
 
-
+output = rank_precision_runtime(model_corechain, question, negative_path[32],
+                                a, 10000, max_length)
 
 

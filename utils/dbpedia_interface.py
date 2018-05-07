@@ -22,6 +22,7 @@ import warnings
 import pickle
 import redis
 import json
+import re
 
 # Our scripts
 import natural_language_utilities as nlutils
@@ -31,10 +32,32 @@ import labels_mulitple_form
 # DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/']
 # DBPEDIA_ENDPOINTS = ['http://localhost:8890/sparql/']
 # DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
+DBPEDIA_ENDPOINTS = ['http://localhost:8164/sparql/']
+REDIS_HOSTNAME = 'sda-srv01'
+#REDIS_HOSTNAME  = '127.0.0.1'
+MAX_WAIT_TIME = 1.0
+ASK_RE_PATTERN = '(?i)ask\s*where'
+
+
+'''
+Endpoint information for sda-srv04 - might/not work
 DBPEDIA_ENDPOINTS = ['http://sda-srv01:8890/sparql']
 REDIS_HOSTNAME = 'sda-srv01'
 #REDIS_HOSTNAME  = '127.0.0.1'
 MAX_WAIT_TIME = 1.0
+'''
+
+'''
+Endpoint information for QROWDGPU
+# GLOBAL MACROS
+# DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/']
+DBPEDIA_ENDPOINTS = ['http://localhost:8164/sparql/']
+# DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
+#DBPEDIA_ENDPOINTS = ['http://sda-srv01:8890/sparql']
+REDIS_HOSTNAME = 'sda-srv01'
+#REDIS_HOSTNAME  = '127.0.0.1'
+MAX_WAIT_TIME = 1.0
+'''
 
 # SPARQL Templates
 GET_RIGHT_PROPERTIES_OF_RESOURCE = '''SELECT DISTINCT ?property WHERE { %(target_resource)s ?property ?useless_resource }'''
@@ -250,8 +273,9 @@ class DBPedia:
         except:
             traceback.print_exc()
 
+        matcher = re.search(ASK_RE_PATTERN, _sparql_query, 0)
         values = {}
-        if 'ASK WHERE {' in _sparql_query:
+        if matcher:
             values['boolean'] = response['boolean']
             return values
         # Now to parse the response

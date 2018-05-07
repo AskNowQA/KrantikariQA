@@ -27,7 +27,8 @@ sparql_template_2 = {
 sparql_template_3 = {
 	"+-" : 'SELECT DISTINCT ?uri WHERE { <%(te1)s> <%(r1)s> ?uri . <te2> <%(r2)s> ?uri  . }',
 	"--" : 'SELECT DISTINCT ?uri WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . }',
-	"-+" : 'SELECT DISTINCT ?uri WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . }'
+	"-+" : 'SELECT DISTINCT ?uri WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s>  . }',
+	"++" : 'SELECT DISTINCT ?uri WHERE { <%(te1)s> <%(r1)s> ?uri . ?uri <%(r2)s> <%(te2)s>  . }'
 }
 
 sparql_template_ask = {
@@ -45,8 +46,9 @@ uri_x_const = '?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?cons_x . ' 
 DIR = './resources_v8/'
 BIG_DATA_DIR = './resources_v8/id_big_data.json'
 
-relations_dict = pickle.load(open('resources/relations.pickle'))
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
+rdf_type_lookup = []
+relations_dict = pickle.load(open('resources/relations.pickle'))
 
 
 
@@ -191,6 +193,8 @@ def generate_candidates(_datum):
 	:return:
 	"""
 
+	global rdf_type_lookup
+
 	# Check if there is some constraint or not
 	data = _datum['parsed-data']
 	if not check_for_constraints(data):
@@ -207,8 +211,14 @@ def generate_candidates(_datum):
 	if len(path) == 2:
 		sparqls = [sparqls[1]]
 	type_x, type_uri = retrive_answers(sparqls)
+	rdf_type_lookup = rdf_type_lookup + type_x + type_uri
+	rdf_type_lookup = list(set(rdf_type_lookup))
+
 
 	# Remove the "actual" constraint from this list (so that we only create negative samples)
+	'''
+		This does not work
+	'''
 	try:
 		type_x = [ x for x in type_x if x not in data['constraints']['x']]
 	except KeyError:
@@ -273,7 +283,7 @@ def run():
 			raw_data[i]['rdf-type-constraints'][j] = raw_data[i]['rdf-type-constraints'][j].tolist()
 
 	json.dump(raw_data,open(BIG_DATA_DIR,'w+'))
-
+	json.dump(rdf_type_lookup, open('resources_v8/rdf_type_lookup.json','w+'))
 
 
 if __name__ == "__main__":

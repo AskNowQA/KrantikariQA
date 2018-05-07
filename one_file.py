@@ -56,44 +56,51 @@ np.random.seed(42) # Random train/test splits stay the same between runs
     SPARQL Templates to be used to reconstruct SPARQLs from query graphs
 """
 sparql_1hop_template = {
-    "-": '%(ask)s %(count)s %(where)s { { ?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s> } UNION '
+    "-": '%(ask)s %(count)s WHERE { { ?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s> } UNION '
                                  + '{ ?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s> } . %(rdf)s }',
-    "+": '%(ask)s %(count)s %(where)s { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri } UNION '
+    "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri } UNION '
                                  + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri } . %(rdf)s }'
 }
-
+sparql_boolean_template = {
+    "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> <%(te2)s> } UNION '
+                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } . %(rdf)s }',
+}
 sparql_2hop_1ent_template = {
-    "++": '%(ask)s %(count)s %(where)s { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
+    "++": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
                                   + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} . '
                                   + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION'
                                   + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} . %(rdf)s }',
-    "-+": '%(ask)s %(count)s %(where)s { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
+    "-+": '%(ask)s %(count)s WHERE { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
                                   + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} .'
                                   + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
                                   + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} . %(rdf)s }',
-    "--": '%(ask)s %(count)s %(where)s { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
+    "--": '%(ask)s %(count)s WHERE { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
                                   + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} .'
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
                                   + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} . %(rdf)s }',
-    "+-": '%(ask)s %(count)s %(where)s { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
+    "+-": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
                                   + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} .'
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
                                   + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} . %(rdf)s }'
 }
 
 sparql_2hop_2ent_template = {
-    "+-": '%(ask)s %(count)s %(where)s { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri} UNION '
+    "+-": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri} UNION '
                                   + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} . '
                                   + '{<%(te2)s> <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
                                   + '{<%(te2)s> <http://dbpedia.org/ontology/%(r2)s> ?uri} . %(rdf)s }',
-    "--": '%(ask)s %(count)s %(where)s { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
+    "--": '%(ask)s %(count)s WHERE { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
                                   + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} . '
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION '
                                   + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} . %(rdf)s }',
-    "-+": '%(ask)s %(count)s %(where)s { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
+    "-+": '%(ask)s %(count)s WHERE { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
                                   + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} .'
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} . %(rdf)s }'
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} . %(rdf)s }',
+    "++": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri} UNION '
+                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} .'
+                                  + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>}  . %(rdf)s }'
 }
 
 rdf_constraint_template = ' ?%(var)s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <%(uri)s> . '
@@ -232,7 +239,7 @@ def rel_id_to_rel(rel, _relations):
         if np.array_equal(value[3],np.asarray(rel)):
             occurrences.append(value)
     if len(occurrences) == 1:
-        return occurrences[0][-1]
+        return occurrences[0][0]
     else:
         '''
             prefers ontology over properties
@@ -428,7 +435,7 @@ def load_reverse_rdf_type():
     return rdf
 
 
-def convert_path_to_text(path):
+def convert_rdf_path_to_text(path):
     """
         Function used to convert a path (of continous IDs) to a text path.
         Eg. [ 5, 3, 420] : [uri, dbo:Poop]
@@ -536,6 +543,7 @@ def pad_question(question):
     padded_question = padded_question.reshape((1, padded_question.shape[0]))
     return padded_question
 
+
 plus_id, minus_id = None, None # These are vocab IDs
 def reconstruct_corechain(_chain):
     """
@@ -614,7 +622,6 @@ def query_graph_to_sparql(_graph):
 
     # Construct the stuff outside the where clause
     sparql_value["ask"] = 'ASK' if _graph['intent'] == 'ask' else 'SELECT DISTINCT'
-    sparql_value["where"] = '' if _graph['intent'] == 'ask' else 'WHERE'
     if _graph['intent'] == 'count':
         sparql_value["count"] = 'COUNT(?uri)'
     elif _graph['intent'] == 'ask':
@@ -622,15 +629,16 @@ def query_graph_to_sparql(_graph):
     else:
         sparql_value["count"] = '?uri'
 
-
-# Check if we need an RDF constraint.
+    # Check if we need an RDF constraint.
     if _graph['rdf_constraint']:
+        try:
+            rdf_constraint_values = {}
+            rdf_constraint_values['var'] = _graph['rdf_constraint_type']
+            rdf_constraint_values['uri'] = convert_rdf_path_to_text(_graph['rdf_best_path'])[1]
 
-        rdf_constraint_values = {}
-        rdf_constraint_values['var'] = _graph['rdf_constraint_type']
-        rdf_constraint_values['uri'] = convert_path_to_text(_graph['rdf_best_path'])[1]
-
-        sparql_value["rdf"] = rdf_constraint_template % rdf_constraint_values
+            sparql_value["rdf"] = rdf_constraint_template % rdf_constraint_values
+        except IndexError:
+            sparql_value["rdf"] = ''
 
     else:
         sparql_value["rdf"] = ''
@@ -639,7 +647,13 @@ def query_graph_to_sparql(_graph):
     signs_key = ''.join(corechain_signs)
 
     # Select tempalte + put in entites and predicates.
-    if len(signs_key) == 1:
+    if _graph['intent'] == 'ask':
+        # Assuming that there is only single triple ASK queries.
+        sparql_template = sparql_boolean_template['+']
+        sparql_value["te1"] = _graph['entities'][0]
+        sparql_value["te2"] = _graph['entities'][1]
+        sparql_value["r1"] = corechain_uris[0].split('/')[-1]
+    elif len(signs_key) == 1:
         sparql_template = sparql_1hop_template[signs_key]
         sparql_value["te1"] = _graph['entities'][0]
         sparql_value["r1"] = corechain_uris[0].split('/')[-1]
@@ -658,10 +672,12 @@ def query_graph_to_sparql(_graph):
 
     # Now to put the magic together
     sparql = sparql_template % sparql_value
+
     return sparql
 
 
 def evaluate(test_sparql, true_sparql, type):
+    #@TODO: If the type of tesst and true are differnt code would return an error.
     '''
         Fmeasure for ask and count are 0/1.
         Also assumes the variable to be always uri.
@@ -676,9 +692,18 @@ def evaluate(test_sparql, true_sparql, type):
         total_retrived_resutls = len(test_answer)
         total_relevant_resutls = len(true_answer)
         common_results = total_retrived_resutls - len(list(set(test_answer)-set(true_answer)))
-        precision = common_results*1.0/total_retrived_resutls
-        recall = common_results*1.0/total_relevant_resutls
-        f1 = (2.0 * (precision * recall)) / (precision + recall)
+        if total_retrived_resutls == 0:
+            precision = 0
+        else:
+            precision = common_results*1.0/total_retrived_resutls
+        if total_relevant_resutls == 0:
+            recall = 0
+        else:
+            recall = common_results*1.0/total_relevant_resutls
+        if precision == 0 and recall == 0:
+            f1 = 0
+        else:
+            f1 = (2.0 * (precision * recall)) / (precision + recall)
         return f1,precision,recall
 
     if type == "count":
@@ -728,7 +753,7 @@ with K.tf.device('/gpu:' + GPU):
 core_chain_correct = []
 
 progbar = ProgressBar()
-iterator = progbar(id_data_train)
+iterator = progbar(id_data_test)
 
 if DEBUG: print("the length of train data is ", len(id_data_test))
 
@@ -768,12 +793,12 @@ for data in iterator:
 
     # Predicting the intent
     intent = question_intent(padded_question)
-    if DEBUG: print("Intent of the question is : ", str(intent))
+    # if DEBUG: print("Intent of the question is : ", str(intent))
     query_graph['intent'] = intent
 
     # Predicting the rdf-constraint
     rdf_constraint = rdf_constraint_check(padded_question)
-    if DEBUG: print("Rdf constraint of the question is : ", str(rdf_constraint))
+    # if DEBUG: print("Rdf constraint of the question is : ", str(rdf_constraint))
     query_graph['rdf_constraint'] = False if rdf_constraint == 2 else True
 
     query_graph['rdf_constraint_type'] = ['x', 'uri', 'none'][rdf_constraint]
@@ -803,4 +828,3 @@ for data in iterator:
     results.append([f,p,r])
     avg.append(f)
     print sum(avg)*1.0/len(avg)
-

@@ -614,10 +614,16 @@ def query_graph_to_sparql(_graph):
 
     # Construct the stuff outside the where clause
     sparql_value["ask"] = 'ASK' if _graph['intent'] == 'ask' else 'SELECT DISTINCT'
-    sparql_value["count"] = 'COUNT(?uri)' if _graph['intent'] == 'count' else '?uri'
     sparql_value["where"] = '' if _graph['intent'] == 'ask' else 'WHERE'
+    if _graph['intent'] == 'count':
+        sparql_value["count"] = 'COUNT(?uri)'
+    elif _graph['intent'] == 'ask':
+        sparql_value["count"] = ''
+    else:
+        sparql_value["count"] = '?uri'
 
-    # Check if we need an RDF constraint.
+
+# Check if we need an RDF constraint.
     if _graph['rdf_constraint']:
 
         rdf_constraint_values = {}

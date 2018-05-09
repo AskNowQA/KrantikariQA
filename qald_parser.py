@@ -309,11 +309,39 @@ def get_true_path(sparql, raw_sparql):
             for triple in sparql['where'][0]['triples']:
                 if not triple['predicate'] in ['a', 'rdf:type', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']:
                     path, entity = __fill_single_triple_data__(_triple=triple, _path=path, _ask=is_ask)
+                    break
 
         else:
 
             # It is a two triple query, but with no rdf:type constraint and we need to parse it the hard way
             path, entity = __fill_double_triple_data__(_triples=sparql['where'][0]['triples'], _path=path, _ask=is_ask)
+
+    # else:
+    #
+    #     '''
+    #         The Question has more than two triples.
+    #         Handle it iff:
+    #             one of the triple is an rdf contstraint.
+    #     '''
+    #
+    #     # Find (if any) the triple with rdf type constraint
+    #     for triple in sparql['where'][0]['triples']:
+    #
+    #         if triple['predicate'] in ['a', 'rdf:type', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']:
+    #
+    #             has_type_constraint = True
+    #             # Found it. Figure out what is being constrained.
+    #             try:
+    #                 if triple['subject'] in sparql['variables']:
+    #                     constraints['?uri'] = triple['object']  # The constraint is on the uri
+    #                 else:
+    #                     constraints['?x'] = triple['object']
+    #             except KeyError:
+    #                 # This is a 2level ASK query with an rdf type constraint. Can only be on interim variable.
+    #                 constraints['?x'] = triple['object']
+    #
+    #     if not has_type_constraint:
+    #         return [-1, -1]
 
     elif len(sparql['where'][0]['triples']) == 3:
 
@@ -347,14 +375,14 @@ def get_true_path(sparql, raw_sparql):
 
         if not has_type_constraint:
             warnings.warn("No code in place for queries with three triples with *NO* rdf:type constraint")
-            return None, None, constraints
+            return -1, -1, {'out-of-scope': True}
 
     else:
         warnings.warn("No code in place for queries with more than three triples")
-        return None, None, constraints
+        return -1, -1, {'out-of-scope': True}
 
     # Before any return condition, check if anything is None. If so, something somewhere forked up and handle it well.
-    return path, entity
+    return path, entity, constraints
 
 
 def get_false_paths(entity, truepath):

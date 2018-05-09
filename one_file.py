@@ -59,7 +59,9 @@ sparql_1hop_template = {
     "-": '%(ask)s %(count)s WHERE { { ?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s> } UNION '
                                  + '{ ?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s> } . %(rdf)s }',
     "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri } UNION '
-                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri } . %(rdf)s }'
+                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri } . %(rdf)s }',
+    "-c": '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . %(rdf)s }',
+    "+c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . %(rdf)s }',
 }
 sparql_boolean_template = {
     "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> <%(te2)s> } UNION '
@@ -81,7 +83,11 @@ sparql_2hop_1ent_template = {
     "+-": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
                                   + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} .'
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} . %(rdf)s }'
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} . %(rdf)s }',
+    "++c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?x . ?x <%(r2)s> ?uri . %(rdf)s }',
+    "-+c": '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?x <%(r2)s> ?uri . %(rdf)s }',
+    "--c": '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?uri <%(r2)s> ?x . %(rdf)s }',
+    "+-c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?x . ?uri <%(r2)s> ?x . %(rdf)s }'
 }
 
 sparql_2hop_2ent_template = {
@@ -100,7 +106,11 @@ sparql_2hop_2ent_template = {
     "++": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri} UNION '
                                   + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} .'
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>}  . %(rdf)s }'
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>}  . %(rdf)s }',
+    "+-c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . <%(te2)s> <%(r2)s> ?uri . %(rdf)s }',
+    "--c": '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s> . %(rdf)s }',
+    "-+c": '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s> . %(rdf)s }',
+    "++c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . ?uri <%(r2)s> <%(te2)s> . %(rdf)s }',
 }
 
 rdf_constraint_template = ' ?%(var)s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <%(uri)s> . '
@@ -644,29 +654,39 @@ def query_graph_to_sparql(_graph):
         sparql_value["rdf"] = ''
 
     # Find the particular template based on the signs
+
+    """
+        Start putting stuff in template.
+        Note: if we're dealing with a count query, we append a 'c' to the query.
+            This does away with dbo/dbp union and goes ahead with whatever came in the question.
+    """
     signs_key = ''.join(corechain_signs)
 
-    # Select tempalte + put in entites and predicates.
     if _graph['intent'] == 'ask':
         # Assuming that there is only single triple ASK queries.
         sparql_template = sparql_boolean_template['+']
         sparql_value["te1"] = _graph['entities'][0]
         sparql_value["te2"] = _graph['entities'][1]
         sparql_value["r1"] = corechain_uris[0].split('/')[-1]
+
     elif len(signs_key) == 1:
-        sparql_template = sparql_1hop_template[signs_key]
+        # Single hop, non boolean.
+        sparql_template = sparql_1hop_template[signs_key+'c' if _graph['intent'] == 'count' else signs_key]
         sparql_value["te1"] = _graph['entities'][0]
-        sparql_value["r1"] = corechain_uris[0].split('/')[-1]
+        sparql_value["r1"] = corechain_uris[0] if _graph['intent'] == 'count' else corechain_uris[0].split('/')[-1]
+
     else:
-        sparql_value["r1"] = corechain_uris[0].split('/')[-1]
-        sparql_value["r2"] = corechain_uris[1].split('/')[-1]
+        # Double hop, non boolean.
+
+        sparql_value["r1"] = corechain_uris[0] if _graph['intent'] == 'count' else corechain_uris[0].split('/')[-1]
+        sparql_value["r2"] = corechain_uris[1] if _graph['intent'] == 'count' else corechain_uris[1].split('/')[-1]
 
         # Check if entities are one or two
         if len(_graph['entities']) == 1:
-            sparql_template = sparql_2hop_1ent_template[signs_key]
+            sparql_template = sparql_2hop_1ent_template[signs_key+'c' if _graph['intent'] == 'count' else signs_key]
             sparql_value["te1"] = _graph['entities'][0]
         else:
-            sparql_template = sparql_2hop_2ent_template[signs_key]
+            sparql_template = sparql_2hop_2ent_template[signs_key+'c' if _graph['intent'] == 'count' else signs_key]
             sparql_value["te1"] = _graph['entities'][0]
             sparql_value["te2"] = _graph['entities'][1]
 

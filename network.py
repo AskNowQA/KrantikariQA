@@ -38,7 +38,7 @@ from utils import embeddings_interface
 DEBUG = True
 
 # Data locations
-DATA_DIR = './data/training/core_chain/lcquad/'
+DATA_DIR = './data/models/core_chain/lcquad/'
 CACHE_DATA_DIR = './data/data/core_chain/lcquad/'
 RAW_DATA_DIR = './resources_v8/'
 

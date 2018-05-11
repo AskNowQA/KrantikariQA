@@ -6,21 +6,15 @@
 
 from __future__ import absolute_import
 import os
-import pickle
 import sys
-import json
 import warnings
 import numpy as np
 import keras.backend.tensorflow_backend as K
-from keras import optimizers, metrics
-from keras.layers import InputSpec, Layer, Input, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
-from keras.layers import Bidirectional, GRU, LSTM
-from keras.models import Sequential, Model, model_from_json
+from keras.layers import Input
+from keras.layers import Lambda
+from keras.models import Model
 
 import network as n
-from utils import embeddings_interface
-from utils import natural_language_utilities as nlutils
 
 # Macros
 DEBUG = True

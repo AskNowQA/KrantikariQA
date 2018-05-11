@@ -2,10 +2,12 @@
 	Some scripts to do somethings. I will update it once I write something.
 '''
 import time
+import copy
 import json
 import pickle
 import os.path
 import traceback
+from pprint import pprint
 from progressbar import ProgressBar
 from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
@@ -18,6 +20,10 @@ short_forms = {
 	'dbp:': 'http://dbpedia.org/property/'
 }
 
+
+QALD = True
+QALD_TRAIN = False
+
 dump_location = './resources_v8/'
 
 
@@ -25,7 +31,14 @@ relations_list = []
 
 print "loading the data from ", dump_location
 
-big_data = pickle.load(open('./resources_v8/final_results/big_data.pickle'))
+
+if QALD:
+	if QALD_TRAIN:
+		big_data = json.load(open('./resources/qald_big_data_training.json'))
+	else:
+		big_data = json.load(open('./resources/qald_big_data_test_v2.json'))
+else:
+	big_data = pickle.load(open('./resources_v8/final_results/big_data.pickle'))
 dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 print "done loading the data"
@@ -93,10 +106,12 @@ print "done saving "
 
 
 print "idfying things"
-id_big_data = []
+
+id_big_data_test = []
 
 
-for data in big_data:
+for i in range(0,len(big_data)):
+	data = copy.deepcopy(big_data[i])
 	path_id = [str(p[0])+str(relations_dict[p[1:]][0]) for p in data['parsed-data']['path']]
 	data['parsed-data']['path_id'] = path_id
 	hop1 = [[r[0], relations_dict[r[1]][0]] for r in data['uri']['hop-1-properties']]
@@ -115,21 +130,24 @@ for data in big_data:
 			new_path_id = [str(path_id[0][0]),int(path_id[0][1:]), str(path_id[1][0]),int(path_id[1][1:])]
 			data['uri']['hop-2-properties'].remove(new_path_id)
 	except:
-		print "ola"
 		print traceback.print_exc()
+		pprint(data['parsed-data'])
+		raw_input('check')
 		continue
-	data.pop('label-data')
-	data['uri']['question-id'] = data['uri']['question-id'].tolist()
-	id_big_data.append(data)
+
+	if not QALD:
+		data.pop('label-data')
+		data['uri']['question-id'] = data['uri']['question-id'].tolist()
+	id_big_data_test.append(data)
 
 print "done with idfying and now saving in the dump location: ", dump_location
 
-print "the length if id big data file is ", str(len(id_big_data))
+print "the length if id big data file is ", str(len(id_big_data_test))
 
 # start = time.clock()
 # pickle.dump(id_big_data,open(dump_location + 'id_big_data.pickle','w+'))
 # print time.clock() - start
 start = time.clock()
-json.dump(id_big_data,open(dump_location+'id_big_data.json','w+'))
+json.dump(id_big_data_test,open(dump_location+'id_big_data.json','w+'))
 print time.clock() - start
 print "done"

@@ -48,8 +48,11 @@ from utils import natural_language_utilities as nlutils
 
 # Some macros
 DEBUG = True
-RAW_QALD_DIR = './resources/qald-7-train-multilingual.json'
-PARSED_QALD_DIR = './resources/qald-7-train-parsed.pickle'
+RAW_QALD_DIR_TRAIN = './resources/qald-7-train-multilingual.json'
+RAW_QALD_DIR_TEST = './resources/qald-7-test-multilingual.json'
+PARSED_QALD_DIR_TRAIN = './resources/qald-7-train-parsed.pickle'
+PARSED_QALD_DIR_TEST = './resources/qald-7-test-parsed.pickle'
+
 
 # Global variables
 dbp = DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
@@ -391,8 +394,9 @@ def get_false_paths(entity, truepath):
 
 def run():
     # Load QALD
-    raw_dataset = json.load(open(RAW_QALD_DIR))['questions']
-    parsed_dataset = pickle.load(open(PARSED_QALD_DIR))
+    raw_dataset = json.load(open(RAW_QALD_DIR_TEST))['questions']
+    parsed_dataset = pickle.load(open(PARSED_QALD_DIR_TEST))
+    paths = []
 
     # Iterate through every question
     for i in range(len(raw_dataset)):
@@ -408,16 +412,19 @@ def run():
         # # Get answer for the query
         # ans = dbp.get_answer(q_raw['query']['sparql'])
 
-        true_path, topic_entities = get_true_path(q_parsed, q_raw)
+        # true_path, topic_entities = get_true_path(q_parsed, q_raw['query']['sparql'])
+        data = get_true_path(q_parsed, q_raw['query']['sparql'])
+        paths.append(data)
         # false_paths = get_false_paths(ans, true_path)
 
-        if DEBUG:
-            pprint(true_path)
-            pprint(topic_entities)
-            print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
-            raw_input("Press enter to continue")
-        pass
+        # if DEBUG:
+        #     pprint(true_path)
+        #     pprint(topic_entities)
+        #     print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+        #     raw_input("Press enter to continue")
+    return paths
 
 
 if __name__ == "__main__":
-    run()
+    paths = run()
+    pickle.dump(paths,open('resources/paths','w+'))

@@ -16,6 +16,7 @@ from progressbar import ProgressBar
 
 # Local file imports
 import krantikari as K
+import qald_parser as qp
 from utils import model_interpreter
 from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
@@ -46,6 +47,7 @@ short_forms = {
 
 # Load a predicate blacklist from disk
 PREDICATE_BLACKLIST = K.PREDICATE_BLACKLIST
+QALD_PREDICATE_BLACKLIST = K.QALD_PREDICATE_BLACKLIST
 
 
 class Krantikari_v2:
@@ -85,7 +87,7 @@ class Krantikari_v2:
 		self.runtime(self.question, self.entities, self.qald)
 
 	@staticmethod
-	def filter_predicates(_predicates, _use_blacklist=True, _only_dbo=False):
+	def filter_predicates(_predicates, _use_blacklist=True, _only_dbo=False, _qald=False):
 		"""
 			Function used to filter out predicates based on some logic
 				- use a blacklist/whitelist @TODO: Make and plug one in.
@@ -97,20 +99,74 @@ class Krantikari_v2:
 		:return: A list of strings (uri)
 		"""
 
-		if _use_blacklist:
+		if _use_blacklist and not _qald:
 			_predicates = [x for x in _predicates
 						   if x not in PREDICATE_BLACKLIST]
 
-		if _only_dbo:
+		if _only_dbo and not _qald:
 			_predicates = [x for x in _predicates
 						   if x.startswith('http://dbpedia.org/ontology')
 						   or x.startswith('dbo:')]
+
+
+		if _qald:
+			if _use_blacklist:
+				_predicates = [x for x in _predicates
+						   if x not in QALD_PREDICATE_BLACKLIST]
+			predicates_new = []
+			for x in _predicates:
+				if x.startswith('http://purl.org/dc/terms/subject'):
+					predicates_new.append(x)
+				if _only_dbo:
+					if 	x.startswith('http://dbpedia.org/ontology') or x.startswith('dbo:') or\
+							p.startswith('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'):
+						predicates_new.append(x)
+				else:
+					if not x.startswith('http://purl.org/dc/terms/'):
+						predicates_new.append(x)
+			_predicates = predicates_new
+
+
 
 		# Filter out uniques
 		_predicates = list(set(_predicates))
 
 		return _predicates
 
+
+	@staticmethod
+	def filter_predicates_path(_path, _use_blacklist=True, _only_dbo=False, _qald=False):
+		'''
+
+		'''
+		# print _path
+		new_path = []
+		for p in _path:
+			if p != '+' and p != '-':
+				new_path.append(p)
+
+		_path = new_path
+		if _use_blacklist and not _qald:
+			for p in _path:
+				if p in PREDICATE_BLACKLIST:
+					return False
+
+		if _qald:
+			if _use_blacklist:
+				for p in _path:
+					if p in K.QALD_PREDICATE_BLACKLIST:
+						return False
+			for p in _path:
+				if p.startswith('http://purl.org/dc/terms/') and not p.startswith('http://purl.org/dc/terms/subject'):
+					return False
+				if _only_dbo:
+					if p.startswith('http://dbpedia.org/ontology') or p.startswith('dbo:') or p.startswith('http://purl.org/dc/terms/subject') or\
+							p.startswith('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'):
+						continue
+					else:
+						return False
+
+		return True
 	@staticmethod
 	def choose_path_length(hop1_scores, hop2_scores):
 		"""
@@ -152,13 +208,14 @@ class Krantikari_v2:
 			temp['path'] = data_temp
 			return temp
 		if id == 3:
+			print SPARQL
 			temp = {}
 			temp['te1'] = te1
 			temp['te2'] = te2
 			answer = dbp.get_answer(SPARQL)  # -,+
 			data_temp = []
 			for i in xrange(len(answer['r1'])):
-				data_temp.append(['+', answer['r1'][i], "-", answer['r2'][i]])
+				data_temp.append(['+', answer['r1'][i], "+", answer['r2'][i]])
 			temp['path'] = data_temp
 			return temp
 		if id == 4:
@@ -186,37 +243,49 @@ class Krantikari_v2:
 		data = []
 		SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
 		SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
-		# SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+		SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
 
 		SPARQL1 = SPARQL1 % {'te1': te1, 'te2': te2}
 		SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
-		# SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+		SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
 		data.append(cls.get_something(SPARQL1, te1, te2, 1, dbp))
 		# data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
 		data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
 		# data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
-		# data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
+		data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
 		# data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
 		return data
 
 	@classmethod
 	def ask_query(cls, te1, te2, dbp):
+		print "in ask query"
 		te1 = "<" + te1 + ">"
 		te2 = "<" + te2 + ">"
 		data = []
-		SPARQLASK = '''SELECT DISTINCT ?r1  WHERE { %(te1)s ?r1 %(te2)s . } '''
-		# SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
-		# SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+		SPARQLASK_1 = '''SELECT DISTINCT ?r1  WHERE { %(te1)s ?r1 %(te2)s . } '''
+		# SPARQLASK_2 = '''SELECT DISTINCT ?r1  WHERE { %(te2)s ?r1 %(te1)s . } '''
+		# SPARQLASK_3 = '''SELECT DISTINCT ?r1  WHERE { %(te2)s ?r1 %(te1)s . } '''
+		SPARQLASK_3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
+		SPARQLASK_4 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s .  ?uri ?r2 %(te2)s . } '''
 
-		SPARQL1 = SPARQLASK % {'te1': te1, 'te2': te2}
+		SPARQL1 = SPARQLASK_1 % {'te1': te1, 'te2': te2}
+		# SPARQL2 = SPARQLASK_2 % {'te1': te1, 'te2': te2}
+		SPARQL3 = SPARQLASK_3 % {'te1': te1, 'te2': te2}
+		SPARQL4 = SPARQLASK_4 % {'te1': te1, 'te2': te2}
+
+		print SPARQL1
+		print SPARQL3
+		print SPARQL4
 		# SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
 		# SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+
+
 		data.append(cls.get_something(SPARQL1, te1, te2, 4, dbp))
-		# data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
+		data.append(cls.get_something(SPARQL1, te2, te1, 4, dbp))
 		# data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
 		# data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
-		# data.append(cls.get_something(SPARQL3, te1, te2, 3, dbp))
-		# data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
+		data.append(cls.get_something(SPARQL3, te1, te2, 2, dbp))
+		data.append(cls.get_something(SPARQL4, te2, te1, 1, dbp))
 		return data
 
 	def convert_core_chain_to_sparql(self, _core_chain):  # @TODO
@@ -322,8 +391,8 @@ class Krantikari_v2:
 			right_properties, left_properties = self.dbp.get_properties(_uri=_entities[0], label=False)
 
 			# @TODO: Use predicate whitelist/blacklist to trim this shit.
-			right_properties = self.filter_predicates(right_properties, _use_blacklist=True, _only_dbo=_qald)
-			left_properties = self.filter_predicates(left_properties, _use_blacklist=True, _only_dbo=_qald)
+			right_properties = self.filter_predicates(right_properties, _use_blacklist=True, _only_dbo=_qald,_qald=_qald)
+			left_properties = self.filter_predicates(left_properties, _use_blacklist=True, _only_dbo=_qald,_qald=_qald)
 
 			# Get the surface forms of Entity and the predicates
 			entity_sf = self.dbp.get_label(_resource_uri=_entities[0])
@@ -433,13 +502,13 @@ class Krantikari_v2:
 
 			for pred in right_properties_filtered:
 				temp_r, temp_l = self.get_hop2_subgraph(_entity=_entities[0], _predicate=pred, _right=True)
-				e_out_to_e_out_out[pred] = self.filter_predicates(temp_r, _use_blacklist=True, _only_dbo=_qald)
-				e_out_in_to_e_out[pred] = self.filter_predicates(temp_l, _use_blacklist=True, _only_dbo=_qald)
+				e_out_to_e_out_out[pred] = self.filter_predicates(temp_r, _use_blacklist=True, _only_dbo=_qald,_qald=_qald)
+				e_out_in_to_e_out[pred] = self.filter_predicates(temp_l, _use_blacklist=True, _only_dbo=_qald,_qald=_qald)
 
 			for pred in left_properties_filtered:
 				temp_r, temp_l = self.get_hop2_subgraph(_entity=_entities[0], _predicate=pred, _right=False)
-				e_in_to_e_in_out[pred] = self.filter_predicates(temp_r, _use_blacklist=True, _only_dbo=_qald)
-				e_in_in_to_e_in[pred] = self.filter_predicates(temp_l, _use_blacklist=True, _only_dbo=_qald)
+				e_in_to_e_in_out[pred] = self.filter_predicates(temp_r, _use_blacklist=True, _only_dbo=_qald,_qald=_qald)
+				e_in_in_to_e_in[pred] = self.filter_predicates(temp_l, _use_blacklist=True, _only_dbo=_qald,_qald=_qald)
 
 			# Get uniques
 			# e_in_in_to_e_in = list(set(e_in_in_to_e_in))
@@ -703,9 +772,12 @@ class Krantikari_v2:
 			'''
 				Filtering out blacklisted relationships and then tokenize and finally vectorized the input.
 			'''
+
 			for node in results:
 				for paths in node['path']:
-					if not (any(x in paths for x in PREDICATE_BLACKLIST)):
+
+					if self.filter_predicates_path(paths, _use_blacklist=True, _only_dbo=self.qald, _qald=self.qald):
+					# if not (any(x in paths for x in PREDICATE_BLACKLIST)):
 						#convert each of the uri to surface forms and then to wordvectors
 						_temp_path = []
 
@@ -716,8 +788,10 @@ class Krantikari_v2:
 								_temp_path.append([path])
 						_temp_path = [y for x in _temp_path for y in x]
 						if self.ask:
-							print "ola"
-							self.data['hop-1-properties'].append(paths)
+							if len(paths) > 2:
+								self.data['hop-2-properties'].append(paths)
+							else:
+								self.data['hop-1-properties'].append(paths)
 						else:
 							self.data['hop-2-properties'].append(paths)
 						#@TODO: Check for two triple about hop-2-properties.
@@ -728,6 +802,8 @@ class Krantikari_v2:
 			if self.ask:
 				self.data['hop-1-properties'] = [list(item) for item in
 												 set(tuple(row) for row in self.data['hop-1-properties'])]
+				self.data['hop-2-properties'] = [list(item) for item in
+												 set(tuple(row) for row in self.data['hop-2-properties'])]
 			else:
 				self.data['hop-2-properties'] = [list(item) for item in	 set(tuple(row) for row in self.data['hop-2-properties'])]
 
@@ -750,8 +826,10 @@ class Krantikari_v2:
 				self.best_path = ranked_paths_hop2_uri[np.argmax(hop2_scores)]
 
 		else:
-			self.best_path = np.random.choice(self.training_paths)
-
+			if self.training_paths:
+				self.best_path = np.random.choice(self.training_paths)
+			else:
+				return None
 
 
 def generate_training_data(start,end,qald=False):
@@ -898,6 +976,72 @@ def generate_training_data(start,end,qald=False):
 	pickle.dump(big_data,open(BIG_DATA,'w+'))
 
 
+def qald_data():
+	'''
+		Loads the qald raw data. Parses the file and then generates negative paths. The negative
+		paths might contain positive path as this has not been explicitly removed. This is then stores in the big_data list
+		which is then returned.
+
+		Currently this function cannot handle queries like
+		'PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX dbo: <http://dbpedia.org/ontology/> select distinct ?uri where { ?uri rdf:type dbo:Holiday. }'
+
+	'''
+	# Load QALD
+	raw_dataset = json.load(open(qp.RAW_QALD_DIR_TEST))['questions']
+	parsed_dataset = pickle.load(open(qp.PARSED_QALD_DIR_TEST))
+	paths = []
+	big_data_test = []
+
+	# Iterate through every question
+	c = 0
+	for i in range(len(raw_dataset[c:])):
+
+		#Stores all the data and meta data for a particular node
+		temp_big_data = {}
+		# Get the QALD question
+		q_raw = raw_dataset[i]
+		q_parsed = parsed_dataset[i]
+
+		if DEBUG:
+			print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+			print i+c
+
+		# # Get answer for the query
+		# ans = dbp.get_answer(q_raw['query']['sparql'])
+
+		# true_path, topic_entities = get_true_path(q_parsed, q_raw['query']['sparql'])
+		data = qp.get_true_path(q_parsed, q_raw['query']['sparql'])
+		if data[0] == -1 or data[0] is None:
+			continue
+		question = q_raw['question'][0]['string']
+		entity = data[1]
+		is_uri = True
+		for e in entity:
+			if not nlutils.is_dbpedia_uri(e):
+				is_uri = False
+		if not is_uri:
+			continue
+		paths.append(data)
+		if "ask" in q_raw['query']['sparql'].lower():
+			training_data = Krantikari_v2(_question=question, _entities=entity, _model_interpreter="", _dbpedia_interface=dbp,
+										  _training=True, _ask=True,_qald=True)
+		else:
+			training_data = Krantikari_v2(_question=question, _entities=entity, _model_interpreter="", _dbpedia_interface=dbp,
+										  _training=True, _ask=False,_qald=True)
+
+		temp_big_data['unparsed-qald-data'] = q_raw
+		temp_big_data['parsed-qald-data'] = q_parsed
+		temp_big_data['uri'] = training_data.data
+		big_data_test.append(temp_big_data)
+
+	# false_paths = get_false_paths(ans, true_path)
+
+	# if DEBUG:
+	#     pprint(true_path)
+	#     pprint(topic_entities)
+	#     print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+	#     raw_input("Press enter to continue")
+	return big_data_test
 
 if __name__ == "__main__":
 	# """
@@ -909,7 +1053,7 @@ if __name__ == "__main__":
 	# _entities = ['http://dbpedia.org/resource/Nicaragua']
 	#
 	# # Create a DBpedia object.
-	# dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
+	dbp = db_interface.DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
 	#
 	# # Create a model interpreter.
 	# model = model_interpreter.ModelInterpreter()  # Model interpreter to be used for ranking

@@ -109,6 +109,7 @@ short_forms = {
 
 # Load a predicate blacklist from disk
 PREDICATE_BLACKLIST = open('./resources/predicate.blacklist').read().split()
+QALD_PREDICATE_BLACKLIST = open('./resources/qald_predicate.blacklist').read().split()
 
 
 # Better warning formatting. Ignore.
@@ -855,7 +856,7 @@ def parse_lcquad(_data):
         '''
             {	u'_id': u'8216e5b6033a407191548689994aa32e',
                 u'corrected_question': u'Name the municipality of Roberto Clemente Bridge ?',
-                u'sparql_query': u' SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Roberto_Clemente_Bridge> <http://dbpedia.org/ontology/municipality> ?uri } ',
+                    u'sparql_query': u' SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Roberto_Clemente_Bridge> <http://dbpedia.org/ontology/municipality> ?uri } ',
                 u'sparql_template_id': 2,
                 u'verbalized_question': u'What is the <municipality> of Roberto Clemente Bridge ?'
             }
@@ -1287,6 +1288,9 @@ def generate_training_data(start,end,qald=False):
     pickle.dump(data, open(RESULTS_DIR, 'w+'))
     pickle.dump(actual_length_false_path,open(LENGTH_DIR,'w+'))
     pickle.dump(parsing_error,open(PARSING_ERROR,'w+'))
+
+
+
 
 
 def test_lcquad(_target_gpu = 0, _debug = True):

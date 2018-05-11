@@ -583,12 +583,6 @@ def runtime_const(x):
 		print traceback.print_exc()
 		return None
 
-#
-# new_data = main()
-# strategy_1(new_data)
-# strategy_2(new_data)
-# strategy_3(new_data)
-
 
 def generate_constraint(data):
 	'''
@@ -596,7 +590,7 @@ def generate_constraint(data):
 		>Create relationships with id mapping.
 	'''
 	#check if the constraint exists
-	const = data['constraints']
+	const = data['parsed-data']['constraints']
 	path = ""
 	try:
 		path = const['?uri']

@@ -37,6 +37,7 @@ from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.layers import Merge
 from sklearn.utils import shuffle
 import network as n
+import network_corechain as n_cc
 from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
@@ -44,7 +45,8 @@ from utils import natural_language_utilities as nlutils
 
 # Some Macros
 DEBUG = True
-DATA_DIR = './data/training/rdf'
+LCQUAD = True
+DATA_DIR = './data/models/rdf/lcquad/' if LCQUAD else './data/models/rdf/qald/'
 RESOURCE_DIR = './resources_v8/rdf'
 ID_DIR = './resources_v8'
 EPOCHS = 300
@@ -55,13 +57,12 @@ NEGATIVE_SAMPLES = 270
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 
-def load_data(file, max_sequence_length, relations):
+def create_dataset(file, max_sequence_length):
     """
         Prepares the training data to be **directly** fed into the model.
 
     :param file:
     :param max_sequence_length:
-    :param relations:
     :return:
     """
     glove_embeddings = n.get_glove_embeddings()
@@ -126,7 +127,7 @@ def load_data(file, max_sequence_length, relations):
                 except ValueError:
                     if len(unpadded_neg_path) == 0:
                         neg_path = neg_paths[-1]
-                        print "Using previous question's paths for this since no neg paths for this question."
+                        print("Using previous question's paths for this since no neg paths for this question.")
                     else:
                         index = np.random.randint(0, len(unpadded_neg_path), 200)
                         unpadded_neg_path = np.array(unpadded_neg_path)
@@ -143,22 +144,19 @@ def load_data(file, max_sequence_length, relations):
             pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
             neg_paths = np.asarray(neg_paths)
 
-
-
             '''
                 Take care of vocabulary.
                 Note: if vocabulary changed, all the models are rendered useless.
             '''
-
             try:
                 vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
             except (IOError, EOFError) as e:
                 vocab = {}
 
             if DEBUG:
-                print questions.shape
-                print pos_paths.shape
-                print neg_paths.shape
+                print(questions.shape)
+                print(pos_paths.shape)
+                print(neg_paths.shape)
 
             all = np.concatenate([questions, pos_paths, neg_paths.reshape(neg_paths.shape[0]*neg_paths.shape[1],neg_paths.shape[2])], axis=0)
             uniques = np.unique(all)
@@ -189,11 +187,13 @@ def load_data(file, max_sequence_length, relations):
             # Create slimmer, better, faster, vectors file.
             vectors = glove_embeddings[uniques]
 
-            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join('./resources_v8', file + ".vocab.pickle"), "w") as idx:
+            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join('./resources_v8', file + ".vocab.pickle"), "w+") as idx:
                 np.savez(data, questions, pos_paths, neg_paths)
                 pickle.dump(vocab,idx)
 
             return vectors, questions, pos_paths, neg_paths
+
+
 
 if __name__ == "__main__":
     gpu = sys.argv[1]
@@ -201,9 +201,8 @@ if __name__ == "__main__":
     max_length = 25
     relations = n.load_relation('resources_v8/relations.pickle')
     dbp = db_interface.DBPedia(_verbose=True, caching=False)
-    n.DATA_DIR = DATA_DIR
+    n.DATA_DIR_CORECHAIN = DATA_DIR
     n.NEGATIVE_SAMPLES = 200
     n.BATCH_SIZE = 300
-    vectors, questions, pos_paths, neg_paths = load_data("id_big_data.json", max_length, relations)
-    print questions.shape
-    n.main_bidirectional(gpu, vectors, questions, pos_paths, neg_paths,10, 200)
+    vectors, questions, pos_paths, neg_paths = create_dataset("id_big_data.json", max_length)
+    n_cc.bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 10, 200)

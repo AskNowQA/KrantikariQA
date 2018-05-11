@@ -19,16 +19,16 @@ from utils import natural_language_utilities as nlutils
 # Todos
 # @TODO: The model doesn't take the embedding vectors as input.
 # @TODO: Maybe put in negative sampling
-# @TODO: Reuse code from network.py
 
 # Setting a seed to clamp the stochastic nature of the code
 np.random.seed(42)
 
 # Some Macros
 DEBUG = True
+LCQUAD = True
 MAX_SEQ_LENGTH = 25
-RAW_DATASET_LOC = './resources_v8/id_big_data.json'
-DATA_DIR = './data/training/type-existence'
+RAW_DATASET_LOC = os.path.join(n.RAW_DATA_DIR, 'id_big_data.json')
+DATA_DIR = './data/models/type_existence/lcquad/' if LCQUAD else './data/models/type_existence/qald/'
 
 # Model Macros
 EPOCHS = 300
@@ -262,5 +262,5 @@ if __name__ == "__main__":
     print("rnn model results are ", result/float(len(Y_test_cap)))
 
     # Time to save model.
-    n.DATA_DIR = DATA_DIR
+    n.MODEL_DIR = DATA_DIR
     n.smart_save_model(model)

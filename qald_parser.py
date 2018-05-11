@@ -408,7 +408,7 @@ def run():
         # # Get answer for the query
         # ans = dbp.get_answer(q_raw['query']['sparql'])
 
-        true_path, topic_entities = get_true_path(q_parsed, q_raw)
+        true_path, topic_entities, constraints = get_true_path(q_parsed, q_raw)
         # false_paths = get_false_paths(ans, true_path)
 
         if DEBUG:

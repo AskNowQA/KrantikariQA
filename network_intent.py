@@ -6,11 +6,11 @@ import json
 import warnings
 import numpy as np
 import keras.backend.tensorflow_backend as K
-from keras import optimizers, metrics
-from keras.layers import InputSpec, Layer, Input, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
-from keras.layers import Bidirectional, GRU, LSTM
-from keras.models import Sequential, Model, model_from_json
+from keras import optimizers
+from keras.layers import Input, Dense
+from keras.layers import Embedding
+from keras.layers import Bidirectional, LSTM
+from keras.models import Model
 
 import network as n
 from utils import embeddings_interface
@@ -19,16 +19,16 @@ from utils import natural_language_utilities as nlutils
 # Todos
 # @TODO: The model doesn't take the embedding vectors as input.
 # @TODO: Maybe put in negative sampling
-# @TODO: Reuse code from network.py
 
 # Setting a seed to clamp the stochastic nature of the code
 np.random.seed(42)
 
 # Some Macros
 DEBUG = True
+LCQUAD = True
 MAX_SEQ_LENGTH = 25
-RAW_DATASET_LOC = './resources_v8/id_big_data.json'
-DATA_DIR = './data/training/intent'
+RAW_DATASET_LOC = os.path.join(n.RAW_DATA_DIR, 'id_big_data.json')
+DATA_DIR = './data/models/intent/lcquad/' if LCQUAD else './data/models/intent/qald/'
 
 # Model Macros
 EPOCHS = 300
@@ -142,7 +142,7 @@ def convert_new_ids(X, Y):
     # See if we've already loaded the new vocab.
     if not vocab:
         try:
-            vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
+            vocab = pickle.load(open('./resources_v8/id_big_data.json.vocab.pickle'))
         except (IOError, EOFError) as e:
             if DEBUG:
                 warnings.warn("Did not find the vocabulary.")
@@ -262,7 +262,7 @@ if __name__ == "__main__":
     print("rnn model results are ", result/float(len(Y_test_cap)))
 
     # Time to save model.
-    n.DATA_DIR = DATA_DIR
+    n.MODEL_DIR = DATA_DIR
     n.smart_save_model(model)
 
 

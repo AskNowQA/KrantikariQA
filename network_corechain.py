@@ -316,7 +316,7 @@ if __name__ == "__main__":
             model = raw_input("Did not understand which model to use. Please write it again: ")
 
     # Specify the directory to save model
-    n.DATA_DIR = DATA_DIR_CORECHAIN % {"model": model}    # **CHANGE WHEN CHANGING MODEL!**
+    n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}    # **CHANGE WHEN CHANGING MODEL!**
     n.CACHE_DATA_DIR = RES_DIR_CORECHAIN
 
     # Load relations and the data

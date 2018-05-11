@@ -38,7 +38,7 @@ from utils import embeddings_interface
 DEBUG = True
 
 # Data locations
-DATA_DIR = './data/models/core_chain/lcquad/'
+MODEL_DIR = './data/models/core_chain/lcquad/'
 CACHE_DATA_DIR = './data/data/core_chain/lcquad/'
 RAW_DATA_DIR = './resources_v8/'
 
@@ -139,16 +139,16 @@ def get_smart_save_path(model):
         pass
 
     # Find the current model dirs in the data dir.
-    _, dirs, _ = os.walk(DATA_DIR).next()
+    _, dirs, _ = os.walk(MODEL_DIR).next()
 
     # If no folder found in there, create a new one.
     if len(dirs) == 0:
-        os.mkdir(os.path.join(DATA_DIR, "model_00"))
+        os.mkdir(os.path.join(MODEL_DIR, "model_00"))
         dirs = ["model_00"]
 
     # Find the latest folder in here
     dir_nums = sorted([ x[-2:] for x in dirs])
-    l_dir = os.path.join(DATA_DIR, "model_" + dir_nums[-1])
+    l_dir = os.path.join(MODEL_DIR, "model_" + dir_nums[-1])
 
     # Check if the latest dir has the same model as current
     try:
@@ -160,7 +160,7 @@ def get_smart_save_path(model):
             else:
                 new_num = str(new_num)
 
-            l_dir = os.path.join(DATA_DIR, "model_" + new_num)
+            l_dir = os.path.join(MODEL_DIR, "model_" + new_num)
             os.mkdir(l_dir)
     except:
         pass

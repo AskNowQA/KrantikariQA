@@ -19,17 +19,18 @@
 
 *Seq Length*: 25
 
+### Bidirectional with Triplet Loss
+*Accuracy*: ??
+
+*Seq Length*: 25
+
 ### Parikh
 *Accuracy*: ~ 13%
 
 *Seq Length*: 25
 
 ### Maheshwari
-*Accuracy*: ??
+*Accuracy*: ~ 10%
 
 *Seq Length*: 25
 
-### Bidirectional with Triplet Loss
-*Accuracy*: ??
-
-*Seq Length*: 25

@@ -665,7 +665,109 @@ def remove_positive_path(positive_path, negative_paths):
     return new_negative_paths
 
 
-def create_dataset(file, max_sequence_length, relations):
+def create_dataset_pairwise(file, max_sequence_length, relations):
+    """
+        This file is meant to create data for core-chain ranking ONLY.
+
+    :param file: id_big_data file
+    :param max_sequence_length: for padding/cropping
+    :param relations: the relations file to backtrack and look up shit.
+    :return:
+    """
+    glove_embeddings = get_glove_embeddings()
+
+    try:
+        with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
+            dataset = np.load(data)
+            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
+            vocab = pickle.load(idx)
+            vectors = glove_embeddings[vocab.keys()]
+            return vectors, questions, pos_paths, neg_paths
+    except (EOFError,IOError) as e:
+        with open(os.path.join(RAW_DATA_DIR, file)) as fp:
+            dataset = json.load(fp)
+            # dataset = dataset[:10]
+            questions = [i['uri']['question-id'] for i in dataset]
+            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+            pos_paths = []
+            for i in dataset:
+                path_id = i['parsed-data']['path_id']
+                positive_path = []
+                for p in path_id:
+                    positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
+                    positive_path += relations[int(p[1:])][3].tolist()
+                pos_paths.append(positive_path)
+
+
+            neg_paths = []
+            for i in range(0,len(dataset)):
+                datum = dataset[i]
+                negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
+                np.random.shuffle(negative_paths_id)
+                negative_paths = []
+                for neg_path in negative_paths_id:
+                    negative_path = []
+                    for p in neg_path:
+                        try:
+                            negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
+                        except ValueError:
+                            negative_path += relations[int(p)][3].tolist()
+                    negative_paths.append(negative_path)
+                negative_paths = remove_positive_path(pos_paths[i],negative_paths)
+                try:
+                    negative_paths = np.random.choice(negative_paths,1000)
+                except ValueError:
+                    if len(negative_paths) == 0:
+                        negative_paths = neg_paths[-1]
+                        print("Using previous question's paths for this since no neg paths for this question.")
+                    else:
+                        index = np.random.randint(0, len(negative_paths), 1000)
+                        negative_paths = np.array(negative_paths)
+                        negative_paths = negative_paths[index]
+                neg_paths.append(negative_paths)
+
+            for i in range(0,len(neg_paths)):
+                neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
+            neg_paths = np.asarray(neg_paths)
+            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+            all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
+
+            # ###################
+            # Map to new ID space
+            # ###################
+
+            uniques = np.unique(all)
+            try:
+                vocab = pickle.load(open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")))
+            except (IOError, EOFError) as e:
+                if DEBUG:
+                    warnings.warn("Did not find the vocabulary.")
+                vocab = {}
+                # Create Vocabulary
+                for i in range(len(uniques)):
+                    vocab[uniques[i]] = i
+
+            # vocab = {}
+
+            # Map everything
+            for i in range(len(questions)):
+                questions[i] = np.asarray([vocab[key] for key in questions[i]])
+                pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+
+                for j in range(len(neg_paths[i])):
+                    neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
+
+            # Create slimmer, better, faster, vectors file.
+            vectors = glove_embeddings[uniques]
+
+            with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
+                np.savez(data, questions, pos_paths, neg_paths)
+                pickle.dump(vocab,idx)
+
+            return vectors, questions, pos_paths, neg_paths
+
+
+def create_dataset_pointwise(file, max_sequence_length, relations):
     """
         This file is meant to create data for core-chain ranking ONLY.
 

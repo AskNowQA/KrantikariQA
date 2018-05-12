@@ -250,13 +250,14 @@ def get_true_path(sparql, raw_sparql):
     # Booleans to make life easy
     has_type_constraint = False
     is_ask = False
+    is_count = False
     out_of_scope = False
 
     # For out of scope questions, root em out, return -1 for them.
     if 'optional' in raw_sparql.lower().replace('{', ' ').replace('.', '').split() or \
-        'union' in raw_sparql.lower().replace('{', ' ').replace('.', '').split() or \
-        'filter' in raw_sparql.lower().replace('{', ' ').replace('.', '').split() or \
-        'order' in raw_sparql.lower().replace('{', ' ').replace('.', '').split():
+            'union' in raw_sparql.lower().replace('{', ' ').replace('.', '').split() or \
+            'filter' in raw_sparql.lower().replace('{', ' ').replace('.', '').split() or \
+            'order' in raw_sparql.lower().replace('{', ' ').replace('.', '').split():
 
         warnings.warn("qald_parser.get_true_path: The query is beyond the scope of this script")
         return -1, -1, {'out-of-scope': True}
@@ -274,6 +275,15 @@ def get_true_path(sparql, raw_sparql):
     if sparql['queryType'].lower() == 'ask':
         is_ask = True
         constraints['ask'] = True
+
+    # Detect and handle COUNT queries differently.
+    try:
+        temp = sparql['variables'][0]['expression']['agggregation']
+        is_count = True
+        constraints['count'] = True
+        sparql['variables'] = [sparql['variables'][0]['expression']['expression']]
+    except KeyError:
+        pass
 
     if len(sparql['where'][0]['triples']) == 1:
 

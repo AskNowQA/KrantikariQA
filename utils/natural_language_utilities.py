@@ -7,7 +7,7 @@ from urlparse import urlparse
 
 # SOME MACROS
 STOPWORDLIST = 'resources/atire_puurula.txt'
-KNOWN_SHORTHANDS = ['dbo', 'dbp', 'rdf', 'rdfs', 'dbr', 'foaf', 'geo', 'res']
+KNOWN_SHORTHANDS = ['dbo', 'dbp', 'rdf', 'rdfs', 'dbr', 'foaf', 'geo', 'res', 'dct']
 DBP_SHORTHANDS = {'dbo': 'http://dbpedia.org/ontology/', 'dbp': 'http://dbpedia.org/property/',
                   'dbr': 'http://dbpedia.org/resource/', 'res': 'http://dbpedia.org/resource/'}
 # @TODO Import the above list from http://dbpedia.org/sparql?nsdecl
@@ -96,6 +96,27 @@ def is_shorthand(_string):
         return True
 
     return False
+
+
+def is_type_constraint(_string, _convert_shorthand = False):
+
+    _string = _string.strip().lower().replace('<','').replace('>','')
+
+    type_constraint = False
+    if _string == 'a':
+        type_constraint = True
+
+    if _string == 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type':
+        type_constraint = True
+
+    if _string == 'rdf:type':
+        type_constraint = True
+
+    if type_constraint:
+        return 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' if _convert_shorthand else True
+
+    else:
+        return '' if _convert_shorthand else False
 
 
 def is_dbpedia_uri(_string):

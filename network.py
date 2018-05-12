@@ -23,7 +23,7 @@ from keras import optimizers, metrics
 from keras.utils import Sequence
 from keras.callbacks import Callback
 from keras.layers import InputSpec, Layer, Input, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
+from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed, concatenate
 from keras.layers import Bidirectional, GRU, LSTM
 from keras.models import Sequential, Model, model_from_json
 from keras.regularizers import l2
@@ -44,7 +44,7 @@ RAW_DATA_DIR = './resources_v8/'
 
 # Network Macros
 MAX_SEQ_LENGTH = 25
-EPOCHS = 300
+EPOCHS = 200
 BATCH_SIZE = 880        # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
@@ -554,9 +554,9 @@ class _BiRNNEncoding(object):
 
 
 class _simple_BiRNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0):
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
         self.model = Sequential()
-        self.model.add(Bidirectional(LSTM(units, return_sequences=False,
+        self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
                                           dropout_W=dropout,
                                           dropout_U=dropout),
                                      input_shape=(max_length, embedding_dims)))
@@ -567,6 +567,20 @@ class _simple_BiRNNEncoding(object):
 
     def __call__(self, sentence):
         return self.model(sentence)
+
+
+class _simpleDense(object):
+    def __init__(self, l, w):
+        self.model = Sequential()
+        self.model.add(Dense(w/2, input_shape=(w*2,)))
+        self.model.add(Dense(1))
+
+    def __call__(self, sentence_1, sentence_2):
+        # concatenated_vector = concatenate([sentence_1, sentence_2], axis=-1)
+        merged_vector = concatenate([sentence_1, sentence_2])
+        # print(K.shape(concatenated_vector))
+        # raw_input("Check shape of concatenated vector.")
+        return self.model(merged_vector)
 
 
 class _StaticEmbedding(object):
@@ -647,7 +661,7 @@ def remove_positive_path(positive_path, negative_paths):
             new_negative_paths.append(np.asarray(negative_paths[i]))
         else:
             counter += 1
-            print counter
+            # print counter
     return new_negative_paths
 
 
@@ -663,7 +677,7 @@ def create_dataset(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz")) as data, open(os.path.join(CACHE_DATA_DIR, file + ".vocab.pickle")) as idx:
+        with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
             dataset = np.load(data)
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
             vocab = pickle.load(idx)
@@ -746,7 +760,7 @@ def create_dataset(file, max_sequence_length, relations):
             # Create slimmer, better, faster, vectors file.
             vectors = glove_embeddings[uniques]
 
-            with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w") as idx:
+            with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
                 np.savez(data, questions, pos_paths, neg_paths)
                 pickle.dump(vocab,idx)
 

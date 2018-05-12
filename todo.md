@@ -9,3 +9,7 @@
 5. Enable two-triple ASK
 
 6. Ensure the continous vocab is made only once, external from everywhere its used.
+
+7. TEST THE NETWORK'S REFACTORED CODE!
+
+8. Check why isn't the data getting cached for birnn_dot model

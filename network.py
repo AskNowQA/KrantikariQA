@@ -39,7 +39,7 @@ DEBUG = True
 
 # Data locations
 MODEL_DIR = './data/models/core_chain/lcquad/'
-CACHE_DATA_DIR = './data/data/core_chain/lcquad/'
+CACHE_DATA_PAIRWISE_DIR = './data/data/core_chain_pairwise/lcquad/'
 RAW_DATA_DIR = './resources_v8/'
 
 # Network Macros
@@ -677,7 +677,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
+        with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
             dataset = np.load(data)
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
             vocab = pickle.load(idx)
@@ -760,7 +760,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
             # Create slimmer, better, faster, vectors file.
             vectors = glove_embeddings[uniques]
 
-            with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
+            with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
                 np.savez(data, questions, pos_paths, neg_paths)
                 pickle.dump(vocab,idx)
 
@@ -779,7 +779,7 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
+        with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
             dataset = np.load(data)
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
             vocab = pickle.load(idx)
@@ -862,7 +862,7 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
             # Create slimmer, better, faster, vectors file.
             vectors = glove_embeddings[uniques]
 
-            with open(os.path.join(CACHE_DATA_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
+            with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
                 np.savez(data, questions, pos_paths, neg_paths)
                 pickle.dump(vocab,idx)
 

@@ -21,7 +21,7 @@ import network as n
 DEBUG = True
 LCQUAD = True
 DATA_DIR_CORECHAIN = './data/models/core_chain/%(model)s/lcquad/' if LCQUAD else './data/models/%(model)s/core_chain/qald/'
-RES_DIR_CORECHAIN = './data/data/core_chain/lcquad/' if LCQUAD else './data/data/core_chain/qald/'
+RES_DIR_PAIRWISE_CORECHAIN = './data/data/core_chain_pairwise/lcquad/' if LCQUAD else './data/data/core_chain_pairwise/qald/'
 CHECK_VALIDATION_ACC_PERIOD = 10
 
 
@@ -729,31 +729,72 @@ if __name__ == "__main__":
             gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
             model = raw_input("Did not understand which model to use. Please write it again: ")
 
-    # Specify the directory to save model
-    n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}    # **CHANGE WHEN CHANGING MODEL!**
-    n.CACHE_DATA_DIR = RES_DIR_CORECHAIN
-
-    # Load relations and the data
-    relations = n.load_relation('resources_v8/relations.pickle')
-    vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH, relations)
-
     if DEBUG: print("About to choose models")
+
     # Start training
     if model == 'birnn_dot':
+        # Specify the directory to save model
+        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
+        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
+
+        # Load relations and the data
+        relations = n.load_relation('resources_v8/relations.pickle')
+        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
+                                                                             relations)
         print("About to run BiDirectionalRNN with Dot")
         bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 100, 1000)
+
     elif model == 'birnn_dot_sigmoid':
+        # Specify the directory to save model
+        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
+        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
+
+        # Load relations and the data
+        relations = n.load_relation('resources_v8/relations.pickle')
+        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
+                                                                             relations)
+
         print("About to run BiDirectionalRNN with Dot and Sigmoid loss")
         bidirectional_dot_sigmoidloss(gpu, vectors, questions, pos_paths, neg_paths)
+
     if model == 'birnn_dense':
+        # Specify the directory to save model
+        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
+        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
+
+        # Load relations and the data
+        relations = n.load_relation('resources_v8/relations.pickle')
+        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
+                                                                             relations)
+
         print("About to run BiDirectionalRNN with Dense")
         bidirectional_dense(gpu, vectors, questions, pos_paths, neg_paths, 10, 1000)
+
     elif model == 'parikh':
+        # Specify the directory to save model
+        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
+        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
+
+        # Load relations and the data
+        relations = n.load_relation('resources_v8/relations.pickle')
+        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
+                                                                             relations)
+
         print("About to run Parikh et al model")
         parikh(gpu, vectors, questions, pos_paths, neg_paths)
     elif model == 'maheshwari':
+        # Specify the directory to save model
+        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
+        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
+
+        # Load relations and the data
+        relations = n.load_relation('resources_v8/relations.pickle')
+        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
+                                                                             relations)
+
         print("About to run Maheshwari et al model")
         maheshwari(gpu, vectors, questions, pos_paths, neg_paths)
+        
     else:
         warnings.warn("Did not choose any model.")
         if DEBUG:

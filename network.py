@@ -23,7 +23,7 @@ from keras import optimizers, metrics
 from keras.utils import Sequence
 from keras.callbacks import Callback
 from keras.layers import InputSpec, Layer, Input, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed, concatenate
+from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed, concatenate, Conv1D, MaxPooling1D, Embedding, Flatten
 from keras.layers import Bidirectional, GRU, LSTM
 from keras.models import Sequential, Model, model_from_json
 from keras.regularizers import l2
@@ -568,7 +568,23 @@ class _simple_BiRNNEncoding(object):
     def __call__(self, sentence):
         return self.model(sentence)
 
+class _simple_CNNEncoding(object):
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
+        self.model = Sequential()
+        self.model.add(Conv1D(units,5,
+                                     input_shape=(max_length, embedding_dims)))
+        self.model.add(MaxPooling1D(2))
+        self.model.add(Conv1D(units, 5))
+        self.model.add(MaxPooling1D(2))
+        self.model.add(Flatten())
+        self.model.add(Dense(128,activation='relu'))
+        #self.model.add(LSTM(units, return_sequences=False,
+        #                                 dropout_W=dropout, dropout_U=dropout))
+        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
+        # self.model.add(TimeDistributed(Dropout(0.2)))
 
+    def __call__(self, sentence):
+        return self.model(sentence)
 class _simpleDense(object):
     def __init__(self, l, w):
         self.model = Sequential()
@@ -577,6 +593,15 @@ class _simpleDense(object):
     def __call__(self, sentence_1):
         return self.model(sentence_1)
 
+
+
+class _parikhDense(object):
+    def __init__(self, l, w):
+        self.model = Sequential()
+        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.1)))
+
+    def __call__(self, sentence_1):
+        return self.model(sentence_1)
 
 class _StaticEmbedding(object):
     def __init__(self, vectors, max_length, nr_out, nr_tune=5000, dropout=0.0):

@@ -40,14 +40,15 @@ DEBUG = True
 # Data locations
 MODEL_DIR = './data/models/core_chain/lcquad/'
 CACHE_DATA_PAIRWISE_DIR = './data/data/core_chain_pairwise/lcquad/'
+CACHE_DATA_POINTWISE_DIR = './data/data/core_chain_pointwise/lcquad/'
 RAW_DATA_DIR = './resources_v8/'
 
 # Network Macros
 MAX_SEQ_LENGTH = 25
 EPOCHS = 200
-BATCH_SIZE = 880        # Around 11 splits for full training dataset
+BATCH_SIZE = 3864800 / 1000        # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
-LOSS = 'categorical_crossentropy'
+LOSS = 'binary_crossentropy'
 NEGATIVE_SAMPLES = 1000
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
@@ -334,7 +335,7 @@ class CustomModelCheckpoint(Callback):
 
 class PointWiseTrainingDataGenerator(Sequence):
     def __init__(self, questions, paths, labels, max_length, batch_size):
-        self.dummy_y = np.zeros(batch_size)
+        # self.dummy_y = np.zeros(batch_size)
 
         self.max_length = max_length
         self.questions = questions
@@ -355,7 +356,7 @@ class PointWiseTrainingDataGenerator(Sequence):
         batch_paths = index(self.paths_shuffled)
         batch_labels = index(self.labels_shuffled)
 
-        return ([batch_questions, batch_paths, batch_labels], self.dummy_y)
+        return ([batch_questions, batch_paths], batch_labels)
 
     def on_epoch_end(self):
 
@@ -810,14 +811,12 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        # @TODO: write this code
-        # with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
-        #     dataset = np.load(data)
-        #     questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-        #     vocab = pickle.load(idx)
-        #     vectors = glove_embeddings[vocab.keys()]
-        #     return vectors, questions, pos_paths, neg_paths
-        raise IOError
+        with open(os.path.join(CACHE_DATA_POINTWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
+            dataset = np.load(data)
+            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
+            vocab = pickle.load(idx)
+            vectors = glove_embeddings[vocab.keys()]
+            return vectors, questions, pos_paths, neg_paths
     except (EOFError, IOError) as e:
         with open(os.path.join(RAW_DATA_DIR, file)) as fp:
             dataset = json.load(fp)
@@ -905,12 +904,16 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
                 neg_paths[i][j] = pos_paths[i]
                 labels[i][j] = 1
 
-            # Now, flatten the questions, the paths, the y labels.
-            labels = labels.reshape((labels.shape[0]*labels.shape[1]))
+            # Repeat the questions
             questions = np.repeat(questions[:, np.newaxis, :], repeats=1000, axis=1)
+
+            # Now, flatten the questions, the paths, the y labels.
+            questions = questions.reshape((questions.shape[0]*questions.shape[1], questions.shape[2]))
+            labels = labels.reshape((labels.shape[0]*labels.shape[1]))
             paths = neg_paths.reshape((neg_paths.shape[0] * neg_paths.shape[1], neg_paths.shape[2]))
 
-            with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
+
+            with open(os.path.join(CACHE_DATA_POINTWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
                 np.savez(data, questions, paths, labels)
                 pickle.dump(vocab, idx)
 

@@ -22,6 +22,7 @@ DEBUG = True
 LCQUAD = True
 DATA_DIR_CORECHAIN = './data/models/core_chain/%(model)s/lcquad/' if LCQUAD else './data/models/%(model)s/core_chain/qald/'
 RES_DIR_PAIRWISE_CORECHAIN = './data/data/core_chain_pairwise/lcquad/' if LCQUAD else './data/data/core_chain_pairwise/qald/'
+RES_DIR_POINTWISE_CORECHAIN = './data/data/core_chain_pointwise/lcquad/' if LCQUAD else './data/data/core_chain_pointwise/qald/'
 CHECK_VALIDATION_ACC_PERIOD = 10
 
 
@@ -715,8 +716,7 @@ def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000):
+def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels):
     """
         Data Time!
     """
@@ -759,8 +759,8 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
         max_length = train_questions.shape[1]
         # Define input to the models
         x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
-        x_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
-        y = Input(shape=(1,), dtype='int32', name='x_neg_path')
+        x_path = Input(shape=(max_length,), dtype='int32', name='x_path')
+        # y = Input(shape=(1,), dtype='int32', name='y')
 
         embedding_dims = vectors.shape[1]
         nr_hidden = 128
@@ -781,22 +781,17 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
 
         dotscore = getScore(x_ques, x_path)
 
-        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([dotscore, y])
-
-        output = n.concatenate([x_path, dotscore, loss], axis=-1)
-
         # Model time!
-        model = Model(inputs=[x_ques, x_path, y],
-                      outputs=[output])
+        model = Model(inputs=[x_ques, x_path],
+                      outputs=[dotscore])
 
         print(model.summary())
 
         model.compile(optimizer=n.OPTIMIZER,
-                      loss=n.custom_loss)
+                      loss=n.LOSS)
 
         # Prepare training data
-
-        training_generator = n.TrainingDataGenerator(train_questions, train_paths, train_labels,
+        training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_paths, train_labels,
                                                      max_length, n.BATCH_SIZE)
 
         # smart_save_model(model)
@@ -818,7 +813,7 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
         # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
 
         print("Precision (hits@1) = ",
-              n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
+              n.rank_precision(model, test_questions, test_paths, test_labels, 1000, 10000))
 
 if __name__ == "__main__":
     gpu = sys.argv[1].strip().lower()
@@ -907,14 +902,14 @@ if __name__ == "__main__":
     elif model == 'pointwise_birnn_dot':
         # Specify the directory to save model
         n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
-        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
+        n.CACHE_DATA_POINTWISE_DIR = RES_DIR_POINTWISE_CORECHAIN
 
         # Load relations and the data
         relations = n.load_relation('resources_v8/relations.pickle')
         vectors, questions, paths, labels = n.create_dataset_pointwise("id_big_data.json", n.MAX_SEQ_LENGTH,
                                                                              relations)
 
-        print("About to run Maheshwari et al model")
+        print("About to run Pointwise BidirectionalRNN with a dot at the helm. God save the queen.")
         pointwise_bidirectional_dot(gpu, vectors, questions, paths, labels)
         
     else:

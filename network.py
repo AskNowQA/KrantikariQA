@@ -572,15 +572,10 @@ class _simple_BiRNNEncoding(object):
 class _simpleDense(object):
     def __init__(self, l, w):
         self.model = Sequential()
-        self.model.add(Dense(w/2, input_shape=(w*2,)))
-        self.model.add(Dense(1))
+        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.1)))
 
-    def __call__(self, sentence_1, sentence_2):
-        # concatenated_vector = concatenate([sentence_1, sentence_2], axis=-1)
-        merged_vector = concatenate([sentence_1, sentence_2])
-        # print(K.shape(concatenated_vector))
-        # raw_input("Check shape of concatenated vector.")
-        return self.model(merged_vector)
+    def __call__(self, sentence_1):
+        return self.model(sentence_1)
 
 
 class _StaticEmbedding(object):

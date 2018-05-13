@@ -363,6 +363,7 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
         nr_hidden = 128
 
         embed = n._StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
+        # encode = n._BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.5)
         encode = n._simple_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.5, return_sequences=False)
         dense = n._simpleDense(max_length, nr_hidden)
 
@@ -373,20 +374,11 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
             ques_encoded = encode(x_ques_embedded)
             path_encoded = encode(x_path_embedded)
 
-            # ques_encoded = K.reshape(ques_encoded, (256*max_length))
-            # path_encoded = K.reshape(path_encoded, (256*max_length))
+            ques_dense = dense(ques_encoded)
+            path_dense = dense(path_encoded)
 
-            # print(ques_encoded.shape, path_encoded.shape)
-            # raw_input("Check shape")
-
-            # holographic_score = holographic_forward(Lambda(lambda x: cross_correlation(x)) ([ques_encoded, path_encoded]))
-            # dot_score = n.dot([ques_encoded, path_encoded], axes=-1)
-            # concatenated_vector = Concatenate([ques_encoded, path_encoded])
-            dense_score = dense(ques_encoded, path_encoded)
-            # l1_score = Lambda(lambda x: K.abs(x[0]-x[1]))([ques_encoded, path_encoded])
-
-            # return final_forward(concatenate([holographic_score, dot_score, l1_score], axis=-1))
-            return dense_score
+            dot_score = n.dot([ques_dense, path_dense],axes = -1)
+            return dot_score
 
         pos_score = getScore(x_ques, x_pos_path)
         neg_score = getScore(x_ques, x_neg_path)

@@ -976,7 +976,7 @@ def generate_training_data(start,end,qald=False):
 	pickle.dump(big_data,open(BIG_DATA,'w+'))
 
 
-def qald_data():
+def qald_data(test = True):
 	'''
 		Loads the qald raw data. Parses the file and then generates negative paths. The negative
 		paths might contain positive path as this has not been explicitly removed. This is then stores in the big_data list
@@ -987,8 +987,12 @@ def qald_data():
 
 	'''
 	# Load QALD
-	raw_dataset = json.load(open(qp.RAW_QALD_DIR_TEST))['questions']
-	parsed_dataset = pickle.load(open(qp.PARSED_QALD_DIR_TEST))
+	if test:
+		raw_dataset = json.load(open(qp.RAW_QALD_DIR_TEST))['questions']
+		parsed_dataset = pickle.load(open(qp.PARSED_QALD_DIR_TEST))
+	else:
+		raw_dataset = json.load(open(qp.RAW_QALD_DIR_TRAIN))['questions']
+		parsed_dataset = pickle.load(open(qp.PARSED_QALD_DIR_TRAIN))
 	paths = []
 	big_data_test = []
 
@@ -1041,6 +1045,10 @@ def qald_data():
 	#     pprint(topic_entities)
 	#     print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
 	#     raw_input("Press enter to continue")
+	if test:
+		pickle.dump(temp_big_data,open('resources/qald_big_data_test.pickle'))
+	else:
+		pickle.dump(temp_big_data,open('resources/qald_big_data_training.pickle'))
 	return big_data_test
 
 if __name__ == "__main__":

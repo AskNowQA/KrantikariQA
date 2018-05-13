@@ -779,13 +779,15 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
-            dataset = np.load(data)
-            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab = pickle.load(idx)
-            vectors = glove_embeddings[vocab.keys()]
-            return vectors, questions, pos_paths, neg_paths
-    except (EOFError,IOError) as e:
+        # @TODO: write this code
+        # with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
+        #     dataset = np.load(data)
+        #     questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
+        #     vocab = pickle.load(idx)
+        #     vectors = glove_embeddings[vocab.keys()]
+        #     return vectors, questions, pos_paths, neg_paths
+        raise IOError
+    except (EOFError, IOError) as e:
         with open(os.path.join(RAW_DATA_DIR, file)) as fp:
             dataset = json.load(fp)
             # dataset = dataset[:10]
@@ -815,9 +817,9 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
                         except ValueError:
                             negative_path += relations[int(p)][3].tolist()
                     negative_paths.append(negative_path)
-                negative_paths = remove_positive_path(pos_paths[i],negative_paths)
+                negative_paths = remove_positive_path(pos_paths[i], negative_paths)
                 try:
-                    negative_paths = np.random.choice(negative_paths,1000)
+                    negative_paths = np.random.choice(negative_paths, 1000)
                 except ValueError:
                     if len(negative_paths) == 0:
                         negative_paths = neg_paths[-1]
@@ -862,12 +864,27 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
             # Create slimmer, better, faster, vectors file.
             vectors = glove_embeddings[uniques]
 
-            with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
-                np.savez(data, questions, pos_paths, neg_paths)
-                pickle.dump(vocab,idx)
+            # Repeat questions (to match the flattened paths)
+            q = np.zeros((questions.shape[0] * 1000, questions.shape[1]))
+            labels = np.zeros((neg_paths.shape[0], neg_paths.shape[1]))
 
-            return vectors, questions, pos_paths, neg_paths
+            # Put in a positive path randomly somewhere in the thing.
+            for i in range(neg_paths.shape[0]):
+                j = np.random.randint(0, neg_paths[i].shape[0])
+                neg_paths[i][j] = pos_paths[i]
+                labels[i][j] = 1
+
+            # Now, flatten the questions, the paths, the y labels.
+            labels = labels.reshape((labels.shape[0]*labels.shape[1]))
+            questions = np.repeat(questions[:, np.newaxis, :], repeats=1000, axis=1)
+            paths = neg_paths.reshape((neg_paths.shape[0] * neg_paths.shape[1], neg_paths.shape[2]))
+
+            with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
+                np.savez(data, questions, paths, labels)
+                pickle.dump(vocab, idx)
+
+            return vectors, questions, paths, labels
 
 
 if __name__ == "__main__":
-    warnings.warn("Code has been moved from this file to network_corechain. Please open that instead. Okay, auf weidersehen")
+    warnings.warn("Code has been moved from this file to network_corechain. Please open that instead. Tschuss. Okay, auf weidersehen")

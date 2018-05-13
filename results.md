@@ -14,6 +14,11 @@
 
 *kwargs*: `{normalizedot: True}`
 
+### Bidirectional RNN with Dot with sigmoid based loss
+*Accuracy*: ~ 50%
+
+*Seq Length*: 25
+
 ### Bidirectional RNN with Dense
 *Accuracy*: ~ 33%
 

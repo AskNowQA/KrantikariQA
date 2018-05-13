@@ -332,7 +332,38 @@ class CustomModelCheckpoint(Callback):
                     # self.model.save(filepath, overwrite=True)
 
 
+class PointWiseTrainingDataGenerator(Sequence):
+    def __init__(self, questions, paths, labels, max_length, batch_size):
+        self.dummy_y = np.zeros(batch_size)
+
+        self.max_length = max_length
+        self.questions = questions
+        self.paths = paths
+        self.labels = labels
+
+        self.questions_shuffled, self.paths_shuffled, self.labels_shuffled = \
+            shuffle(self.questions, self.paths, self.labels)
+
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return math.ceil(len(self.questions) / self.batch_size)
+
+    def __getitem__(self, idx):
+        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
+        batch_questions = index(self.questions_shuffled)
+        batch_paths = index(self.paths_shuffled)
+        batch_labels = index(self.labels_shuffled)
+
+        return ([batch_questions, batch_paths, batch_labels], self.dummy_y)
+
+    def on_epoch_end(self):
+
+        self.questions_shuffled, self.paths_shuffled, self.labels_shuffled = \
+            shuffle(self.questions, self.paths, self.labels)
+
 class TrainingDataGenerator(Sequence):
+
     def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
         self.dummy_y = np.zeros(batch_size)
         self.firstDone = False

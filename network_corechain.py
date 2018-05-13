@@ -29,6 +29,7 @@ CHECK_VALIDATION_ACC_PERIOD = 10
 def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
 
+
 def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
                                   _neg_paths_per_epoch_test = 1000):
     """
@@ -714,6 +715,111 @@ def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
+def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_paths_per_epoch_train = 10,
+                      _neg_paths_per_epoch_test = 1000):
+    """
+        Data Time!
+    """
+    # Pull the data up from disk
+    gpu = _gpu
+    max_length = n.MAX_SEQ_LENGTH
+
+    np.random.seed(0)  # Random train/test splits stay the same between runs
+
+    # Divide the data into diff blocks
+    split_point = lambda x: int(len(x) * .80)
+
+    def train_split(x):
+        return x[:split_point(x)]
+
+    def test_split(x):
+        return x[split_point(x):]
+
+    train_paths = train_split(paths)
+    train_labels = train_split(labels)
+    train_questions = train_split(questions)
+
+    test_paths = test_split(paths)
+    test_labels = test_split(labels)
+    test_questions = test_split(questions)
+
+    print(train_questions.shape)
+    print(train_paths.shape)
+    print(train_labels.shape)
+
+    print(test_questions.shape)
+    print(test_paths.shape)
+    print(test_labels.shape)
+
+    with K.tf.device('/gpu:' + gpu):
+        K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+        """
+            Model Time!
+        """
+        max_length = train_questions.shape[1]
+        # Define input to the models
+        x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
+        x_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
+        y = Input(shape=(1,), dtype='int32', name='x_neg_path')
+
+        embedding_dims = vectors.shape[1]
+        nr_hidden = 128
+
+        embed = n._StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
+        encode = n._simple_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.5)
+
+        def getScore(ques, path):
+            x_ques_embedded = embed(ques)
+            x_path_embedded = embed(path)
+
+            ques_encoded = encode(x_ques_embedded)
+            path_encoded = encode(x_path_embedded)
+
+            dot_score = n.dot([ques_encoded, path_encoded], axes=-1)
+
+            return dot_score
+
+        dotscore = getScore(x_ques, x_path)
+
+        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([dotscore, y])
+
+        output = n.concatenate([x_path, dotscore, loss], axis=-1)
+
+        # Model time!
+        model = Model(inputs=[x_ques, x_path, y],
+                      outputs=[output])
+
+        print(model.summary())
+
+        model.compile(optimizer=n.OPTIMIZER,
+                      loss=n.custom_loss)
+
+        # Prepare training data
+
+        training_generator = n.TrainingDataGenerator(train_questions, train_paths, train_labels,
+                                                     max_length, n.BATCH_SIZE)
+
+        # smart_save_model(model)
+        json_desc, dir = n.get_smart_save_path(model)
+        model_save_path = os.path.join(dir, 'model.h5')
+
+        checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_paths, test_labels,
+                                               monitor='val_metric',
+                                               verbose=1,
+                                               save_best_only=True,
+                                               mode='max',
+                                               period=10)
+
+        model.fit_generator(training_generator,
+                            epochs=n.EPOCHS,
+                            workers=3,
+                            use_multiprocessing=True,
+                            callbacks=[checkpointer])
+        # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
+
+        print("Precision (hits@1) = ",
+              n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
+
 if __name__ == "__main__":
     gpu = sys.argv[1].strip().lower()
     model = sys.argv[2].strip().lower()
@@ -723,7 +829,7 @@ if __name__ == "__main__":
     while True:
         try:
             assert gpu in ['0','1','2','3']
-            assert model.lower() in ['birnn_dot', 'parikh', 'birnn_dense', 'maheshwari', 'birnn_dense_sigmoid']
+            assert model.lower() in ['birnn_dot', 'parikh', 'birnn_dense', 'maheshwari', 'birnn_dense_sigmoid', 'pointwise_birnn_dot']
             break
         except AssertionError:
             gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
@@ -794,6 +900,22 @@ if __name__ == "__main__":
 
         print("About to run Maheshwari et al model")
         maheshwari(gpu, vectors, questions, pos_paths, neg_paths)
+
+    # #######################
+    # Pointwise models hereon
+    # #######################
+    elif model == 'pointwise_birnn_dot':
+        # Specify the directory to save model
+        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
+        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
+
+        # Load relations and the data
+        relations = n.load_relation('resources_v8/relations.pickle')
+        vectors, questions, paths, labels = n.create_dataset_pointwise("id_big_data.json", n.MAX_SEQ_LENGTH,
+                                                                             relations)
+
+        print("About to run Maheshwari et al model")
+        pointwise_bidirectional_dot(gpu, vectors, questions, paths, labels)
         
     else:
         warnings.warn("Did not choose any model.")

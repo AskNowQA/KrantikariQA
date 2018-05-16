@@ -29,6 +29,7 @@ from keras.models import Sequential, Model, model_from_json
 from keras.regularizers import l2
 from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
+from keras.regularizers import L1L2
 
 # Custom imports
 from utils import embeddings_interface
@@ -44,7 +45,7 @@ RAW_DATA_DIR = './resources_v8/'
 
 # Network Macros
 MAX_SEQ_LENGTH = 25
-EPOCHS = 200
+EPOCHS = 300
 BATCH_SIZE = 880        # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
@@ -482,20 +483,20 @@ class _Comparison(object):
         self.words = words
         self.model = Sequential()
         self.model.add(Dropout(dropout, input_shape=(nr_hidden*2,)))
-        self.model.add(Dense(nr_hidden, name='compare1', init='he_normal', W_regularizer=l2(L2)))
+        self.model.add(Dense(nr_hidden, name='compare1', init='he_normal', W_regularizer=l2(L2),activation='relu'))
         self.model.add(Activation('relu'))
         self.model.add(Dropout(dropout))
-        self.model.add(Dense(nr_hidden, name='compare2', W_regularizer=l2(L2), init='he_normal'))
+        self.model.add(Dense(nr_hidden, name='compare2', W_regularizer=l2(L2), init='he_normal',activation='relu'))
         self.model.add(Activation('relu'))
         self.model = TimeDistributed(self.model)
 
     def __call__(self, sent, align, **kwargs):
         result = self.model(merge([sent, align], mode='concat')) # Shape: (i, n)
         avged = GlobalAveragePooling1D()(result)
-        maxed = GlobalMaxPooling1D()(result)
-        merged = merge([avged, maxed])
-        result = BatchNormalization()(merged)
-        return result
+        # maxed = GlobalMaxPooling1D()(result)
+        # merged = merge([avged, maxed])
+        # result = BatchNormalization()(merged)
+        return avged
 
 
 class _Entailment(object):
@@ -503,11 +504,11 @@ class _Entailment(object):
         self.model = Sequential()
         self.model.add(Dropout(dropout, input_shape=(nr_hidden*2,)))
         self.model.add(Dense(nr_hidden, name='entail1',
-            init='he_normal', W_regularizer=l2(L2)))
+            init='he_normal', W_regularizer=l2(L2),activation='relu'))
         self.model.add(Activation('relu'))
         # self.model.add(Dropout(dropout))
         self.model.add(Dense(nr_out, name='entail_out',
-            init='he_normal', W_regularizer=l2(L2)))
+            init='he_normal', W_regularizer=l2(L2),activation='relu'))
         # self.model.add(Activation('relu'))
         # self.model.add(Dense(nr_out, name='entail_out', activation='softmax',
         #                 W_regularizer=l2(L2), init='zero'))
@@ -556,10 +557,12 @@ class _BiRNNEncoding(object):
 class _simple_BiRNNEncoding(object):
     def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
         self.model = Sequential()
+        reg = L1L2(l1=0.0, l2=0.01)
         self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
                                           dropout_W=dropout,
-                                          dropout_U=dropout),
+                                          dropout_U=dropout, kernel_regularizer=reg),
                                      input_shape=(max_length, embedding_dims)))
+        # self.model.regularizers = [l2(0.01)]
         #self.model.add(LSTM(units, return_sequences=False,
         #                                 dropout_W=dropout, dropout_U=dropout))
         # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
@@ -588,7 +591,16 @@ class _simple_CNNEncoding(object):
 class _simpleDense(object):
     def __init__(self, l, w):
         self.model = Sequential()
-        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.1)))
+        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.01),activation='relu'))
+
+    def __call__(self, sentence_1):
+        return self.model(sentence_1)
+
+
+class _simpleTimeDistributedDense(object):
+    def __init__(self, l, w):
+        self.model = Sequential()
+        self.model.add(TimeDistributed(Dense(w/2,kernel_regularizer= l2(0.1)), input_shape=(w*2,)))
 
     def __call__(self, sentence_1):
         return self.model(sentence_1)

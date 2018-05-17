@@ -22,7 +22,7 @@ short_forms = {
 
 
 QALD = True
-QALD_TRAIN = False
+QALD_TRAIN = True
 
 dump_location = './resources_v8/'
 
@@ -131,8 +131,9 @@ for i in range(0,len(big_data)):
 			data['uri']['hop-2-properties'].remove(new_path_id)
 	except:
 		print traceback.print_exc()
-		pprint(data['parsed-data'])
-		raw_input('check')
+		# pprint(data['parsed-data'])
+		# pprint(data)
+		# raw_input('check')
 		continue
 
 	if not QALD:
@@ -148,6 +149,6 @@ print "the length if id big data file is ", str(len(id_big_data_test))
 # pickle.dump(id_big_data,open(dump_location + 'id_big_data.pickle','w+'))
 # print time.clock() - start
 start = time.clock()
-json.dump(id_big_data_test,open(dump_location+'id_big_data.json','w+'))
+json.dump(id_big_data_test,open(dump_location+'qald_id_big_data_train.json','w+'))
 print time.clock() - start
 print "done"

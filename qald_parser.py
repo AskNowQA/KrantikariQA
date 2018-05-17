@@ -76,7 +76,8 @@ def __fill_single_triple_data__(_triple, _path, _ask = False):
 
     if _ask:
         # Check if we have any literal
-        if not (nlutils.is_dbpedia_uri(_triple['subject']) and nlutils.is_dbpedia_uri(_triple['object'])):
+        if not (nlutils.is_dbpedia_uri(_triple['subject']) and '?' != nlutils.is_dbpedia_uri(_triple['subject'])) \
+                and (nlutils.is_dbpedia_uri(_triple['object']) and '?' != nlutils.is_dbpedia_uri(_triple['object'])):
             return -1, -1
 
         # We don't have any literal
@@ -282,7 +283,7 @@ def get_true_path(sparql, raw_sparql):
         is_count = True
         constraints['count'] = True
         sparql['variables'] = [sparql['variables'][0]['expression']['expression']]
-    except KeyError:
+    except (TypeError, KeyError) as e:
         pass
 
     if len(sparql['where'][0]['triples']) == 1:

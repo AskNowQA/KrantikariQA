@@ -286,8 +286,50 @@ def run():
 	json.dump(rdf_type_lookup, open('resources_v8/rdf_type_lookup.json','w+'))
 
 
+def qald_run(test = True):
+	''''
+
+		If the query contains only rdf constraint and no other triple, it will push the rdf type to the
+		constraint candidate  and there will be no positive or negative path in the query.
+
+		'path_id': [u'+25212']
+	'''
+
+	if test:
+		raw_data = json.load(open('resources_v8/qald_id_big_data_test.json'))
+	else:
+		raw_data = json.load(open('resources_v8/qald_id_big_data_train.json'))
+
+
+	'''
+		Find the rdf-type id
+	'''
+
+	rdf_type_id = None
+	for data in raw_data:
+		if data['parsed-data']['path'][0][1:] == 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type':
+			rdf_type_id = data['parsed-data']['path_id'][1:]
+
+	for i in range(0,len(raw_data)):
+		if raw_data[i]['parsed-data']['path_id'][0][1:] == rdf_type_id:
+			raw_data[i]['rdf-type-constraints'] = []
+		else:
+			x, uri = generate_candidates(raw_data[i])
+			type_x_candidates, type_uri_candidates = create_valid_paths(x, uri)
+			raw_data[i]['rdf-type-constraints'] = type_x_candidates + type_uri_candidates
+			print i
+
+	for i in range(0,len(raw_data)):
+		for j in range(0,len(raw_data[i]['rdf-type-constraints'])):
+			raw_data[i]['rdf-type-constraints'][j] = raw_data[i]['rdf-type-constraints'][j].tolist()
+
+	if test:
+		json.dump(raw_data,open('resources_v8/qald_id_big_data_test.json','w+'))
+		json.dump(rdf_type_lookup, open('resources_v8/rdf_type_lookup.json','w+'))
+	else:
+		json.dump(raw_data, open('resources_v8/qald_id_big_data_train.json', 'w+'))
+		json.dump(rdf_type_lookup, open('resources_v8/rdf_type_lookup.json', 'w+'))
+
 if __name__ == "__main__":
-	run()
-
-
+	qald_run()
 

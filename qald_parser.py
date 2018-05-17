@@ -229,6 +229,33 @@ def __fill_double_triple_data__(_triples, _path, _ask=False):
     return _path, topic_entities
 
 
+def scavenge_entities(_sparql):
+    """
+
+        Function used to blindly find all the entities in the given parsed sparql object.
+        To be called if the standard parsing fails to find anything.
+
+    :param _sparql: ze parsed SPARQL dict (from JSON)
+    :return: list of str  (entities)
+    """
+
+    entities = []
+
+    # Go through all the triples
+    for i in range(len(_sparql['where'][0]['triples'])):
+
+        triple = _sparql['where'][0]['triples'][i]
+
+        # Check if subject is a URI
+        if nlutils.is_dbpedia_uri(triple['subject']):
+            entities.append(nlutils.is_dbpedia_shorthand(triple['subject'], _convert=True))
+
+        if nlutils.is_dbpedia_uri(triple['object']):
+            entities.append(nlutils.is_dbpedia_shorthand(triple['object'], _convert=True))
+
+    return entities
+
+
 def get_true_path(sparql, raw_sparql):
     """
         Check if there is one or more triples:
@@ -389,18 +416,18 @@ def get_true_path(sparql, raw_sparql):
 
         if not has_type_constraint:
             warnings.warn("No code in place for queries with three triples with *NO* rdf:type constraint")
-            return -1, -1, {'out-of-scope': True}
+            return -1, scavenge_entities(sparql), {'out-of-scope': True}
 
     else:
         warnings.warn("No code in place for queries with more than three triples")
-        return -1, -1, {'out-of-scope': True}
+        return -1, scavenge_entities(sparql), {'out-of-scope': True}
 
     # Before any return condition, check if anything is None. If so, something somewhere forked up and handle it well.
+
+    if entity == -1:
+        entity = scavenge_entities(sparql)
+
     return path, entity, constraints
-
-
-def get_false_paths(entity, truepath):
-    return None
 
 
 def run():

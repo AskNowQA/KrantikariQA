@@ -80,9 +80,18 @@ def __fill_single_triple_data__(_triple, _path, _ask = False):
                 and (nlutils.is_dbpedia_uri(_triple['object']) and '?' != nlutils.is_dbpedia_uri(_triple['object'])):
             return -1, -1
 
-        # We don't have any literal
-        _entity = [nlutils.is_dbpedia_shorthand(_triple['subject'], _convert=True),
-                   nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)]
+        # # We don't have any literal
+        # _entity = [nlutils.is_dbpedia_shorthand(_triple['subject'], _convert=True),
+        #            nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)]
+
+        _entity = []
+        if nlutils.is_dbpedia_uri(_triple['subject']) and '?' != nlutils.is_dbpedia_uri(_triple['subject'])
+            _entity.append(nlutils.is_dbpedia_shorthand(_triple['subject'], _convert=True))
+        if nlutils.is_dbpedia_uri(_triple['object']) and '?' != nlutils.is_dbpedia_uri(_triple['object'])
+            _entity.append(nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True))
+        if not _entity:
+            _entity = -1
+
         _path.append('+' + nlutils.is_dbpedia_shorthand(_triple['predicate'], _convert=True))
         return _path, _entity
 
@@ -424,7 +433,7 @@ def get_true_path(sparql, raw_sparql):
 
     # Before any return condition, check if anything is None. If so, something somewhere forked up and handle it well.
 
-    if entity == -1:
+    if entity == -1 or entity == None:
         entity = scavenge_entities(sparql)
 
     return path, entity, constraints

@@ -334,9 +334,9 @@ class CustomModelCheckpoint(Callback):
 
 
 class PointWiseTrainingDataGenerator(Sequence):
-    def __init__(self, questions, paths, labels, max_length, batch_size):
-        # self.dummy_y = np.zeros(batch_size)
+    def __init__(self, questions, paths, labels, max_length, neg_paths_per_epoch, batch_size):
 
+        self.neg_paths_per_epoch = neg_paths_per_epoch
         self.max_length = max_length
         self.questions = questions
         self.paths = paths
@@ -351,11 +351,11 @@ class PointWiseTrainingDataGenerator(Sequence):
         return math.ceil(len(self.questions) / self.batch_size)
 
     def __getitem__(self, idx):
-        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
+        index = lambda x: np.concatenate(x[0], x[np.random.choice(np.arange(idx * self.batch_size+1,(idx + 1) * self.batch_size)), self.neg_paths_per_epoch]) # @TODO: fix this.
         batch_questions = index(self.questions_shuffled)
         batch_paths = index(self.paths_shuffled)
         batch_labels = index(self.labels_shuffled)
-
+        # print(batch_paths.shape, batch_labels.shape)
         return ([batch_questions, batch_paths], batch_labels)
 
     def on_epoch_end(self):
@@ -900,7 +900,8 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
 
             # Put in a positive path randomly somewhere in the thing.
             for i in range(neg_paths.shape[0]):
-                j = np.random.randint(0, neg_paths[i].shape[0])
+                # j = np.random.randint(0, neg_paths[i].shape[0])
+                j = 0
                 neg_paths[i][j] = pos_paths[i]
                 labels[i][j] = 1
 

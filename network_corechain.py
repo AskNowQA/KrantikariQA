@@ -716,7 +716,7 @@ def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels):
+def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, train_paths_per_epoch = 10):
     """
         Data Time!
     """
@@ -792,7 +792,7 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels):
 
         # Prepare training data
         training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_paths, train_labels,
-                                                     max_length, n.BATCH_SIZE)
+                                                     max_length, train_paths_per_epoch, n.BATCH_SIZE)
 
         # smart_save_model(model)
         json_desc, dir = n.get_smart_save_path(model)

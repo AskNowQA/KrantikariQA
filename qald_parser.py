@@ -288,7 +288,7 @@ def get_true_path(sparql, raw_sparql):
             'order' in raw_sparql.lower().replace('{', ' ').replace('.', '').split():
 
         warnings.warn("qald_parser.get_true_path: The query is beyond the scope of this script")
-        return -1, -1, {'out-of-scope': True}
+        return -1, scavenge_entities(sparql), {'out-of-scope': True}
 
     # Handling keyerror "triples" i.e. there are no triples to start with
     try:

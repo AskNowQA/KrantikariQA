@@ -34,7 +34,7 @@ from utils import natural_language_utilities as nlutils
 # Some Macros
 DEBUG = True
 MAX_SEQ_LENGTH = 25
-LOC_RDF_TYPE_LOOKUP = 'resources_v8/rdf_type_lookup.json'
+LOC_RDF_TYPE_LOOKUP = 'data/data/core_chain_pairwise/lcquad/id_big_data.json.mapped.npz'
 
 # NN Macros
 EPOCHS = 300
@@ -46,7 +46,7 @@ OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 DATA_DIR = './data/training/pairwise'
 
 # Configure at every run!
-GPU = '0'
+GPU = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = GPU
 
 # Set the seed to clamp the stochastic nature.
@@ -764,7 +764,7 @@ id_data_train = train_split(id_data)
 # Load all model
 with K.tf.device('/gpu:' + GPU):
     metric = rank_precision_metric(10)
-    model_corechain = load_model("./data/training/pairwise/model_32/model.h5", {'custom_loss':custom_loss, 'metric':metric})
+    model_corechain = load_model("./data/models/core_chain/parikh/lcquad/model_03/model.h5", {'custom_loss':custom_loss, 'metric':metric})
     model_rdf_type_check = load_model("./data/training/rdf/model_00/model.h5", {'custom_loss':custom_loss, 'metric':metric})
     model_rdf_type_existence = load_model("./data/training/type-existence/model_00/model.h5")
     model_question_intent = load_model("./data/training/intent/model_00/model.h5")

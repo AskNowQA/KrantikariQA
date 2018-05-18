@@ -28,7 +28,7 @@ from utils import natural_language_utilities as nlutils
 
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
 
-TEST = True
+TEST = False
 DEBUG = True
 exception_log = []
 big_data_test = []
@@ -105,7 +105,7 @@ for i in range(len(raw_dataset[c:])):
 				logger['is_uri'] = True
 				is_uri = False
 		if not is_uri:
-			logger.append['is_uri'] = False
+			logger['is_uri'] = False
 			log.append(logger)
 			continue
 		if "ask" in q_raw['query']['sparql'].lower():

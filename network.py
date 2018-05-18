@@ -33,15 +33,19 @@ from keras.regularizers import L1L2
 
 # Custom imports
 from utils import embeddings_interface
+from utils import prepare_vocab_continous as vocab_master
 
 
 # Some Macros
 DEBUG = True
+MODEL = 'birnn_dot'
+DATASET = 'lcquad'
 
 # Data locations
-MODEL_DIR = './data/models/core_chain/lcquad/'
-CACHE_DATA_PAIRWISE_DIR = './data/data/core_chain_pairwise/lcquad/'
-RAW_DATA_DIR = './resources_v8/'
+MODEL_DIR = './data/models/%(model)s/%(dataset)s/'
+MODEL_SPECIFIC_DATA_DIR = './data/data/%(model)s/%(dataset)s/'
+COMMON_DATA_DIR = './data/data/common/'
+DATASET_SPECIFIC_DATA_DIR = './data/data/%(dataset)s/'
 
 # Network Macros
 MAX_SEQ_LENGTH = 25
@@ -53,6 +57,7 @@ NEGATIVE_SAMPLES = 1000
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 np.random.seed(42)
+
 
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
@@ -140,16 +145,16 @@ def get_smart_save_path(model):
         pass
 
     # Find the current model dirs in the data dir.
-    _, dirs, _ = os.walk(MODEL_DIR).next()
+    _, dirs, _ = os.walk(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}).next()
 
     # If no folder found in there, create a new one.
     if len(dirs) == 0:
-        os.mkdir(os.path.join(MODEL_DIR, "model_00"))
+        os.mkdir(os.path.join(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}, "model_00"))
         dirs = ["model_00"]
 
     # Find the latest folder in here
     dir_nums = sorted([ x[-2:] for x in dirs])
-    l_dir = os.path.join(MODEL_DIR, "model_" + dir_nums[-1])
+    l_dir = os.path.join(MODEL_DIR  % {'model':MODEL, 'dataset':DATASET}, "model_" + dir_nums[-1])
 
     # Check if the latest dir has the same model as current
     try:
@@ -161,9 +166,10 @@ def get_smart_save_path(model):
             else:
                 new_num = str(new_num)
 
-            l_dir = os.path.join(MODEL_DIR, "model_" + new_num)
+            l_dir = os.path.join(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}, "model_" + new_num)
             os.mkdir(l_dir)
     except:
+        # @TODO: Check which errors to catch.
         pass
     finally:
         return desc, l_dir
@@ -201,8 +207,16 @@ def custom_loss(y_true, y_pred):
     return K.sum(diff)
 
 
-def load_relation(relation_file):
-    relations = pickle.load(open(relation_file))
+def load_relation():
+    """
+        Function used once to load the relations dictionary
+        (which keeps the log of IDified relations, their uri and other things.)
+
+    :param relation_file: str
+    :return: dict
+    """
+
+    relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle')))
     inverse_relations = {}
     for key in relations:
         value = relations[key]
@@ -606,7 +620,6 @@ class _simpleTimeDistributedDense(object):
         return self.model(sentence_1)
 
 
-
 class _parikhDense(object):
     def __init__(self, l, w):
         self.model = Sequential()
@@ -614,6 +627,7 @@ class _parikhDense(object):
 
     def __call__(self, sentence_1):
         return self.model(sentence_1)
+
 
 class _StaticEmbedding(object):
     def __init__(self, vectors, max_length, nr_out, nr_tune=5000, dropout=0.0):
@@ -709,30 +723,39 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
+        with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pairwise'}, file + ".mapped.npz")) as data:
             dataset = np.load(data)
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab = pickle.load(idx)
-            vectors = glove_embeddings[vocab.keys()]
+            vocab, vectors = vocab_master.load()
+            # vectors = glove_embeddings[sorted(vocab.keys())]
             return vectors, questions, pos_paths, neg_paths
     except (EOFError,IOError) as e:
-        with open(os.path.join(RAW_DATA_DIR, file)) as fp:
+        with open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, file)) as fp:
             dataset = json.load(fp)
             # dataset = dataset[:10]
-            questions = [i['uri']['question-id'] for i in dataset]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+
+            ignored = []
+
             pos_paths = []
             for i in dataset:
                 path_id = i['parsed-data']['path_id']
                 positive_path = []
-                for p in path_id:
-                    positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                    positive_path += relations[int(p[1:])][3].tolist()
+                try:
+                    for p in path_id:
+                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
+                        positive_path += relations[int(p[1:])][3].tolist()
+                except (TypeError, ValueError) as e:
+                    ignored.append(i)
+                    continue
                 pos_paths.append(positive_path)
 
+            questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
+            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
 
             neg_paths = []
-            for i in range(0,len(dataset)):
+            for i in range(0, len(dataset)):
+                if i in ignored:
+                    continue
                 datum = dataset[i]
                 negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
                 np.random.shuffle(negative_paths_id)
@@ -762,24 +785,28 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
                 neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
             neg_paths = np.asarray(neg_paths)
             pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-            all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
 
-            # ###################
-            # Map to new ID space
-            # ###################
+            # # Map to new ID space.
+            # try:
+            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, ".vocab.pickle")))
+            #     vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npz" )))
+            # except (IOError, EOFError) as e:
+            #     if DEBUG:
+            #         warnings.warn("Did not find the vocabulary.")
+            vocab, vectors = vocab_master.load()
 
-            uniques = np.unique(all)
-            try:
-                vocab = pickle.load(open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")))
-            except (IOError, EOFError) as e:
-                if DEBUG:
-                    warnings.warn("Did not find the vocabulary.")
-                vocab = {}
-                # Create Vocabulary
-                for i in range(len(uniques)):
-                    vocab[uniques[i]] = i
 
-            # vocab = {}
+            # all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
+            # # uniques = np.unique(all)
+            # try:
+            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, file + ".vocab.pickle")))
+            # except (IOError, EOFError) as e:
+            #     if DEBUG:
+            #         warnings.warn("Did not find the vocabulary.")
+            #     vocab = {}
+            #     # Create Vocabulary
+            #     for i in range(len(uniques)):
+            #         vocab[uniques[i]] = i
 
             # Map everything
             for i in range(len(questions)):
@@ -789,12 +816,8 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
                 for j in range(len(neg_paths[i])):
                     neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
-            # Create slimmer, better, faster, vectors file.
-            vectors = glove_embeddings[uniques]
-
-            with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
+            with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pairwise'} , file + ".mapped.npz"), "w+") as data:
                 np.savez(data, questions, pos_paths, neg_paths)
-                pickle.dump(vocab,idx)
 
             return vectors, questions, pos_paths, neg_paths
 
@@ -811,27 +834,34 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
+        with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pointwise'}, file + ".mapped.npz")) as data:
             dataset = np.load(data)
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab = pickle.load(idx)
-            vectors = glove_embeddings[vocab.keys()]
+            vocab, vectors = vocab_master.load()
+            # vectors = glove_embeddings[vocab.keys()]
             return vectors, questions, pos_paths, neg_paths
     except (EOFError,IOError) as e:
-        with open(os.path.join(RAW_DATA_DIR, file)) as fp:
+        with open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, file)) as fp:
             dataset = json.load(fp)
             # dataset = dataset[:10]
-            questions = [i['uri']['question-id'] for i in dataset]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+
+            ignored = []
+
             pos_paths = []
             for i in dataset:
                 path_id = i['parsed-data']['path_id']
                 positive_path = []
-                for p in path_id:
-                    positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                    positive_path += relations[int(p[1:])][3].tolist()
+                try:
+                    for p in path_id:
+                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
+                        positive_path += relations[int(p[1:])][3].tolist()
+                except (TypeError, ValueError) as e:
+                    ignored.append(i)
+                    continue
                 pos_paths.append(positive_path)
 
+            questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
+            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
 
             neg_paths = []
             for i in range(0,len(dataset)):
@@ -864,22 +894,32 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
                 neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
             neg_paths = np.asarray(neg_paths)
             pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-            all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
 
-            # ###################
-            # Map to new ID space
-            # ###################
+            # Map to new ID space.
+            # try:
+            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, ".vocab.pickle")))
+            #     vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npz" )))
+            # except (IOError, EOFError) as e:
+            #     if DEBUG:
+            #         warnings.warn("Did not find the vocabulary.")
+            vocab, vectors = vocab_master.load()
 
-            uniques = np.unique(all)
-            try:
-                vocab = pickle.load(open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")))
-            except (IOError, EOFError) as e:
-                if DEBUG:
-                    warnings.warn("Did not find the vocabulary.")
-                vocab = {}
-                # Create Vocabulary
-                for i in range(len(uniques)):
-                    vocab[uniques[i]] = i
+            # all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
+            #
+            # # ###################
+            # # Map to new ID space
+            # # ###################
+            #
+            # uniques = np.unique(all)
+            # try:
+            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, file + ".vocab.pickle")))
+            # except (IOError, EOFError) as e:
+            #     if DEBUG:
+            #         warnings.warn("Did not find the vocabulary.")
+            #     vocab = {}
+            #     # Create Vocabulary
+            #     for i in range(len(uniques)):
+            #         vocab[uniques[i]] = i
 
             # vocab = {}
 
@@ -892,11 +932,11 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
                     neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
             # Create slimmer, better, faster, vectors file.
-            vectors = glove_embeddings[uniques]
+            # vectors = glove_embeddings[uniques]
 
-            with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
+            with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pointwise'}, file + ".mapped.npz"), "w+") as data:
                 np.savez(data, questions, pos_paths, neg_paths)
-                pickle.dump(vocab,idx)
+                # pickle.dump(vocab,idx)
 
             return vectors, questions, pos_paths, neg_paths
 

@@ -20,15 +20,16 @@ import network as n
 
 # Macros
 DEBUG = True
-LCQUAD = False
-DATA_DIR_CORECHAIN = './data/models/core_chain/%(model)s/lcquad/' if LCQUAD else './data/models/core_chain/%(model)s/qald/'
-RES_DIR_PAIRWISE_CORECHAIN = './data/data/core_chain_pairwise/lcquad/' if LCQUAD else './data/data/core_chain_pairwise/qald/'
+LCQUAD = True
+# DATA_DIR_CORECHAIN = './data/models/core_chain/%(model)s/lcquad/' if LCQUAD else './data/models/core_chain/%(model)s/qald/'
+# RES_DIR_PAIRWISE_CORECHAIN = './data/data/core_chain_pairwise/lcquad/' if LCQUAD else './data/data/core_chain_pairwise/qald/'
 CHECK_VALIDATION_ACC_PERIOD = 10
 
 
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
+
 
 def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
                                   _neg_paths_per_epoch_test = 1000):
@@ -535,7 +536,7 @@ def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_
             feats_path = compare(path_encoded, align_path)
 
 
-			#
+			# poop
             ques_concat = n.concatenate(
                 [feats_ques,ques_encoded_last_output], axis=-1
             )
@@ -1200,41 +1201,35 @@ if __name__ == "__main__":
             gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
             model = raw_input("Did not understand which model to use. Please write it again: ")
 
+    n.MODEL = 'core_chain/'+model
+    n.DATASET = 'lcquad' if LCQUAD else 'qald'
+
     if DEBUG: print("About to choose models")
 
     # Start training
     if model == 'birnn_dot':
-        # Specify the directory to save model
-        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
-        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
 
         # Load relations and the data
-        relations = n.load_relation('resources_v8/relations.pickle')
+        relations = n.load_relation()
         vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
                                                                              relations)
         print("About to run BiDirectionalRNN with Dot")
         bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 100, 1000)
 
     elif model == 'birnn_dot_sigmoid':
-        # Specify the directory to save model
-        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
-        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
 
         # Load relations and the data
-        relations = n.load_relation('resources_v8/relations.pickle')
+        relations = n.load_relation()
         vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
                                                                              relations)
 
         print("About to run BiDirectionalRNN with Dot and Sigmoid loss")
         bidirectional_dot_sigmoidloss(gpu, vectors, questions, pos_paths, neg_paths)
 
-    if model == 'birnn_dense':
-        # Specify the directory to save model
-        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
-        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
+    elif model == 'birnn_dense':
 
         # Load relations and the data
-        relations = n.load_relation('resources_v8/relations.pickle')
+        relations = n.load_relation()
         vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
                                                                              relations)
 
@@ -1242,48 +1237,39 @@ if __name__ == "__main__":
         bidirectional_dense(gpu, vectors, questions, pos_paths, neg_paths, 10, 1000)
 
     elif model == 'parikh':
-        # Specify the directory to save model
-        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
-        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
 
         # Load relations and the data
-        relations = n.load_relation('resources_v8/relations.pickle')
+        relations = n.load_relation()
         vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
                                                                              relations)
 
         print("About to run Parikh et al model")
         parikh(gpu, vectors, questions, pos_paths, neg_paths)
+
     elif model == 'maheshwari':
-        # Specify the directory to save model
-        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
-        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
 
         # Load relations and the data
-        relations = n.load_relation('resources_v8/relations.pickle')
+        relations = n.load_relation()
         vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
                                                                              relations)
 
         print("About to run Maheshwari et al model")
         maheshwari(gpu, vectors, questions, pos_paths, neg_paths)
+
     elif model == 'cnn':
-        # Specify the directory to save model
-        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
-        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
 
         # Load relations and the data
-        relations = n.load_relation('resources_v8/relations.pickle')
+        relations = n.load_relation()
         vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
                                                                              relations)
 
         print("About to run cnn et al model")
         cnn_dot(gpu, vectors, questions, pos_paths, neg_paths)
+
     elif model == 'parikh_dot':
-        # Specify the directory to save model
-        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
-        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
 
         # Load relations and the data
-        relations = n.load_relation('resources_v8/relations.pickle')
+        relations = n.load_relation()
         vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
                                                                              relations)
 
@@ -1291,19 +1277,19 @@ if __name__ == "__main__":
         parikh_dot(gpu, vectors, questions, pos_paths, neg_paths)
 
     elif model == 'birnn_dot_qald':
-        # Specify the directory to save model
-        n.MODEL_DIR = DATA_DIR_CORECHAIN % {"model": model}  # **CHANGE WHEN CHANGING MODEL!**
-        n.CACHE_DATA_PAIRWISE_DIR = RES_DIR_PAIRWISE_CORECHAIN
+
+        LCQUAD = False
+        n.DATASET = 'lcquad' if LCQUAD else 'qald'
 
         # Load relations and the data
-        relations = n.load_relation('resources_v8/relations.pickle')
+        relations = n.load_relation()
 
-        id_train = json.load(open("resources_v8/qald_id_big_data_train.json"))
-        id_test = json.load(open("resources_v8/qald_id_big_data_test.json"))
+        id_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR, "qald_id_big_data_train.json")))
+        id_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR, "qald_id_big_data_test.json")))
 
         index = len(id_train) - 1
 
-        json.dump(id_train+id_test,open('resources_v8/combined_qald.json','w+'))
+        json.dump(id_train+id_test, open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR, 'combined_qald.json'), 'w+'))
 
         vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("combined_qald.json", n.MAX_SEQ_LENGTH,
                                                                                    relations)
@@ -1312,6 +1298,7 @@ if __name__ == "__main__":
         # parikh_dot(gpu, vectors, questions, pos_paths, neg_paths)
         birnn_dot_qald(gpu, vectors, questions, pos_paths, neg_paths, _index=index, _neg_paths_per_epoch_train=10,
                                _neg_paths_per_epoch_test=1000)
+
     else:
         warnings.warn("Did not choose any model.")
         if DEBUG:

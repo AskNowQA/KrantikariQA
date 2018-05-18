@@ -15,6 +15,7 @@ from keras.models import Sequential, Model, model_from_json
 import network as n
 from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
+from utils import prepare_vocab_continous as vocab_master
 
 # Todos
 # @TODO: The model doesn't take the embedding vectors as input.
@@ -25,10 +26,13 @@ np.random.seed(42)
 
 # Some Macros
 DEBUG = True
-LCQUAD = True
+DATASET = 'lcquad'
 MAX_SEQ_LENGTH = 25
-RAW_DATASET_LOC = os.path.join(n.RAW_DATA_DIR, 'id_big_data.json')
-DATA_DIR = './data/models/type_existence/lcquad/' if LCQUAD else './data/models/type_existence/qald/'
+FILENAME = 'qald_id_big_data.json' if DATASET is 'qald' else 'id_big_data.json'
+
+# RAW_DATASET_LOC = os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, 'id_big_data.json')
+# DATA_DIR = './data/models/type_existence/lcquad/' if LCQUAD else './data/models/type_existence/qald/'
+# DATA_DIR = os.path.join(n.MODEL_DIR % {'model':'type_existence', 'dataset':DATASET})
 
 # Model Macros
 EPOCHS = 300
@@ -90,7 +94,7 @@ def create_dataset():
     :return: two lists of dataset (train+test)
     """
 
-    dataset = json.load(open(RAW_DATASET_LOC))
+    dataset = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, FILENAME)))
 
     X = np.zeros((len(dataset), MAX_SEQ_LENGTH), dtype=np.int64)
     Y = np.zeros((len(dataset), 3), dtype=np.int64)
@@ -134,33 +138,20 @@ def convert_new_ids(X, Y):
     :param Y: numpy mat n, 3
     :return: reduced embedding mat, X (converted), Y
     """
-    global vocab
+    global vocab, vectors
 
     # Collect the embedding matrix.
-    glove_embeddings = get_glove_embeddings()
+    # glove_embeddings = get_glove_embeddings()
 
     # See if we've already loaded the new vocab.
-    if not vocab:
-        try:
-            vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
-        except (IOError, EOFError) as e:
-            if DEBUG:
-                warnings.warn("Did not find the vocabulary.")
-            vocab = {}
-
-    # Collect uniques from X
-    uniques = np.unique(X)
-
-    # Update vocab in case of unseen questions
-    index = len(vocab)
-
-    for key in uniques:
-        try:
-            temp = vocab[key]
-        except KeyError:
-            # if key not in vocab.keys():
-            vocab[key] = index
-            index += 1
+    if not vocab or not vectors:
+        # try:
+        #     vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
+        # except (IOError, EOFError) as e:
+        #     if DEBUG:
+        #         warnings.warn("Did not find the vocabulary.")
+        #     vocab = {}
+        vocab, vectors = vocab_master.load()
 
     # Map X
     for i in range(X.shape[0]):
@@ -168,18 +159,15 @@ def convert_new_ids(X, Y):
 
             X[i][j] = vocab[X[i][j]]
 
-    # Reduce Embedding Matrix
-    vectors = glove_embeddings[uniques]
-
     # Return stuff
     return vectors, X, Y
 
 
-def get_glove_embeddings():
-    from utils.embeddings_interface import __check_prepared__
-    __check_prepared__('glove')
-    from utils.embeddings_interface import glove_embeddings
-    return glove_embeddings
+# def get_glove_embeddings():
+#     from utils.embeddings_interface import __check_prepared__
+#     __check_prepared__('glove')
+#     from utils.embeddings_interface import glove_embeddings
+#     return glove_embeddings
 
 
 def rnn_model(embedding_layer, X_train, Y_train, max_seq_length):
@@ -262,5 +250,6 @@ if __name__ == "__main__":
     print("rnn model results are ", result/float(len(Y_test_cap)))
 
     # Time to save model.
-    n.MODEL_DIR = DATA_DIR
+    n.DATASET = DATASET
+    n.MODEL = 'type_existence'
     n.smart_save_model(model)

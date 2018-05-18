@@ -36,25 +36,32 @@ from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.layers import Merge
 from sklearn.utils import shuffle
+
+
 import network as n
 import network_corechain as n_cc
 from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
+from utils import prepare_vocab_continous as vocab_master
 
 
 # Some Macros
 DEBUG = True
-LCQUAD = True
-DATA_DIR = './data/models/rdf/lcquad/' if LCQUAD else './data/models/rdf/qald/'
-RESOURCE_DIR = './resources_v8/rdf'
-ID_DIR = './resources_v8'
+# LCQUAD = True
+# DATA_DIR = './data/models/rdf/lcquad/' if LCQUAD else './data/models/rdf/qald/'
+# RESOURCE_DIR = './resources_v8/rdf'
+# ID_DIR = './resources_v8'
 EPOCHS = 300
 BATCH_SIZE = 180 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
 NEGATIVE_SAMPLES = 270
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
+
+# Set up directories
+n.DATASET = 'lcquad'
+n.MODEL = 'rdf'
 
 
 def create_dataset(file, max_sequence_length):
@@ -80,7 +87,7 @@ def create_dataset(file, max_sequence_length):
         raise EOFError
 
     except (EOFError,IOError) as e:
-        with open(os.path.join(ID_DIR, file)) as fp:
+        with open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':n.DATASET}, file)) as fp:
             dataset = json.load(fp)
             # dataset = dataset[:10]
 
@@ -135,46 +142,50 @@ def create_dataset(file, max_sequence_length):
 
                 neg_paths.append(neg_path)
 
-
             # Convert things to nparrays
             questions = np.asarray(questions, dtype=np.int64)
-
 
             # questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
             pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
             neg_paths = np.asarray(neg_paths)
 
-            '''
-                Take care of vocabulary.
-                Note: if vocabulary changed, all the models are rendered useless.
-            '''
-            try:
-                vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
-            except (IOError, EOFError) as e:
-                vocab = {}
+            # '''
+            #     Take care of vocabulary.
+            #     Note: if vocabulary changed, all the models are rendered useless.
+            # '''
+            # try:
+            #     vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
+            # except (IOError, EOFError) as e:
+            #     vocab = {}
+            #
+            # if DEBUG:
+            #     print(questions.shape)
+            #     print(pos_paths.shape)
+            #     print(neg_paths.shape)
+            #
+            # all = np.concatenate([questions, pos_paths, neg_paths.reshape(neg_paths.shape[0]*neg_paths.shape[1],neg_paths.shape[2])], axis=0)
+            # uniques = np.unique(all)
+            #
+            #
+            # # ############################################################
+            # # Map to new ID space all those which are not a part of vocab#
+            # # ############################################################
+            #
+            # index = len(vocab)
+            #
+            # for key in uniques:
+            #     try:
+            #         temp = vocab[key]
+            #     except KeyError:
+            #     # if key not in vocab.keys():
+            #         vocab[key] = index
+            #         index += 1
+            #
+            #
+            # # Create slimmer, better, faster, vectors file.
+            # vectors = glove_embeddings[uniques]
 
-            if DEBUG:
-                print(questions.shape)
-                print(pos_paths.shape)
-                print(neg_paths.shape)
-
-            all = np.concatenate([questions, pos_paths, neg_paths.reshape(neg_paths.shape[0]*neg_paths.shape[1],neg_paths.shape[2])], axis=0)
-            uniques = np.unique(all)
-
-
-            # ############################################################
-            # Map to new ID space all those which are not a part of vocab#
-            # ############################################################
-
-            index = len(vocab)
-
-            for key in uniques:
-                try:
-                    temp = vocab[key]
-                except KeyError:
-                # if key not in vocab.keys():
-                    vocab[key] = index
-                    index += 1
+            vocab, vectors = vocab_master.load()
 
             # Map everything
             for i in range(len(questions)):
@@ -184,25 +195,21 @@ def create_dataset(file, max_sequence_length):
                 for j in range(len(neg_paths[i])):
                     neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
-            # Create slimmer, better, faster, vectors file.
-            vectors = glove_embeddings[uniques]
-
-            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join('./resources_v8', file + ".vocab.pickle"), "w+") as idx:
+            with open(os.path.join(n.MODEL_SPECIFIC_DATA_DIR % {'model':'rdf', 'dataset':n.DATASET}, file + ".mapped.npz"), "w+") as data:
                 np.savez(data, questions, pos_paths, neg_paths)
-                pickle.dump(vocab,idx)
+                # pickle.dump(vocab,idx)
 
             return vectors, questions, pos_paths, neg_paths
-
 
 
 if __name__ == "__main__":
     gpu = sys.argv[1]
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
     max_length = 25
-    relations = n.load_relation('resources_v8/relations.pickle')
+    relations = n.load_relation()
     dbp = db_interface.DBPedia(_verbose=True, caching=False)
-    n.DATA_DIR_CORECHAIN = DATA_DIR
     n.NEGATIVE_SAMPLES = 200
     n.BATCH_SIZE = 300
+    file = "id_big_data.json" if n.DATASET is 'lcquad' else "qald_id_big_data.json"
     vectors, questions, pos_paths, neg_paths = create_dataset("id_big_data.json", max_length)
     n_cc.bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 10, 200)

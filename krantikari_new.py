@@ -119,7 +119,7 @@ class Krantikari_v2:
 					predicates_new.append(x)
 				if _only_dbo:
 					if 	x.startswith('http://dbpedia.org/ontology') or x.startswith('dbo:') or\
-							p.startswith('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'):
+							x.startswith('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'):
 						predicates_new.append(x)
 				else:
 					if not x.startswith('http://purl.org/dc/terms/'):
@@ -228,6 +228,25 @@ class Krantikari_v2:
 				data_temp.append(['+', answer['r1'][i] ])
 			temp['path'] = data_temp
 			return temp
+		if id == 5:
+			temp = {}
+			temp['te1'] = te1
+			answer = dbp.get_answer(SPARQL)  # -,+
+			data_temp = []
+			for i in xrange(len(answer['r1'])):
+				data_temp.append(['+', answer['r1'][i] ])
+			temp['path'] = data_temp
+			return temp
+		if id == 6:
+			temp = {}
+			temp['te1'] = te1
+			answer = dbp.get_answer(SPARQL)  # -,+
+			data_temp = []
+			for i in xrange(len(answer['r1'])):
+				data_temp.append(['-', answer['r1'][i] ])
+			temp['path'] = data_temp
+			return temp
+
 
 
 	@classmethod
@@ -258,35 +277,48 @@ class Krantikari_v2:
 
 	@classmethod
 	def ask_query(cls, te1, te2, dbp):
-		print "in ask query"
-		te1 = "<" + te1 + ">"
-		te2 = "<" + te2 + ">"
-		data = []
-		SPARQLASK_1 = '''SELECT DISTINCT ?r1  WHERE { %(te1)s ?r1 %(te2)s . } '''
-		# SPARQLASK_2 = '''SELECT DISTINCT ?r1  WHERE { %(te2)s ?r1 %(te1)s . } '''
-		# SPARQLASK_3 = '''SELECT DISTINCT ?r1  WHERE { %(te2)s ?r1 %(te1)s . } '''
-		SPARQLASK_3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
-		SPARQLASK_4 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s .  ?uri ?r2 %(te2)s . } '''
 
-		SPARQL1 = SPARQLASK_1 % {'te1': te1, 'te2': te2}
-		# SPARQL2 = SPARQLASK_2 % {'te1': te1, 'te2': te2}
-		SPARQL3 = SPARQLASK_3 % {'te1': te1, 'te2': te2}
-		SPARQL4 = SPARQLASK_4 % {'te1': te1, 'te2': te2}
+		if te1 and te2:
+			print "in ask query"
+			te1 = "<" + te1 + ">"
+			te2 = "<" + te2 + ">"
+			data = []
+			SPARQLASK_1 = '''SELECT DISTINCT ?r1  WHERE { %(te1)s ?r1 %(te2)s . } '''
+			# SPARQLASK_2 = '''SELECT DISTINCT ?r1  WHERE { %(te2)s ?r1 %(te1)s . } '''
+			# SPARQLASK_3 = '''SELECT DISTINCT ?r1  WHERE { %(te2)s ?r1 %(te1)s . } '''
+			SPARQLASK_3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
+			SPARQLASK_4 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s .  ?uri ?r2 %(te2)s . } '''
 
-		print SPARQL1
-		print SPARQL3
-		print SPARQL4
-		# SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
-		# SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+			SPARQL1 = SPARQLASK_1 % {'te1': te1, 'te2': te2}
+			# SPARQL2 = SPARQLASK_2 % {'te1': te1, 'te2': te2}
+			SPARQL3 = SPARQLASK_3 % {'te1': te1, 'te2': te2}
+			SPARQL4 = SPARQLASK_4 % {'te1': te1, 'te2': te2}
+
+			print SPARQL1
+			print SPARQL3
+			print SPARQL4
+			# SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
+			# SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
 
 
-		data.append(cls.get_something(SPARQL1, te1, te2, 4, dbp))
-		data.append(cls.get_something(SPARQL1, te2, te1, 4, dbp))
-		# data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
-		# data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
-		data.append(cls.get_something(SPARQL3, te1, te2, 2, dbp))
-		data.append(cls.get_something(SPARQL4, te2, te1, 1, dbp))
-		return data
+			data.append(cls.get_something(SPARQL1, te1, te2, 4, dbp))
+			data.append(cls.get_something(SPARQL1, te2, te1, 4, dbp))
+			# data.append(cls.get_something(SPARQL2, te1, te2, 2, dbp))
+			# data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
+			data.append(cls.get_something(SPARQL3, te1, te2, 2, dbp))
+			data.append(cls.get_something(SPARQL4, te2, te1, 1, dbp))
+			return data
+		else:
+			te1 = "<" + te1 + ">"
+			data = []
+			SPARQLASK_1 = '''SELECT DISTINCT ?r1  WHERE { %(te1)s ?r1 ?uri . } '''
+			SPARQLASK_2 = '''SELECT DISTINCT ?r1  WHERE { ?uri ?r1 %(te1)s . } '''
+			SPARQL1 = SPARQLASK_1 % {'te1': te1}
+			SPARQL2 = SPARQLASK_2 % {'te1': te1}
+			te2='DUMMY'
+			data.append(cls.get_something(SPARQL1, te1, te2, 5, dbp))
+			data.append(cls.get_something(SPARQL2, te1, te2	, 6, dbp))
+
 
 	def convert_core_chain_to_sparql(self, _core_chain):  # @TODO
 		pass
@@ -987,6 +1019,7 @@ def qald_data(test = True):
 
 	'''
 	# Load QALD
+	exception_log = []
 	if test:
 		raw_dataset = json.load(open(qp.RAW_QALD_DIR_TEST))['questions']
 		parsed_dataset = pickle.load(open(qp.PARSED_QALD_DIR_TEST))
@@ -999,44 +1032,48 @@ def qald_data(test = True):
 	# Iterate through every question
 	c = 0
 	for i in range(len(raw_dataset[c:])):
+		try:
 
-		#Stores all the data and meta data for a particular node
-		temp_big_data = {}
-		# Get the QALD question
-		q_raw = raw_dataset[i]
-		q_parsed = parsed_dataset[i]
+			#Stores all the data and meta data for a particular node
+			temp_big_data = {}
+			# Get the QALD question
+			q_raw = raw_dataset[i]
+			q_parsed = parsed_dataset[i]
 
-		if DEBUG:
-			print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-			print i+c
+			if DEBUG:
+				print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+				print i+c
 
-		# # Get answer for the query
-		# ans = dbp.get_answer(q_raw['query']['sparql'])
+			# # Get answer for the query
+			# ans = dbp.get_answer(q_raw['query']['sparql'])
 
-		# true_path, topic_entities = get_true_path(q_parsed, q_raw['query']['sparql'])
-		data = qp.get_true_path(q_parsed, q_raw['query']['sparql'])
-		if data[0] == -1 or data[0] is None:
-			continue
-		question = q_raw['question'][0]['string']
-		entity = data[1]
-		is_uri = True
-		for e in entity:
-			if not nlutils.is_dbpedia_uri(e):
-				is_uri = False
-		if not is_uri:
-			continue
-		paths.append(data)
-		if "ask" in q_raw['query']['sparql'].lower():
-			training_data = Krantikari_v2(_question=question, _entities=entity, _model_interpreter="", _dbpedia_interface=dbp,
-										  _training=True, _ask=True,_qald=True)
-		else:
-			training_data = Krantikari_v2(_question=question, _entities=entity, _model_interpreter="", _dbpedia_interface=dbp,
-										  _training=True, _ask=False,_qald=True)
+			# true_path, topic_entities = get_true_path(q_parsed, q_raw['query']['sparql'])
+			data = qp.get_true_path(q_parsed, q_raw['query']['sparql'])
+			if data[0] == -1 or data[0] is None:
+				continue
+			question = q_raw['question'][0]['string']
+			entity = data[1]
+			is_uri = True
+			for e in entity:
+				if not nlutils.is_dbpedia_uri(e):
+					is_uri = False
+			if not is_uri:
+				continue
+			paths.append(data)
+			if "ask" in q_raw['query']['sparql'].lower():
+				training_data = Krantikari_v2(_question=question, _entities=entity, _model_interpreter="", _dbpedia_interface=dbp,
+											  _training=True, _ask=True,_qald=True)
+			else:
+				training_data = Krantikari_v2(_question=question, _entities=entity, _model_interpreter="", _dbpedia_interface=dbp,
+											  _training=True, _ask=False,_qald=True)
 
-		temp_big_data['unparsed-qald-data'] = q_raw
-		temp_big_data['parsed-qald-data'] = q_parsed
-		temp_big_data['uri'] = training_data.data
-		big_data_test.append(temp_big_data)
+			temp_big_data['unparsed-qald-data'] = q_raw
+			temp_big_data['parsed-qald-data'] = q_parsed
+			temp_big_data['uri'] = training_data.data
+			big_data_test.append(temp_big_data)
+		except:
+			exception_log.append(raw_dataset[i])
+
 
 	# false_paths = get_false_paths(ans, true_path)
 
@@ -1046,11 +1083,13 @@ def qald_data(test = True):
 	#     print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
 	#     raw_input("Press enter to continue")
 	if test:
-		pickle.dump(temp_big_data,open('resources/qald_big_data_test.pickle'))
+		pickle.dump(big_data_test,open('resources/qald_big_data_test.pickle','w+'))
 	else:
-		pickle.dump(temp_big_data,open('resources/qald_big_data_training.pickle'))
+		pickle.dump(big_data_test,open('resources/qald_big_data_training.pickle','w+'))
 	return big_data_test
-
+#
+# test_data = qald_data(test = True)
+# train_data = qald_data(test = False)
 if __name__ == "__main__":
 	# """
 	#     TEST1 : Accuracy of similar_predicates

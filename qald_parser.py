@@ -85,9 +85,9 @@ def __fill_single_triple_data__(_triple, _path, _ask = False):
         #            nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True)]
 
         _entity = []
-        if nlutils.is_dbpedia_uri(_triple['subject']) and '?' != nlutils.is_dbpedia_uri(_triple['subject'])
+        if nlutils.is_dbpedia_uri(_triple['subject']) and '?' != nlutils.is_dbpedia_uri(_triple['subject']):
             _entity.append(nlutils.is_dbpedia_shorthand(_triple['subject'], _convert=True))
-        if nlutils.is_dbpedia_uri(_triple['object']) and '?' != nlutils.is_dbpedia_uri(_triple['object'])
+        if nlutils.is_dbpedia_uri(_triple['object']) and '?' != nlutils.is_dbpedia_uri(_triple['object']):
             _entity.append(nlutils.is_dbpedia_shorthand(_triple['object'], _convert=True))
         if not _entity:
             _entity = -1
@@ -250,19 +250,22 @@ def scavenge_entities(_sparql):
 
     entities = []
 
-    # Go through all the triples
-    for i in range(len(_sparql['where'][0]['triples'])):
+    try:
+        # Go through all the triples
+        for i in range(len(_sparql['where'][0]['triples'])):
 
-        triple = _sparql['where'][0]['triples'][i]
+            triple = _sparql['where'][0]['triples'][i]
 
-        # Check if subject is a URI
-        if nlutils.is_dbpedia_uri(triple['subject']):
-            entities.append(nlutils.is_dbpedia_shorthand(triple['subject'], _convert=True))
+            # Check if subject is a URI
+            if nlutils.is_dbpedia_uri(triple['subject']):
+                entities.append(nlutils.is_dbpedia_shorthand(triple['subject'], _convert=True))
 
-        if nlutils.is_dbpedia_uri(triple['object']):
-            entities.append(nlutils.is_dbpedia_shorthand(triple['object'], _convert=True))
+            if nlutils.is_dbpedia_uri(triple['object']):
+                entities.append(nlutils.is_dbpedia_shorthand(triple['object'], _convert=True))
 
-    return entities
+        return entities
+    except KeyError:
+        return -1
 
 
 def get_true_path(sparql, raw_sparql):

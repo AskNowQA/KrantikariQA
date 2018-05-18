@@ -44,11 +44,32 @@ uri_x_const = '?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?cons_x . ' 
 	Macros
 """
 DIR = './resources_v8/'
-BIG_DATA_DIR = './resources_v8/id_big_data.json'
+LCQUAD_FILE_NAME = 'id_big_data.json'
+QALD_FILE_NAME_TEST = 'qald_id_big_data_test.json'
+QALD_FILE_NAME_TRAIN = 'qald_id_big_data_train.json'
+
+
+COMMON_DIR = 'data/data/common/'
+LCQUAD_DIR = 'data/data/lcquad/'
+QALD_DIR = 'data/data/qald/'
 
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
+
 rdf_type_lookup = []
-relations_dict = pickle.load(open('resources/relations.pickle'))
+
+
+
+if os.path.isfile(COMMON_DIR+'rdf_type_lookup.json'):
+	rdf_type_lookup = json.load(open(COMMON_DIR+'rdf_type_lookup.json'))
+else:
+	rdf_type_lookup = []
+
+if os.path.isfile(COMMON_DIR+'relations.pickle'):
+	relations_dict = pickle.load(open(COMMON_DIR+'relations.pickle'))
+else:
+	print "error. The relation file should have existed"
+	raw_input("check and continue")
+	relations_dict = {}
 
 
 
@@ -270,7 +291,7 @@ def run():
 		Main script which calls and does everything.
 	:return: nothing
 	"""
-	raw_data = json.load(open(BIG_DATA_DIR))
+	raw_data = json.load(open(LCQUAD_DIR+LCQUAD_FILE_NAME))
 
 	for i in range(0,len(raw_data)):
 		x,uri = generate_candidates(raw_data[i])
@@ -282,8 +303,8 @@ def run():
 		for j in range(0,len(raw_data[i]['rdf-type-constraints'])):
 			raw_data[i]['rdf-type-constraints'][j] = raw_data[i]['rdf-type-constraints'][j].tolist()
 
-	json.dump(raw_data,open(BIG_DATA_DIR,'w+'))
-	json.dump(rdf_type_lookup, open('resources_v8/rdf_type_lookup.json','w+'))
+	json.dump(raw_data,open(LCQUAD_DIR+LCQUAD_FILE_NAME,'w+'))
+	json.dump(rdf_type_lookup, open(COMMON_DIR+'rdf_type_lookup.json','w+'))
 
 
 def qald_run(test = True):
@@ -296,9 +317,9 @@ def qald_run(test = True):
 	'''
 
 	if test:
-		raw_data = json.load(open('resources_v8/qald_id_big_data_test.json'))
+		raw_data = json.load(open(QALD_DIR+QALD_FILE_NAME_TEST))
 	else:
-		raw_data = json.load(open('resources_v8/qald_id_big_data_train.json'))
+		raw_data = json.load(open(QALD_DIR+QALD_FILE_NAME_TRAIN))
 
 
 	'''
@@ -307,11 +328,15 @@ def qald_run(test = True):
 
 	rdf_type_id = None
 	for data in raw_data:
+		if data['parsed-data']['path'][0] == -1:
+			continue
 		if data['parsed-data']['path'][0][1:] == 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type':
 			rdf_type_id = data['parsed-data']['path_id'][1:]
 
 	for i in range(0,len(raw_data)):
-		if raw_data[i]['parsed-data']['path_id'][0][1:] == rdf_type_id:
+		if raw_data[i]['parsed-data']['path_id'][0] == -1:
+			raw_data[i]['rdf-type-constraints'] = []
+		elif raw_data[i]['parsed-data']['path_id'][0][1:] == rdf_type_id:
 			raw_data[i]['rdf-type-constraints'] = []
 		else:
 			x, uri = generate_candidates(raw_data[i])
@@ -324,11 +349,11 @@ def qald_run(test = True):
 			raw_data[i]['rdf-type-constraints'][j] = raw_data[i]['rdf-type-constraints'][j].tolist()
 
 	if test:
-		json.dump(raw_data,open('resources_v8/qald_id_big_data_test.json','w+'))
-		json.dump(rdf_type_lookup, open('resources_v8/rdf_type_lookup.json','w+'))
+		json.dump(raw_data,open(QALD_DIR+QALD_FILE_NAME_TEST,'w+'))
+		json.dump(rdf_type_lookup, open(COMMON_DIR + 'rdf_type_lookup.json', 'w+'))
 	else:
-		json.dump(raw_data, open('resources_v8/qald_id_big_data_train.json', 'w+'))
-		json.dump(rdf_type_lookup, open('resources_v8/rdf_type_lookup.json', 'w+'))
+		json.dump(raw_data, open(QALD_DIR+QALD_FILE_NAME_TRAIN, 'w+'))
+		json.dump(rdf_type_lookup, open(COMMON_DIR + 'rdf_type_lookup.json', 'w+'))
 
 if __name__ == "__main__":
 	qald_run()

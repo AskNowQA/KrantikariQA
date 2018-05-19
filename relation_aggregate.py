@@ -22,7 +22,7 @@ short_forms = {
 
 
 QALD = True
-QALD_TRAIN = False
+QALD_TRAIN = True
 
 FINAL_LCQUAD_FILE_NAME = 'id_big_data.json'
 FINAL_QALD_FILE_NAME_TEST = 'qald_id_big_data_test.json'
@@ -31,7 +31,7 @@ FINAL_QALD_FILE_NAME_TRAIN = 'qald_id_big_data_train.json'
 
 INIT_LCQUAD_FILE_NAME = 'big_data.pickle'
 INIT_QALD_FILE_NAME_TEST = 'qald_big_data_test.json'
-INIT_QALD_FILE_NAME_TRAIN = 'qald_big_data_training.json'
+INIT_QALD_FILE_NAME_TRAIN = 'qald_big_data_train.json'
 
 
 COMMON_DIR = 'data/data/common/'
@@ -43,7 +43,7 @@ dump_location = './resources_v8/'
 
 relations_list = []
 
-print "loading the data from ", dump_location
+print "loading the data from ", COMMON_DIR
 
 
 if QALD:

@@ -25,16 +25,18 @@ import keras.backend.tensorflow_backend as K
 from keras.preprocessing.sequence import pad_sequences
 
 # Local imports
+import network as n
 import data_preparation_rdf_type as drt
 from utils import embeddings_interface
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
+from utils import prepare_vocab_continous as vocab_master
 
 
 # Some Macros
 DEBUG = True
 MAX_SEQ_LENGTH = 25
-LOC_RDF_TYPE_LOOKUP = 'data/data/core_chain_pairwise/lcquad/id_big_data.json.mapped.npz'
+
 
 # NN Macros
 EPOCHS = 300
@@ -47,10 +49,14 @@ OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 # Model Directories
 DATASET = 'lcquad'
 CORECHAIN_MODEL_NAME = 'birnn_dot'
-CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_03/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data':DATASET}
-RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_00/model.h5' % {'data':DATASET}
-RDFEXISTENCE_MODEL_DIR = './data/models/type_existence/%(data)s/model_00/model.h5' % {'data':DATASET}
-INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_00/model.h5' % {'data':DATASET}
+ID_BIG_DATA_FILENAME = 'id_big_data.json' if DATASET is 'lcquad' else 'qald_id_big_data.json'
+CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_11/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data':DATASET}
+RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_01/model.h5' % {'data':DATASET}
+RDFEXISTENCE_MODEL_DIR = './data/models/type_existence/%(data)s/model_01/model.h5' % {'data':DATASET}
+INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_01/model.h5' % {'data':DATASET}
+
+RELATIONS_LOC = os.path.join(n.COMMON_DATA_DIR, 'relations.pickle')
+RDF_TYPE_LOOKUP_LOC = 'data/data/common/rdf_type_lookup.json'
 
 # Configure at every run!
 GPU = '1'
@@ -58,6 +64,16 @@ os.environ['CUDA_VISIBLE_DEVICES'] = GPU
 
 # Set the seed to clamp the stochastic nature.
 np.random.seed(42) # Random train/test splits stay the same between runs
+
+# Global variables
+
+# Global variables
+dbp = db_interface.DBPedia(_verbose=True, caching=False)
+vocab, vectors = vocab_master.load()
+
+reverse_vocab = {}
+for keys in vocab:
+    reverse_vocab[vocab[keys]] = keys
 
 """
     SPARQL Templates to be used to reconstruct SPARQLs from query graphs
@@ -72,7 +88,9 @@ sparql_1hop_template = {
 }
 sparql_boolean_template = {
     "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> <%(te2)s> } UNION '
-                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } . %(rdf)s }',
+                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } . %(rdf)s }'
+    # "": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> <%(te2)s> } UNION '
+    #                              + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } . %(rdf)s }',
 }
 sparql_2hop_1ent_template = {
     "++": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
@@ -219,29 +237,6 @@ def cross_correlation(x):
     return tf.cast(tf.real(ifft), 'float32')
 
 
-def create_data_big_data(data, keras=True):
-    """
-        The function takes id version of big data node and transforms it to version required by Keras network code.
-    """
-
-    false_paths = []
-    true_path = []
-    id_paths = []
-    for rel in data['parsed-data']['path_id']:
-        true_path = true_path + [rel[0]] + reverse_relations[int(rel[1:])][-2]
-        id_paths.append(data['parsed-data']['path_id'])
-    for rel in data['uri']['hop-1-properties']:
-        temp_path = [str(rel[0])] +  reverse_relations[int(rel[1])][-2]
-        false_paths.append(temp_path)
-        id_paths.append(temp_path)
-    for rel in data['uri']['hop-2-properties']:
-        temp_path = [str(rel[0])] +  reverse_relations[int(rel[1])][-2] + [str(rel[2])] +  reverse_relations[int(rel[3])][-2]
-        false_paths.append(temp_path)
-        id_paths.append(temp_path)
-    question = data['parsed-data']['corrected_question']
-    return [question,true_path,false_paths,id_paths]
-
-
 def rel_id_to_rel(rel, _relations):
     """
 
@@ -375,8 +370,8 @@ def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, c
     # return type_x_candidates if only_x else type_uri_candidates
 
 
-def load_relation(relation_file):
-    relations = pickle.load(open(relation_file))
+def load_relation():
+    relations = pickle.load(open(RELATIONS_LOC))
     inverse_relations = {}
     for key in relations:
         value = relations[key]
@@ -444,7 +439,7 @@ def remove_positive_path(positive_path, negative_paths):
 
 
 def load_reverse_rdf_type():
-    rdf_type = np.load(open(LOC_RDF_TYPE_LOOKUP))
+    rdf_type = json.load(open(RDF_TYPE_LOOKUP_LOC))
     rdf = {}
     for classes in rdf_type:
         rdf[classes] = embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(classes)))
@@ -747,22 +742,18 @@ def evaluate(test_sparql, true_sparql, type):
             return 0.0,0.0,1.0
 
 
-# Global variables
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
-vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
-relations = load_relation('resources_v8/relations.pickle')
-reverse_relations = {}
-for keys in relations:
-    reverse_relations[relations[keys][0]] = [keys] + relations[keys][1:]
-reverse_rdf_dict = load_reverse_rdf_type()
-reverse_vocab = {}
-for keys in vocab:
-    reverse_vocab[vocab[keys]] = keys
 
 if __name__ is "__main__":
 
+    # Some more globals
+    relations = load_relation()
+    reverse_relations = {}
+    for keys in relations:
+        reverse_relations[relations[keys][0]] = [keys] + relations[keys][1:]
+    reverse_rdf_dict = load_reverse_rdf_type()
+
     # Load the main data
-    id_data = json.load(open('resources_v8/id_big_data.json'))
+    id_data = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, ID_BIG_DATA_FILENAME)))
 
     # Split it.
     id_data_test = test_split(id_data)

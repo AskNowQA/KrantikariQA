@@ -242,6 +242,18 @@ if __name__ == "__main__":
 
     gpu = sys.argv[1]
     DATASET = sys.argv[2].strip()
+
+    # See if the args are valid.
+    while True:
+        try:
+            assert gpu in ['0', '1', '2', '3']
+            assert DATASET in ['lcquad', 'qald']
+            break
+        except AssertionError:
+            gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
+            model = raw_input("Did not understand which Dataset to use. Please write it again: ")
+
+
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
     FILENAME = ['qald_id_big_data_train.json','qald_id_big_data_test.json'] if DATASET == 'qald' else 'id_big_data.json'

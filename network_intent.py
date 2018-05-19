@@ -26,9 +26,10 @@ np.random.seed(42)
 
 # Some Macros
 DEBUG = True
-DATASET = 'lcquad'
 MAX_SEQ_LENGTH = 25
-FILENAME = 'qald_id_big_data.json' if DATASET is 'qald' else 'id_big_data.json'
+
+# DATASET = 'lcquad'
+# FILENAME = 'qald_id_big_data.json' if DATASET is 'qald' else 'id_big_data.json'
 # RAW_DATASET_LOC = os.path.join(n.COMMON_DATA_DIR, 'id_big_data.json')
 # DATA_DIR = './data/models/intent/lcquad/' if LCQUAD else './data/models/intent/qald/'
 
@@ -63,8 +64,7 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 
 def get_x(_datum):
-    return np.asarray(embeddings_interface.vocabularize(nlutils.tokenize(_datum['parsed-data']['corrected_question'])),
-                      dtype=np.int64)
+    return np.asarray(_datum['uri']['question-id'])
 
 
 def get_y(_datum):
@@ -92,7 +92,15 @@ def create_dataset():
     :return: two lists of dataset (train+test)
     """
 
-    dataset = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, FILENAME)))
+    if DATASET == 'lcquad':
+        dataset = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME)))
+        index = None
+    else:
+        dataset_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME[0])))
+        dataset_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME[1])))
+
+        index = len(dataset_train) - 1
+        dataset = dataset_train + dataset_test
 
     X = np.zeros((len(dataset), MAX_SEQ_LENGTH), dtype=np.int64)
     Y = np.zeros((len(dataset), 3), dtype=np.int64)
@@ -117,8 +125,12 @@ def create_dataset():
     Y = Y[s]
 
     # Split
-    train_X, test_X = X[:int(X.shape[0]*0.8)], X[int(X.shape[0]*0.8):]
-    train_Y, test_Y = Y[:int(Y.shape[0]*0.8)], Y[int(Y.shape[0]*0.8):]
+    if DATASET == 'lcquad':
+        train_X, test_X = X[:int(X.shape[0]*0.8)], X[int(X.shape[0]*0.8):]
+        train_Y, test_Y = Y[:int(Y.shape[0]*0.8)], Y[int(Y.shape[0]*0.8):]
+    else:
+        train_X, test_X = X[:index], X[index:]
+        train_Y, test_Y = Y[:index], Y[index:]
 
     # # Save
     # np.save(open(os.path.join(MODEL_DIR, 'trainX.npy'), 'w+'), train_X)
@@ -227,7 +239,23 @@ def run(vectors, X_train, Y_train, gpu):
 if __name__ == "__main__":
 
     gpu = sys.argv[1]
+    DATASET = sys.argv[2].strip()
+
+    # See if the args are valid.
+    while True:
+        try:
+            assert gpu in ['0', '1', '2', '3']
+            assert DATASET in ['lcquad', 'qald']
+            break
+        except AssertionError:
+            gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
+            model = raw_input("Did not understand which Dataset to use. Please write it again: ")
+
+
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+    FILENAME = ['qald_id_big_data_train.json', 'qald_id_big_data_test.json'] if DATASET == 'qald' else 'id_big_data.json'
+    n.MODEL = 'intent'
+    n.DATASET = DATASET
 
     # n.NEGATIVE_SAMPLES = NEGATIVE_SAMPLES
     # n.BATCH_SIZE = BATCH_SIZE
@@ -247,6 +275,4 @@ if __name__ == "__main__":
     print("rnn model results are ", result/float(len(Y_test_cap)))
 
     # Time to save model.
-    n.DATASET = DATASET
-    n.MODEL = 'intent'
     n.smart_save_model(model)

@@ -13,7 +13,7 @@ import qald_parser as qp
 DEBUG = False
 
 
-TEST = True
+TEST = False
 
 
 FINAL_QALD_FILE_NAME_TEST = 'qald_big_data_test.json'
@@ -73,9 +73,9 @@ if not DEBUG:
 
 if not DEBUG:
 	if TEST:
-		pickle.dump(big_data_test,open('data/data/qald/qald_big_data_test.pickle','w+'))
+		pickle.dump(big_data_test,open(QALD_DIR+INIT_QALD_FILE_NAME_TEST,'w+'))
 	else:
-		pickle.dump(big_data_train,open('data/data/qald/qald_big_data_training.pickle','w+'))
+		pickle.dump(big_data_train,open(QALD_DIR+INIT_QALD_FILE_NAME_TRAIN,'w+'))
 else:
 	pickle.dump(big_data_test,open('data/data/qald/qald_big_data_test_v2.pickle','w+'))
 
@@ -92,6 +92,7 @@ if not DEBUG:
 	if TEST:
 		json.dump(big_data_test,open(QALD_DIR+FINAL_QALD_FILE_NAME_TEST,'w+'))
 	else:
+		print "dumping things in final wald "
 		json.dump(big_data_train,open(QALD_DIR+FINAL_QALD_FILE_NAME_TRAIN,'w+'))
 else:
 	json.dump(big_data_test,open('data/data/qald/qald_big_data_test_v2.json','w+'))

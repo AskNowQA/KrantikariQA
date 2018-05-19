@@ -264,13 +264,13 @@ def _prepare_():
             continue
         pos_paths.append(positive_path)
 
-    questions = [i['uri']['question-id'] for i in dataset if i not in paths_to_ignore]
+    questions = [i['uri']['question-id'] for i in dataset]
     questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
 
     neg_paths = []
     for i in range(0, len(dataset)):
-        if i in paths_to_ignore:
-            continue
+        # if i in paths_to_ignore:
+        #     continue
         datum = dataset[i]
         negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
         np.random.shuffle(negative_paths_id)

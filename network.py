@@ -585,6 +585,27 @@ class _simple_BiRNNEncoding(object):
     def __call__(self, sentence):
         return self.model(sentence)
 
+
+class _double_BiRNNEncoding(object):
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
+        self.model = Sequential()
+        reg = L1L2(l1=0.0, l2=0.01)
+        self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
+                                          dropout_W=dropout,
+                                          dropout_U=dropout, kernel_regularizer=reg),
+                                     input_shape=(max_length, embedding_dims)))
+        self.model.add(Bidirectional(LSTM(units,dropout_W=dropout,
+                                          dropout_U=dropout, kernel_regularizer=reg)))
+        # self.model.regularizers = [l2(0.01)]
+        #self.model.add(LSTM(units, return_sequences=False,
+        #                                 dropout_W=dropout, dropout_U=dropout))
+        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
+        # self.model.add(TimeDistributed(Dropout(0.2)))
+
+    def __call__(self, sentence):
+        return self.model(sentence)
+
+
 class _simple_CNNEncoding(object):
     def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
         self.model = Sequential()

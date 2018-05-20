@@ -74,11 +74,12 @@ def get_y(_datum):
                 001: list
     """
 
+    data = _datum['parsed-data']['sparql_query'][:_datum['parsed-data']['sparql_query'].lower().find('{')]
     # Check for ask
-    if u'ask' in _datum['parsed-data']['constraints'].keys():
+    if u'ask' in data.lower():
         return np.asarray([0, 1, 0])
 
-    if u'count' in _datum['parsed-data']['constraints'].keys():
+    if u'count' in data.lower():
         return np.asarray([1, 0, 0])
 
     return np.asarray([0, 0, 1])
@@ -204,7 +205,7 @@ def rnn_model(embedding_layer, X_train, Y_train, max_seq_length):
 
     # Training time bois.
     model.fit(np.asarray(X_train), np.asarray(Y_train),
-              epochs=30, batch_size=128)
+              epochs=20, batch_size=128)
 
     return model
 

@@ -20,7 +20,6 @@ import network as n
 
 # Macros
 DEBUG = True
-LCQUAD = True
 # DATA_DIR_CORECHAIN = './data/models/core_chain/%(model)s/lcquad/' if LCQUAD else './data/models/core_chain/%(model)s/qald/'
 # RES_DIR_PAIRWISE_CORECHAIN = './data/data/core_chain_pairwise/lcquad/' if LCQUAD else './data/data/core_chain_pairwise/qald/'
 CHECK_VALIDATION_ACC_PERIOD = 10
@@ -32,7 +31,7 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 
 def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                                  _neg_paths_per_epoch_test = 1000):
+                                  _neg_paths_per_epoch_test = 1000, _index=None):
     """
         Data Time!
     """
@@ -55,7 +54,10 @@ def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    split_point = lambda x: int(len(x) * .80)
+    if _index:
+        split_point = index + 1
+    else:
+        split_point = lambda x: int(len(x) * .80)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -164,7 +166,7 @@ def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths
 
 
 def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000):
+                      _neg_paths_per_epoch_test = 1000, _index=None):
     """
         Data Time!
     """
@@ -187,7 +189,8 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    split_point = lambda x: int(len(x) * .80)
+    if _index: split_point = lambda x: _index+1
+    else: split_point = lambda x: int(len(x) * .80)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -296,7 +299,7 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
 
 
 def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000):
+                      _neg_paths_per_epoch_test = 1000, _index=None):
     """
         Data Time!
     """
@@ -319,7 +322,10 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    split_point = lambda x: int(len(x) * .80)
+    if _index:
+        split_point = index + 1
+    else:
+        split_point = lambda x: int(len(x) * .80)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -429,7 +435,7 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10, _neg_paths_per_epoch_test = 1000):
+def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10, _neg_paths_per_epoch_test = 1000, _index=None):
 
     gpu = _gpu
     max_length = n.MAX_SEQ_LENGTH
@@ -448,7 +454,10 @@ def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_
     np.random.seed(0) # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    split_point = lambda x: int(len(x) * .80)
+    if _index:
+        split_point = index + 1
+    else:
+        split_point = lambda x: int(len(x) * .80)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -602,7 +611,7 @@ def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10, _neg_paths_per_epoch_test = 1000):
+def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10, _neg_paths_per_epoch_test = 1000, _index=None):
 
     gpu = _gpu
     max_length = n.MAX_SEQ_LENGTH
@@ -621,7 +630,10 @@ def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
     np.random.seed(0) # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    split_point = lambda x: int(len(x) * .80)
+    if _index:
+        split_point = index + 1
+    else:
+        split_point = lambda x: int(len(x) * .80)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -740,7 +752,7 @@ def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10, _neg_paths_per_epoch_test = 1000):
+def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10, _neg_paths_per_epoch_test = 1000, _index=None):
     # Pull the data up from disk
     gpu = _gpu
     max_length = n.MAX_SEQ_LENGTH
@@ -760,7 +772,10 @@ def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    split_point = lambda x: int(len(x) * .80)
+    if _index:
+        split_point = index + 1
+    else:
+        split_point = lambda x: int(len(x) * .80)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -923,7 +938,7 @@ def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
 
 
 def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000):
+                      _neg_paths_per_epoch_test = 1000, _index=None):
     """
         Data Time!
     """
@@ -946,7 +961,10 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    split_point = lambda x: int(len(x) * .80)
+    if _index:
+        split_point = index + 1
+    else:
+        split_point = lambda x: int(len(x) * .80)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -1054,254 +1072,89 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def birnn_dot_qald(_gpu, vectors, questions, pos_paths, neg_paths, _index, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000):
-    """
-        Data Time!
-    """
-    # Pull the data up from disk
-    gpu = _gpu
-    max_length = n.MAX_SEQ_LENGTH
-
-    counter = 0
-    for i in range(0, len(pos_paths)):
-        temp = -1
-        for j in range(0, len(neg_paths[i])):
-            if np.array_equal(pos_paths[i], neg_paths[i][j]):
-                if j == 0:
-                    neg_paths[i][j] = neg_paths[i][j + 10]
-                else:
-                    neg_paths[i][j] = neg_paths[i][0]
-    if counter > 0:
-        print(counter)
-        warnings.warn("critical condition needs to be entered")
-    np.random.seed(0)  # Random train/test splits stay the same between runs
-
-    # Divide the data into diff blocks
-    split_point = index+1
-
-    def train_split(x):
-        return x[:split_point]
-
-    def test_split(x):
-        return x[split_point:]
-
-    train_pos_paths = train_split(pos_paths)
-    train_neg_paths = train_split(neg_paths)
-    train_questions = train_split(questions)
-
-    test_pos_paths = test_split(pos_paths)
-    test_neg_paths = test_split(neg_paths)
-    test_questions = test_split(questions)
-
-    neg_paths_per_epoch_train = _neg_paths_per_epoch_train
-    neg_paths_per_epoch_test = _neg_paths_per_epoch_test
-    dummy_y_train = np.zeros(len(train_questions) * neg_paths_per_epoch_train)
-    dummy_y_test = np.zeros(len(test_questions) * (neg_paths_per_epoch_test + 1))
-
-    print(train_questions.shape)
-    print(train_pos_paths.shape)
-    print(train_neg_paths.shape)
-
-    print(test_questions.shape)
-    print(test_pos_paths.shape)
-    print(test_neg_paths.shape)
-
-    with K.tf.device('/gpu:' + gpu):
-        neg_paths_per_epoch_train = 10
-        neg_paths_per_epoch_test = 1000
-        K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
-        """
-            Model Time!
-        """
-        max_length = train_questions.shape[1]
-        # Define input to the models
-        x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
-        x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
-        x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
-
-        embedding_dims = vectors.shape[1]
-        nr_hidden = 128
-
-        embed = n._StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
-        encode = n._simple_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.4)
-
-        def getScore(ques, path):
-            x_ques_embedded = embed(ques)
-            x_path_embedded = embed(path)
-
-            ques_encoded = encode(x_ques_embedded)
-            path_encoded = encode(x_path_embedded)
-
-            # holographic_score = holographic_forward(Lambda(lambda x: cross_correlation(x)) ([ques_encoded, path_encoded]))
-            dot_score = n.dot([ques_encoded, path_encoded], axes=-1)
-            # l1_score = Lambda(lambda x: K.abs(x[0]-x[1]))([ques_encoded, path_encoded])
-
-            # return final_forward(concatenate([holographic_score, dot_score, l1_score], axis=-1))
-            return dot_score
-
-        pos_score = getScore(x_ques, x_pos_path)
-        neg_score = getScore(x_ques, x_neg_path)
-
-        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
-
-        output = n.concatenate([pos_score, neg_score, loss], axis=-1)
-
-        # Model time!
-        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
-                      outputs=[output])
-
-        print(model.summary())
-
-        model.compile(optimizer=n.OPTIMIZER,
-                      loss=n.custom_loss)
-
-        # Prepare training data
-        training_input = [train_questions, train_pos_paths, train_neg_paths]
-
-        training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                     max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
-        validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                         max_length, neg_paths_per_epoch_test, 9999)
-
-        # smart_save_model(model)
-        json_desc, dir = n.get_smart_save_path(model)
-        model_save_path = os.path.join(dir, 'model.h5')
-
-        checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
-                                               monitor='val_metric',
-                                               verbose=1,
-                                               save_best_only=True,
-                                               mode='max',
-                                               period=10)
-
-        model.fit_generator(training_generator,
-                            epochs=n.EPOCHS,
-                            workers=3,
-                            use_multiprocessing=True,
-                            callbacks=[checkpointer])
-        # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
-
-        print("Precision (hits@1) = ",
-              n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
-
-
 if __name__ == "__main__":
-    gpu = sys.argv[1].strip().lower()
+    GPU = sys.argv[1].strip().lower()
     model = sys.argv[2].strip().lower()
-    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+    DATASET = sys.argv[3].strip().lower()
+    os.environ['CUDA_VISIBLE_DEVICES'] = GPU
 
     # See if the args are valid.
     while True:
         try:
-            assert gpu in ['0','1','2','3']
-            assert model.lower() in ['birnn_dot', 'parikh', 'birnn_dense', 'maheshwari', 'birnn_dense_sigmoid','cnn','parikh_dot','birnn_dot_qald']
+            assert GPU in ['0', '1', '2', '3']
+            assert model in ['birnn_dot', 'parikh', 'birnn_dense', 'maheshwari', 'birnn_dense_sigmoid','cnn','parikh_dot','birnn_dot_qald']
+            assert DATASET in ['lcquad', 'qald']
             break
         except AssertionError:
-            gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
+            GPU = raw_input("Did not understand which gpu to use. Please write it again: ")
             model = raw_input("Did not understand which model to use. Please write it again: ")
+            DATASET = raw_input("Did not understand which dataset to use. Please write it again: ")
 
     n.MODEL = 'core_chain/'+model
-    n.DATASET = 'lcquad' if LCQUAD else 'qald'
+    n.DATASET = DATASET
+
+    # Load relations and the data
+    relations = n.load_relation()
+
+    if DATASET == 'qald':
+
+        id_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_train.json")))
+        id_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_test.json")))
+
+        index = len(id_train) - 1
+        FILENAME = 'combined_qald.json'
+
+        json.dump(id_train + id_test, open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, FILENAME), 'w+'))
+
+    else:
+
+        index = None
+        FILENAME = "id_big_data.json"
+
+    vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise(FILENAME, n.MAX_SEQ_LENGTH,
+                                                                         relations)
 
     if DEBUG: print("About to choose models")
 
     # Start training
     if model == 'birnn_dot':
 
-        # Load relations and the data
-        relations = n.load_relation()
-        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
-                                                                             relations)
         print("About to run BiDirectionalRNN with Dot")
-        bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 100, 1000)
+        bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index)
 
     elif model == 'birnn_dot_sigmoid':
 
-        # Load relations and the data
-        relations = n.load_relation()
-        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
-                                                                             relations)
-
         print("About to run BiDirectionalRNN with Dot and Sigmoid loss")
-        bidirectional_dot_sigmoidloss(gpu, vectors, questions, pos_paths, neg_paths)
+        bidirectional_dot_sigmoidloss(GPU, vectors, questions, pos_paths, neg_paths, index)
 
     elif model == 'birnn_dense':
 
-        # Load relations and the data
-        relations = n.load_relation()
-        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
-                                                                             relations)
-
         print("About to run BiDirectionalRNN with Dense")
-        bidirectional_dense(gpu, vectors, questions, pos_paths, neg_paths, 10, 1000)
+        bidirectional_dense(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index)
 
     elif model == 'parikh':
 
-        # Load relations and the data
-        relations = n.load_relation()
-        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
-                                                                             relations)
-
         print("About to run Parikh et al model")
-        parikh(gpu, vectors, questions, pos_paths, neg_paths)
+        parikh(GPU, vectors, questions, pos_paths, neg_paths, index)
 
     elif model == 'maheshwari':
 
-        # Load relations and the data
-        relations = n.load_relation()
-        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
-                                                                             relations)
-
         print("About to run Maheshwari et al model")
-        maheshwari(gpu, vectors, questions, pos_paths, neg_paths)
+        maheshwari(GPU, vectors, questions, pos_paths, neg_paths, index)
 
     elif model == 'cnn':
 
-        # Load relations and the data
-        relations = n.load_relation()
-        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
-                                                                             relations)
-
         print("About to run cnn et al model")
-        cnn_dot(gpu, vectors, questions, pos_paths, neg_paths)
+        cnn_dot(GPU, vectors, questions, pos_paths, neg_paths, index)
 
     elif model == 'parikh_dot':
 
-        # Load relations and the data
-        relations = n.load_relation()
-        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("id_big_data.json", n.MAX_SEQ_LENGTH,
-                                                                             relations)
-
         print("About to run cnn et al model")
-        parikh_dot(gpu, vectors, questions, pos_paths, neg_paths)
-
-    elif model == 'birnn_dot_qald':
-
-        LCQUAD = False
-        n.DATASET = 'lcquad' if LCQUAD else 'qald'
-
-        # Load relations and the data
-        relations = n.load_relation()
-
-        id_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR, "qald_id_big_data_train.json")))
-        id_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR, "qald_id_big_data_test.json")))
-
-        index = len(id_train) - 1
-
-        json.dump(id_train+id_test, open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR, 'combined_qald.json'), 'w+'))
-
-        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise("combined_qald.json", n.MAX_SEQ_LENGTH,
-                                                                                   relations)
-
-        print("About to run birnn qald et al model")
-        # parikh_dot(gpu, vectors, questions, pos_paths, neg_paths)
-        birnn_dot_qald(gpu, vectors, questions, pos_paths, neg_paths, _index=index, _neg_paths_per_epoch_train=10,
-                               _neg_paths_per_epoch_test=1000)
+        parikh_dot(GPU, vectors, questions, pos_paths, neg_paths, index)
 
     else:
         warnings.warn("Did not choose any model.")
         if DEBUG:
-            print("sysargs are: ", gpu, model)
+            print("sysargs are: ", GPU, model)
 
 

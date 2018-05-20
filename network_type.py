@@ -251,7 +251,7 @@ if __name__ == "__main__":
             break
         except AssertionError:
             gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
-            model = raw_input("Did not understand which Dataset to use. Please write it again: ")
+            DATASET = raw_input("Did not understand which Dataset to use. Please write it again: ")
 
 
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu

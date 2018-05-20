@@ -753,7 +753,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
             questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
 
             neg_paths = []
-            for i in range(0, len(dataset)):
+            for i in range(0, len(pos_paths)):
                 if i in ignored:
                     continue
                 datum = dataset[i]

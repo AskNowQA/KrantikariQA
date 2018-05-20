@@ -60,11 +60,13 @@ NEGATIVE_SAMPLES = 270
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 # Set up directories
-n.DATASET = 'lcquad'
-n.MODEL = 'rdf'
+n.NEGATIVE_SAMPLES = 200
+n.BATCH_SIZE = 300
+
+dbp = db_interface.DBPedia(_verbose=True, caching=False)
 
 
-def create_dataset(file, max_sequence_length):
+def create_dataset():
     """
         Prepares the training data to be **directly** fed into the model.
 
@@ -86,8 +88,8 @@ def create_dataset(file, max_sequence_length):
         #     return vectors, questions, pos_paths, neg_paths
         raise EOFError
 
-    except (EOFError,IOError) as e:
-        with open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':n.DATASET}, file)) as fp:
+    except (EOFError, IOError) as e:
+        with open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':n.DATASET}, FILENAME)) as fp:
             dataset = json.load(fp)
             # dataset = dataset[:10]
 
@@ -114,16 +116,16 @@ def create_dataset(file, max_sequence_length):
 
 
                 # Question
-                question = np.zeros((max_sequence_length), dtype=np.int64)
+                question = np.zeros((n.MAX_SEQ_LENGTH), dtype=np.int64)
                 unpadded_question = np.asarray(datum['uri']['question-id'])
-                question[:min(len(unpadded_question), max_sequence_length)] = unpadded_question
+                question[:min(len(unpadded_question), n.MAX_SEQ_LENGTH)] = unpadded_question
                 questions.append(question)
 
                 # Negative Path
                 unpadded_neg_path = datum["rdf-type-constraints"]
                 unpadded_neg_path = n.remove_positive_path(pos_path, unpadded_neg_path)
                 np.random.shuffle(unpadded_neg_path)
-                unpadded_neg_path = pad_sequences(unpadded_neg_path, maxlen=max_sequence_length, padding='post')
+                unpadded_neg_path = pad_sequences(unpadded_neg_path, maxlen=n.MAX_SEQ_LENGTH, padding='post')
 
                 '''
                     Remove positive path from negative paths.
@@ -146,7 +148,7 @@ def create_dataset(file, max_sequence_length):
             questions = np.asarray(questions, dtype=np.int64)
 
             # questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+            pos_paths = pad_sequences(pos_paths, maxlen=n.MAX_SEQ_LENGTH, padding='post')
             neg_paths = np.asarray(neg_paths)
 
             # '''
@@ -195,21 +197,62 @@ def create_dataset(file, max_sequence_length):
                 for j in range(len(neg_paths[i])):
                     neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
-            with open(os.path.join(n.MODEL_SPECIFIC_DATA_DIR % {'model':'rdf', 'dataset':n.DATASET}, file + ".mapped.npz"), "w+") as data:
-                np.savez(data, questions, pos_paths, neg_paths)
+            # with open(os.path.join(n.MODEL_SPECIFIC_DATA_DIR % {'model':'rdf', 'dataset':n.DATASET}, file + ".mapped.npz"), "w+") as data:
+            #     np.savez(data, questions, pos_paths, neg_paths)
                 # pickle.dump(vocab,idx)
 
             return vectors, questions, pos_paths, neg_paths
 
 
 if __name__ == "__main__":
+
     gpu = sys.argv[1]
-    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
-    max_length = 25
+    DATASET = sys.argv[2].strip()
+
+    # See if the args are valid.
+    while True:
+        try:
+            assert gpu in ['0', '1', '2', '3']
+            assert DATASET in ['lcquad', 'qald']
+            break
+        except AssertionError:
+            gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
+            DATASET = raw_input("Did not understand which Dataset to use. Please write it again: ")
+
     relations = n.load_relation()
-    dbp = db_interface.DBPedia(_verbose=True, caching=False)
-    n.NEGATIVE_SAMPLES = 200
-    n.BATCH_SIZE = 300
-    file = "id_big_data.json" if n.DATASET is 'lcquad' else "qald_id_big_data.json"
-    vectors, questions, pos_paths, neg_paths = create_dataset("id_big_data.json", max_length)
-    n_cc.bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 10, 200)
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+    FILENAME = ['qald_id_big_data_train.json', 'qald_id_big_data_test.json'] if DATASET == 'qald' else 'id_big_data.json'
+    n.MODEL = 'rdf'
+    n.DATASET = DATASET
+
+    # If we're working with QALD, we need to open both files, combine, store and give THAT as the filename to createdata
+    if DATASET == 'qald':
+
+        # id_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME[0])))
+        # id_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME[1])))
+        #
+        # index = len(id_train) - 1
+        # FILENAME = 'combined_qald.json'
+        # json.dump(id_train + id_test,
+        #           open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME), 'w+'))
+
+        FILENAME_train, FILENAME_test = FILENAME[0], FILENAME[1]
+
+        # Compute train data
+        FILENAME = FILENAME_train
+        vectors, questions_train, pos_paths_train, neg_paths_train = create_dataset()
+
+        # Compute test data
+        FILENAME = FILENAME_test
+        _, questions_test, pos_paths_test, neg_paths_test = create_dataset()
+
+        index = len(questions_train) - 1
+        questions = np.concatenate((questions_train, questions_test))
+        pos_paths = np.concatenate((pos_paths_train, pos_paths_test))
+        neg_paths = np.concatenate((neg_paths_train, neg_paths_test))
+
+    else:
+        index = None
+        vectors, questions, pos_paths, neg_paths = create_dataset()
+    n.BATCH_SIZE = 1
+    n_cc.bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 10, 200, _index=index)

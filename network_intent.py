@@ -102,7 +102,7 @@ def create_dataset():
         index = len(dataset_train) - 1
         dataset = dataset_train + dataset_test
 
-    X = np.zeros((len(dataset), MAX_SEQ_LENGTH), dtype=np.int64)
+    X = np.zeros((len(dataset), n.MAX_SEQ_LENGTH), dtype=np.int64)
     Y = np.zeros((len(dataset), 3), dtype=np.int64)
 
     for i in range(len(dataset)):
@@ -112,7 +112,7 @@ def create_dataset():
         x, y = get_x(data), get_y(data)
 
         # Append ze data into their lists
-        X[i, :min(x.shape[0], MAX_SEQ_LENGTH)] = x[:min(x.shape[0], MAX_SEQ_LENGTH)]
+        X[i, :min(x.shape[0], n.MAX_SEQ_LENGTH)] = x[:min(x.shape[0], n.MAX_SEQ_LENGTH)]
         Y[i] = y
 
     # Convert to new (continous IDs)
@@ -227,11 +227,11 @@ def run(vectors, X_train, Y_train, gpu):
         embedding_layer = Embedding(vectors.shape[0],
                                     EMBEDDING_DIM,
                                     weights=[vectors],
-                                    input_length=MAX_SEQ_LENGTH,
+                                    input_length=n.MAX_SEQ_LENGTH,
                                     trainable=False)
 
         # Train
-        model = rnn_model(embedding_layer, X_train, Y_train, MAX_SEQ_LENGTH)
+        model = rnn_model(embedding_layer, X_train, Y_train, n.MAX_SEQ_LENGTH)
 
         return model
 
@@ -249,8 +249,7 @@ if __name__ == "__main__":
             break
         except AssertionError:
             gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
-            model = raw_input("Did not understand which Dataset to use. Please write it again: ")
-
+            DATASET = raw_input("Did not understand which Dataset to use. Please write it again: ")
 
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
     FILENAME = ['qald_id_big_data_train.json', 'qald_id_big_data_test.json'] if DATASET == 'qald' else 'id_big_data.json'

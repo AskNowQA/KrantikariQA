@@ -10,18 +10,16 @@ import sys
 import json
 import warnings
 import numpy as np
-from macpath import norm_error
 
 import keras.backend.tensorflow_backend as K
 from keras.models import Model
-from keras.layers import Input, Concatenate, Lambda
+from keras.layers import Input, Lambda
 
+from utils import prepare_transfer_learning
 import network as n
 
 # Macros
 DEBUG = True
-# DATA_DIR_CORECHAIN = './data/models/core_chain/%(model)s/lcquad/' if LCQUAD else './data/models/core_chain/%(model)s/qald/'
-# RES_DIR_PAIRWISE_CORECHAIN = './data/data/core_chain_pairwise/lcquad/' if LCQUAD else './data/data/core_chain_pairwise/qald/'
 CHECK_VALIDATION_ACC_PERIOD = 10
 
 
@@ -31,7 +29,7 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 
 def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                                  _neg_paths_per_epoch_test = 1000, _index=None):
+                                  _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None):
     """
         Data Time!
     """
@@ -135,6 +133,12 @@ def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths
         model.compile(optimizer=n.OPTIMIZER,
                       loss=n.custom_loss)
 
+        """
+            Check if we intend to transfer weights from any other model.
+        """
+        if _transfer_model_path:
+            model, _ = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
 
@@ -166,7 +170,7 @@ def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths
 
 
 def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000, _index=None):
+                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None) :
     """
         Data Time!
     """
@@ -236,7 +240,7 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
         nr_hidden = 128
 
         embed = n._StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
-        encode = n._simple_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.4)
+        encode = n._simple_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.4, _name="    encoder")
 
         def getScore(ques, path):
             x_ques_embedded = embed(ques)
@@ -267,6 +271,12 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
 
         model.compile(optimizer=n.OPTIMIZER,
                       loss=n.custom_loss)
+
+        """
+            Check if we intend to transfer weights from any other model.
+        """
+        if _transfer_model_path:
+            model, _ = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
@@ -299,7 +309,7 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
 
 
 def two_bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000, _index=None):
+                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None):
     """
         A bi-lstm encodes the input.
         Another bi-lstm encodes the op
@@ -402,6 +412,12 @@ def two_bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_p
         model.compile(optimizer=n.OPTIMIZER,
                       loss=n.custom_loss)
 
+        """
+            Check if we intend to transfer weights from any other model.
+        """
+        if _transfer_model_path:
+            model, _ = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
 
@@ -433,7 +449,7 @@ def two_bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_p
 
 
 def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000, _index=None):
+                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None):
     """
         Data Time!
     """
@@ -539,6 +555,12 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
         model.compile(optimizer=n.OPTIMIZER,
                       loss=n.custom_loss)
 
+        """
+            Check if we intend to transfer weights from any other model.
+        """
+        if _transfer_model_path:
+            model, _ = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
 
@@ -569,7 +591,8 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10, _neg_paths_per_epoch_test = 1000, _index=None):
+def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train=10,
+           _neg_paths_per_epoch_test=1000, _index=None, _transfer_model_path=None):
 
     gpu = _gpu
     max_length = n.MAX_SEQ_LENGTH
@@ -720,6 +743,12 @@ def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_
 
         model.compile(optimizer=n.OPTIMIZER, loss=n.custom_loss)
 
+        """
+            Check if we intend to transfer weights from any other model.
+        """
+        if _transfer_model_path:
+            model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
 
@@ -745,7 +774,8 @@ def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10, _neg_paths_per_epoch_test = 1000, _index=None):
+def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train=10,
+               _neg_paths_per_epoch_test=1000, _index=None, _transfer_model_path=None):
 
     gpu = _gpu
     max_length = n.MAX_SEQ_LENGTH
@@ -861,6 +891,12 @@ def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
 
         model.compile(optimizer=n.OPTIMIZER, loss=n.custom_loss)
 
+        """
+            Check if we intend to transfer weights from any other model.
+        """
+        if _transfer_model_path:
+            model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
 
@@ -886,7 +922,8 @@ def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10, _neg_paths_per_epoch_test = 1000, _index=None):
+def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train=10,
+               _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None):
     # Pull the data up from disk
     gpu = _gpu
     max_length = n.MAX_SEQ_LENGTH
@@ -1046,6 +1083,12 @@ def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
 
         model.compile(optimizer=n.OPTIMIZER, loss=n.custom_loss)
 
+        """
+            Check if we intend to transfer weights from any other model.
+        """
+        if _transfer_model_path:
+            model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
 
@@ -1072,7 +1115,7 @@ def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
 
 
 def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000, _index=None):
+                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None):
     """
         Data Time!
     """
@@ -1176,6 +1219,12 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
         model.compile(optimizer=n.OPTIMIZER,
                       loss=n.custom_loss)
 
+        """
+            Check if we intend to transfer weights from any other model.
+        """
+        if _transfer_model_path:
+            model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
 
@@ -1233,6 +1282,8 @@ if __name__ == "__main__":
     # Load relations and the data
     relations = n.load_relation()
 
+    # @TODO: manage transfer-proper
+
     if DATASET == 'qald':
 
         id_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_train.json")))
@@ -1247,15 +1298,12 @@ if __name__ == "__main__":
         FILENAME, index = "id_big_data.json", None
 
     elif DATASET == 'transfer-a':
-        import prepare_transfer_learning
         FILENAME, index = prepare_transfer_learning.transfer_a()
 
     elif DATASET == 'transfer-b':
-        import prepare_transfer_learning
         FILENAME, index = prepare_transfer_learning.transfer_b()
 
     elif DATASET == 'transfer-c':
-        import prepare_transfer_learning
         FILENAME, index = prepare_transfer_learning.transfer_c()
     else:
         warnings.warn("Code never comes here. ")

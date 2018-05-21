@@ -12,6 +12,7 @@ import pickle
 import sys
 import json
 import math
+import h5py
 import warnings
 import numpy as np
 from sklearn.utils import shuffle
@@ -30,9 +31,11 @@ from keras.regularizers import l2
 from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.regularizers import L1L2
+from keras.models import load_model
 
 # Custom imports
 from utils import embeddings_interface
+from utils import prepare_transfer_learning as transfer_learning
 from utils import prepare_vocab_continous as vocab_master
 
 
@@ -721,6 +724,71 @@ def cross_correlation(x):
     b_fft = tf.fft(tf.complex(b, 0.0))
     ifft = tf.ifft(tf.conj(a_fft) * b_fft)
     return tf.cast(tf.real(ifft), 'float32')
+
+
+def load_pretrained_weights(_new_model, _trained_model_path):
+    """
+        Function used to put in weights of a pretrained in the layers of this new model.
+        Algo:
+            Try to see if we have weights of that previous model.
+            If not, load model, save weights.
+            Then load weights, get its layers' name.
+            Get layer names of this new model.
+            Put in weights of the old to new.
+            Return new.
+
+    :param _new_model: keras model.
+    :param _trained_model_path: str: path of the model (only the dict)
+    :return: keras model
+    """
+
+    try:
+        assert os.path.isfile(os.path.join(_trained_model_path, 'weights.h5'))
+    except (IOError, AssertionError) as e:
+
+        # The weights file doesn't exist yet. Gotta load the model
+        metric = rank_precision_metric(10)
+        old_model = load_model(os.path.join(_trained_model_path, 'model.h5'), {'custom_loss':custom_loss, 'metric':metric})
+
+        # Save weights
+        old_model.save_weights(os.path.join(_trained_model_path, 'weights.h5'), {'custom_loss':custom_loss, 'metric':metric})
+
+    finally:
+        weights = h5py.File(os.path.join(_trained_model_path, 'weights.h5'))
+
+    # ################################
+    # We have the weights in our hands
+    # ################################
+
+    # Prepare the dict of 'name':'layerobj' for the new model
+    # layers_dict = dict([(layer.name, layer) for layer in _new_model.layers])
+    for i in range(len(_new_model)):
+
+        layer = _new_model.layers[i]
+
+        # Try to find if the layer exists in the weights we just loaded
+        try:
+            assert layer.name in weights.keys()
+        except AssertionError:
+            # The layer isn't found.
+            if DEBUG: warnings.warn("Layer %s of the new model didn't match anything in pre-trained model" % str(layer.name))
+            continue
+
+        weights_layer = [weights[layer.name][x] for x in weights[layer.name].attrs['weight_names']]
+
+        _new_model.layers[i].set_weights(weights_layer)
+
+    return _new_model
+
+
+
+
+
+
+
+
+
+
 
 
 def remove_positive_path(positive_path, negative_paths):

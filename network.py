@@ -533,12 +533,13 @@ class _Entailment(object):
 
 
 class _GlobalSumPooling1D(Layer):
-    '''Global sum pooling operation for temporal data.
-    # Input shape
-        3D tensor with shape: `(samples, steps, features)`.
-    # Output shape
-        2D tensor with shape: `(samples, features)`.
-    '''
+    """
+        Global sum pooling operation for temporal data.
+        # Input shape
+            3D tensor with shape: `(samples, steps, features)`.
+        # Output shape
+            2D tensor with shape: `(samples, features)`.
+    """
     def __init__(self, **kwargs):
         super(_GlobalSumPooling1D, self).__init__(**kwargs)
         self.input_spec = [InputSpec(ndim=3)]
@@ -569,12 +570,12 @@ class _BiRNNEncoding(object):
 
 
 class _simple_BiRNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False, _name="encoder"):
         self.model = Sequential()
         reg = L1L2(l1=0.0, l2=0.01)
         self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
                                           dropout_W=dropout,
-                                          dropout_U=dropout, kernel_regularizer=reg),
+                                          dropout_U=dropout, kernel_regularizer=reg, name=_name),
                                      input_shape=(max_length, embedding_dims)))
         # self.model.regularizers = [l2(0.01)]
         #self.model.add(LSTM(units, return_sequences=False,
@@ -623,6 +624,8 @@ class _simple_CNNEncoding(object):
 
     def __call__(self, sentence):
         return self.model(sentence)
+
+
 class _simpleDense(object):
     def __init__(self, l, w):
         self.model = Sequential()

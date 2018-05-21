@@ -226,7 +226,7 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
         """
             Model Time!
         """
-        max_length = train_questions.shape[1]
+        # max_length = train_questions.shape[1]
         # Define input to the models
         x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
         x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
@@ -1207,10 +1207,11 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
 
 
 if __name__ == "__main__":
+
+    # Parse arguments
     GPU = sys.argv[1].strip().lower()
     model = sys.argv[2].strip().lower()
     DATASET = sys.argv[3].strip().lower()
-    os.environ['CUDA_VISIBLE_DEVICES'] = GPU
 
     # See if the args are valid.
     while True:
@@ -1218,13 +1219,14 @@ if __name__ == "__main__":
             assert GPU in ['0', '1', '2', '3']
             assert model in ['birnn_dot', 'parikh', 'birnn_dense', 'maheshwari', 'birnn_dense_sigmoid','cnn',
                              'parikh_dot','birnn_dot_qald', 'two_birnn_dot']
-            assert DATASET in ['lcquad', 'qald']
+            assert DATASET in ['lcquad', 'qald', 'transfer-a', 'transfer-b', 'transfer-c', 'transfer-proper-a']
             break
         except AssertionError:
             GPU = raw_input("Did not understand which gpu to use. Please write it again: ")
             model = raw_input("Did not understand which model to use. Please write it again: ")
             DATASET = raw_input("Did not understand which dataset to use. Please write it again: ")
 
+    os.environ['CUDA_VISIBLE_DEVICES'] = GPU
     n.MODEL = 'core_chain/'+model
     n.DATASET = DATASET
 
@@ -1241,10 +1243,23 @@ if __name__ == "__main__":
 
         json.dump(id_train + id_test, open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, FILENAME), 'w+'))
 
-    else:
+    elif DATASET == 'qald':
+        FILENAME, index = "id_big_data.json", None
 
-        index = None
-        FILENAME = "id_big_data.json"
+    elif DATASET == 'transfer-a':
+        import prepare_transfer_learning
+        FILENAME, index = prepare_transfer_learning.transfer_a()
+
+    elif DATASET == 'transfer-b':
+        import prepare_transfer_learning
+        FILENAME, index = prepare_transfer_learning.transfer_b()
+
+    elif DATASET == 'transfer-c':
+        import prepare_transfer_learning
+        FILENAME, index = prepare_transfer_learning.transfer_c()
+    else:
+        warnings.warn("Code never comes here. ")
+        FILENAME, index = None, None
 
     vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise(FILENAME, n.MAX_SEQ_LENGTH,
                                                                          relations)

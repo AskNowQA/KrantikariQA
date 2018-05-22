@@ -15,12 +15,13 @@ import keras.backend.tensorflow_backend as K
 from keras.models import Model
 from keras.layers import Input, Lambda
 
-from utils import prepare_transfer_learning
+import prepare_transfer_learning
 import network as n
 
 # Macros
 DEBUG = True
 CHECK_VALIDATION_ACC_PERIOD = 10
+LCQUAD_BIRNN_MODEL = 'model_12'
 
 
 # Better warning formatting. Ignore.
@@ -137,7 +138,7 @@ def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths
             Check if we intend to transfer weights from any other model.
         """
         if _transfer_model_path:
-            model, _ = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+            model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
@@ -240,7 +241,7 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
         nr_hidden = 128
 
         embed = n._StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
-        encode = n._simple_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.4, _name="    encoder")
+        encode = n._simple_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.4, _name="encoder")
 
         def getScore(ques, path):
             x_ques_embedded = embed(ques)
@@ -276,7 +277,7 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
             Check if we intend to transfer weights from any other model.
         """
         if _transfer_model_path:
-            model, _ = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+            model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
@@ -382,7 +383,7 @@ def two_bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_p
         nr_hidden = 128
 
         embed = n._StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
-        encode_one = n._double_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.4, True)
+        encode_one = n._double_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.4, True, _name="double_encoder")
         # encode_two = n._BiRNNEncoding(max_length, nr_hidden*2, nr_hidden/2, 0.4)
 
         def getScore(ques, path):
@@ -416,7 +417,7 @@ def two_bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_p
             Check if we intend to transfer weights from any other model.
         """
         if _transfer_model_path:
-            model, _ = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+            model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
@@ -559,7 +560,7 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
             Check if we intend to transfer weights from any other model.
         """
         if _transfer_model_path:
-            model, _ = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
+            model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
         # Prepare training data
         training_input = [train_questions, train_pos_paths, train_neg_paths]
@@ -1261,6 +1262,7 @@ if __name__ == "__main__":
     GPU = sys.argv[1].strip().lower()
     model = sys.argv[2].strip().lower()
     DATASET = sys.argv[3].strip().lower()
+    TRANSFER_MODEL_PATH = None
 
     # See if the args are valid.
     while True:
@@ -1268,7 +1270,7 @@ if __name__ == "__main__":
             assert GPU in ['0', '1', '2', '3']
             assert model in ['birnn_dot', 'parikh', 'birnn_dense', 'maheshwari', 'birnn_dense_sigmoid','cnn',
                              'parikh_dot','birnn_dot_qald', 'two_birnn_dot']
-            assert DATASET in ['lcquad', 'qald', 'transfer-a', 'transfer-b', 'transfer-c', 'transfer-proper-a']
+            assert DATASET in ['lcquad', 'qald', 'transfer-a', 'transfer-b', 'transfer-c', 'transfer-proper-qald']
             break
         except AssertionError:
             GPU = raw_input("Did not understand which gpu to use. Please write it again: ")
@@ -1294,7 +1296,7 @@ if __name__ == "__main__":
 
         json.dump(id_train + id_test, open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, FILENAME), 'w+'))
 
-    elif DATASET == 'qald':
+    elif DATASET == 'lcquad':
         FILENAME, index = "id_big_data.json", None
 
     elif DATASET == 'transfer-a':
@@ -1305,6 +1307,17 @@ if __name__ == "__main__":
 
     elif DATASET == 'transfer-c':
         FILENAME, index = prepare_transfer_learning.transfer_c()
+
+    elif DATASET == 'transfer-proper-qald':
+        id_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_train.json")))
+        id_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_test.json")))
+
+        index = len(id_train) - 1
+        FILENAME = 'combined_qald.json'
+
+        json.dump(id_train + id_test, open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, FILENAME), 'w+'))
+        TRANSFER_MODEL_PATH = os.path.join(n.MODEL_DIR % {'model':n.MODEL, 'dataset':'lcquad'}, LCQUAD_BIRNN_MODEL)
+
     else:
         warnings.warn("Code never comes here. ")
         FILENAME, index = None, None
@@ -1318,42 +1331,42 @@ if __name__ == "__main__":
     if model == 'birnn_dot':
 
         print("About to run BiDirectionalRNN with Dot")
-        bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index)
+        bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
     if model == 'two_birnn_dot':
 
         print("About to run BiDirectionalRNN with Dot")
-        two_bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index)
+        two_bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
     elif model == 'birnn_dot_sigmoid':
 
         print("About to run BiDirectionalRNN with Dot and Sigmoid loss")
-        bidirectional_dot_sigmoidloss(GPU, vectors, questions, pos_paths, neg_paths, index)
+        bidirectional_dot_sigmoidloss(GPU, vectors, questions, pos_paths, neg_paths, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
     elif model == 'birnn_dense':
 
         print("About to run BiDirectionalRNN with Dense")
-        bidirectional_dense(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index)
+        bidirectional_dense(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
     elif model == 'parikh':
 
         print("About to run Parikh et al model")
-        parikh(GPU, vectors, questions, pos_paths, neg_paths, index)
+        parikh(GPU, vectors, questions, pos_paths, neg_paths, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
     elif model == 'maheshwari':
 
         print("About to run Maheshwari et al model")
-        maheshwari(GPU, vectors, questions, pos_paths, neg_paths, index)
+        maheshwari(GPU, vectors, questions, pos_paths, neg_paths, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
     elif model == 'cnn':
 
         print("About to run cnn et al model")
-        cnn_dot(GPU, vectors, questions, pos_paths, neg_paths, index)
+        cnn_dot(GPU, vectors, questions, pos_paths, neg_paths, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
     elif model == 'parikh_dot':
 
         print("About to run cnn et al model")
-        parikh_dot(GPU, vectors, questions, pos_paths, neg_paths, index)
+        parikh_dot(GPU, vectors, questions, pos_paths, neg_paths, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
     else:
         warnings.warn("Did not choose any model.")

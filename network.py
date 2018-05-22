@@ -9,7 +9,6 @@
 from __future__ import absolute_import
 import os
 import pickle
-import sys
 import json
 import math
 import h5py
@@ -23,20 +22,19 @@ from keras.layers.merge import concatenate, dot
 from keras import optimizers, metrics
 from keras.utils import Sequence
 from keras.callbacks import Callback
-from keras.layers import InputSpec, Layer, Input, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed, concatenate, Conv1D, MaxPooling1D, Embedding, Flatten
-from keras.layers import Bidirectional, GRU, LSTM
-from keras.models import Sequential, Model, model_from_json
+from keras.layers import InputSpec, Layer, Dense, merge
+from keras.layers import Lambda, Activation, Dropout, TimeDistributed, Conv1D, MaxPooling1D, Embedding, Flatten
+from keras.layers import Bidirectional, LSTM
+from keras.models import Sequential
 from keras.regularizers import l2
-from keras.layers.normalization import BatchNormalization
-from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
+from keras.layers.pooling import GlobalAveragePooling1D
 from keras.regularizers import L1L2
 from keras.models import load_model
 
 # Custom imports
 from utils import embeddings_interface
-from utils import prepare_transfer_learning as transfer_learning
 from utils import prepare_vocab_continous as vocab_master
+import prepare_transfer_learning as transfer_learning
 
 
 # Some Macros
@@ -574,11 +572,11 @@ class _BiRNNEncoding(object):
 
 class _simple_BiRNNEncoding(object):
     def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False, _name="encoder"):
-        self.model = Sequential()
+        self.model = Sequential(name=_name)
         reg = L1L2(l1=0.0, l2=0.01)
         self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
                                           dropout_W=dropout,
-                                          dropout_U=dropout, kernel_regularizer=reg, name=_name),
+                                          dropout_U=dropout, kernel_regularizer=reg),
                                      input_shape=(max_length, embedding_dims)))
         # self.model.regularizers = [l2(0.01)]
         #self.model.add(LSTM(units, return_sequences=False,
@@ -591,8 +589,8 @@ class _simple_BiRNNEncoding(object):
 
 
 class _double_BiRNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
-        self.model = Sequential()
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False, _name="doubleencoder"):
+        self.model = Sequential(name=_name)
         reg = L1L2(l1=0.0, l2=0.01)
         self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
                                           dropout_W=dropout,
@@ -742,6 +740,8 @@ def load_pretrained_weights(_new_model, _trained_model_path):
     :return: keras model
     """
 
+    if DEBUG: print("Trying to put the values from %s to this new model" % _trained_model_path)
+
     try:
         assert os.path.isfile(os.path.join(_trained_model_path, 'weights.h5'))
     except (IOError, AssertionError) as e:
@@ -778,17 +778,9 @@ def load_pretrained_weights(_new_model, _trained_model_path):
 
         _new_model.layers[i].set_weights(weights_layer)
 
+        if DEBUG: print("Successfully loaded weights onto layer %s" % layer.name)
+
     return _new_model
-
-
-
-
-
-
-
-
-
-
 
 
 def remove_positive_path(positive_path, negative_paths):

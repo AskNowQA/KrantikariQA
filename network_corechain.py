@@ -20,8 +20,8 @@ import network as n
 
 # Macros
 DEBUG = True
-CHECK_VALIDATION_ACC_PERIOD = 10
-LCQUAD_BIRNN_MODEL = 'model_12'
+CHECK_VALIDATION_ACC_PERIOD = 5
+LCQUAD_BIRNN_MODEL = 'model_14'
 
 
 # Better warning formatting. Ignore.
@@ -157,7 +157,7 @@ def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths
                                                verbose=1,
                                                save_best_only=True,
                                                mode='max',
-                                               period=10)
+                                               period=CHECK_VALIDATION_ACC_PERIOD)
 
         model.fit_generator(training_generator,
                             epochs=n.EPOCHS,
@@ -296,7 +296,7 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
                                                verbose=1,
                                                save_best_only=True,
                                                mode='max',
-                                               period=10)
+                                               period=CHECK_VALIDATION_ACC_PERIOD)
 
         model.fit_generator(training_generator,
                             epochs=n.EPOCHS,
@@ -436,7 +436,7 @@ def two_bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_p
                                                verbose=1,
                                                save_best_only=True,
                                                mode='max',
-                                               period=10)
+                                               period=CHECK_VALIDATION_ACC_PERIOD)
 
         model.fit_generator(training_generator,
                             epochs=n.EPOCHS,
@@ -1309,8 +1309,11 @@ if __name__ == "__main__":
         FILENAME, index = prepare_transfer_learning.transfer_c()
 
     elif DATASET == 'transfer-proper-qald':
-        id_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_train.json")))
-        id_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_test.json")))
+        """
+            Load model trained on LCQuAD train; and is now going to be trained on QALD train. 
+        """
+        id_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':'qald'}, "qald_id_big_data_train.json")))
+        id_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':'qald'}, "qald_id_big_data_test.json")))
 
         index = len(id_train) - 1
         FILENAME = 'combined_qald.json'
@@ -1333,7 +1336,7 @@ if __name__ == "__main__":
         print("About to run BiDirectionalRNN with Dot")
         bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
-    if model == 'two_birnn_dot':
+    elif model == 'two_birnn_dot':
 
         print("About to run BiDirectionalRNN with Dot")
         two_bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)

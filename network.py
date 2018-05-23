@@ -576,8 +576,8 @@ class _simple_BiRNNEncoding(object):
         reg = L1L2(l1=0.0, l2=0.01)
         self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
                                           dropout_W=dropout,
-                                          dropout_U=dropout, kernel_regularizer=reg),
-                                     input_shape=(max_length, embedding_dims)))
+                                          dropout_U=dropout, kernel_regularizer=reg, name="encoder_lstm"),
+                                     input_shape=(max_length, embedding_dims), name="encoder_bidirectional"))
         # self.model.regularizers = [l2(0.01)]
         #self.model.add(LSTM(units, return_sequences=False,
         #                                 dropout_W=dropout, dropout_U=dropout))
@@ -742,43 +742,53 @@ def load_pretrained_weights(_new_model, _trained_model_path):
 
     if DEBUG: print("Trying to put the values from %s to this new model" % _trained_model_path)
 
-    try:
-        assert os.path.isfile(os.path.join(_trained_model_path, 'weights.h5'))
-    except (IOError, AssertionError) as e:
+    _new_model.load_weights(os.path.join(_trained_model_path, 'model.h5'), by_name=True)
 
-        # The weights file doesn't exist yet. Gotta load the model
-        metric = rank_precision_metric(10)
-        old_model = load_model(os.path.join(_trained_model_path, 'model.h5'), {'custom_loss':custom_loss, 'metric':metric})
-
-        # Save weights
-        old_model.save_weights(os.path.join(_trained_model_path, 'weights.h5'), {'custom_loss':custom_loss, 'metric':metric})
-
-    finally:
-        weights = h5py.File(os.path.join(_trained_model_path, 'weights.h5'))
-
-    # ################################
-    # We have the weights in our hands
-    # ################################
-
-    # Prepare the dict of 'name':'layerobj' for the new model
-    # layers_dict = dict([(layer.name, layer) for layer in _new_model.layers])
-    for i in range(len(_new_model)):
-
-        layer = _new_model.layers[i]
-
-        # Try to find if the layer exists in the weights we just loaded
-        try:
-            assert layer.name in weights.keys()
-        except AssertionError:
-            # The layer isn't found.
-            if DEBUG: warnings.warn("Layer %s of the new model didn't match anything in pre-trained model" % str(layer.name))
-            continue
-
-        weights_layer = [weights[layer.name][x] for x in weights[layer.name].attrs['weight_names']]
-
-        _new_model.layers[i].set_weights(weights_layer)
-
-        if DEBUG: print("Successfully loaded weights onto layer %s" % layer.name)
+    # layers_config = None
+    #
+    # try:
+    #     assert os.path.isfile(os.path.join(_trained_model_path, 'weights.h5'))
+    # except (IOError, AssertionError) as e:
+    #
+    #     # The weights file doesn't exist yet. Gotta load the model
+    #     metric = rank_precision_metric(10)
+    #     old_model = load_model(os.path.join(_trained_model_path, 'model.h5'), {'custom_loss':custom_loss, 'metric':metric})
+    #     layers_config = json.loads(json.load(open(os.path.join(_trained_model_path, 'model.json'))))['config']['layers']
+    #
+    #     # Save weights
+    #     old_model.save_weights(os.path.join(_trained_model_path, 'weights.h5'), {'custom_loss':custom_loss, 'metric':metric})
+    #
+    # finally:
+    #     weights = h5py.File(os.path.join(_trained_model_path, 'weights.h5'))
+    #
+    # # ################################
+    # # We have the weights in our hands
+    # # ################################
+    #
+    # # Prepare the dict of 'name':'layerobj' for the new model
+    # # layers_dict = dict([(layer.name, layer) for layer in _new_model.layers])
+    # for i in range(len(_new_model.layers)):
+    #
+    #     layer = _new_model.layers[i]
+    #     layer_config = layers_config[i]
+    #
+    #     # Try to find if the layer exists in the weights we just loaded
+    #     try:
+    #         assert layer.name in weights.keys()
+    #     except AssertionError:
+    #         # The layer isn't found.
+    #         if DEBUG:
+    #             warnings.warn("Layer %s of the new model didn't match anything in pre-trained model" % str(layer.name))
+    #             raw_input("Enter to continue")
+    #         continue
+    #
+    #     weights_layer = [weights[layer.name][x] for x in weights[layer.name].attrs['weight_names']]
+    #
+    #     _new_model.layers[i].set_weights(weights_layer)
+    #
+    #     if DEBUG:
+    #         print("Successfully loaded weights onto layer %s" % layer.name)
+    #         raw_input("Enter to continue")
 
     return _new_model
 

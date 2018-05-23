@@ -9,9 +9,9 @@
 from __future__ import absolute_import
 import os
 import pickle
-import sys
 import json
 import math
+import h5py
 import warnings
 import numpy as np
 from sklearn.utils import shuffle
@@ -22,37 +22,44 @@ from keras.layers.merge import concatenate, dot
 from keras import optimizers, metrics
 from keras.utils import Sequence
 from keras.callbacks import Callback
-from keras.layers import InputSpec, Layer, Input, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed, concatenate
-from keras.layers import Bidirectional, GRU, LSTM
-from keras.models import Sequential, Model, model_from_json
+from keras.layers import InputSpec, Layer, Dense, merge
+from keras.layers import Lambda, Activation, Dropout, TimeDistributed, Conv1D, MaxPooling1D, Embedding, Flatten
+from keras.layers import Bidirectional, LSTM
+from keras.models import Sequential
 from keras.regularizers import l2
-from keras.layers.normalization import BatchNormalization
-from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
+from keras.layers.pooling import GlobalAveragePooling1D
+from keras.regularizers import L1L2
+from keras.models import load_model
+from keras.callbacks import ModelCheckpoint
 
 # Custom imports
 from utils import embeddings_interface
+from utils import prepare_vocab_continous as vocab_master
+import prepare_transfer_learning as transfer_learning
 
 
 # Some Macros
 DEBUG = True
+MODEL = 'birnn_dot'
+DATASET = 'lcquad'
 
 # Data locations
-MODEL_DIR = './data/models/core_chain/lcquad/'
-CACHE_DATA_PAIRWISE_DIR = './data/data/core_chain_pairwise/lcquad/'
-CACHE_DATA_POINTWISE_DIR = './data/data/core_chain_pointwise/lcquad/'
-RAW_DATA_DIR = './resources_v8/'
+MODEL_DIR = './data/models/%(model)s/%(dataset)s/'
+MODEL_SPECIFIC_DATA_DIR = './data/data/%(model)s/%(dataset)s/'
+COMMON_DATA_DIR = './data/data/common/'
+DATASET_SPECIFIC_DATA_DIR = './data/data/%(dataset)s/'
 
 # Network Macros
 MAX_SEQ_LENGTH = 25
-EPOCHS = 200
-BATCH_SIZE = 3864800 / 1000        # Around 11 splits for full training dataset
+EPOCHS = 300
+BATCH_SIZE = 880        # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'binary_crossentropy'
 NEGATIVE_SAMPLES = 1000
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 np.random.seed(42)
+
 
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
@@ -140,16 +147,16 @@ def get_smart_save_path(model):
         pass
 
     # Find the current model dirs in the data dir.
-    _, dirs, _ = os.walk(MODEL_DIR).next()
+    _, dirs, _ = os.walk(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}).next()
 
     # If no folder found in there, create a new one.
     if len(dirs) == 0:
-        os.mkdir(os.path.join(MODEL_DIR, "model_00"))
+        os.mkdir(os.path.join(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}, "model_00"))
         dirs = ["model_00"]
 
     # Find the latest folder in here
     dir_nums = sorted([ x[-2:] for x in dirs])
-    l_dir = os.path.join(MODEL_DIR, "model_" + dir_nums[-1])
+    l_dir = os.path.join(MODEL_DIR  % {'model':MODEL, 'dataset':DATASET}, "model_" + dir_nums[-1])
 
     # Check if the latest dir has the same model as current
     try:
@@ -161,9 +168,10 @@ def get_smart_save_path(model):
             else:
                 new_num = str(new_num)
 
-            l_dir = os.path.join(MODEL_DIR, "model_" + new_num)
+            l_dir = os.path.join(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}, "model_" + new_num)
             os.mkdir(l_dir)
     except:
+        # @TODO: Check which errors to catch.
         pass
     finally:
         return desc, l_dir
@@ -201,8 +209,16 @@ def custom_loss(y_true, y_pred):
     return K.sum(diff)
 
 
-def load_relation(relation_file):
-    relations = pickle.load(open(relation_file))
+def load_relation():
+    """
+        Function used once to load the relations dictionary
+        (which keeps the log of IDified relations, their uri and other things.)
+
+    :param relation_file: str
+    :return: dict
+    """
+
+    relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle')))
     inverse_relations = {}
     for key in relations:
         value = relations[key]
@@ -224,6 +240,21 @@ def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_pa
     all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
 
     outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)], batch_size=batch_size)[:,0]
+    outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch+1))
+
+    precision = float(len(np.where(np.argmax(outputs, axis=1) == 0)[0]))/outputs.shape[0]
+    return precision
+
+
+def rank_precision_pointwise(model, test_questions, test_paths, test_labels, neg_paths_per_epoch=100, batch_size=1000):
+    max_length = test_questions.shape[-1]
+
+    # Don't have to change questions' shape.
+
+
+    outputs = model.predict([test_questions, test_paths, test_labels], batch_size=batch_size)[:,0]
+    print outputs
+    print outputs.shape
     outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch+1))
 
     precision = float(len(np.where(np.argmax(outputs, axis=1) == 0)[0]))/outputs.shape[0]
@@ -301,7 +332,7 @@ class CustomModelCheckpoint(Callback):
             self.epochs_since_last_save = 0
             filepath = self.filepath.format(epoch=epoch + 1, **logs)
             if self.save_best_only:
-                current = rank_precision(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 1000, 10000)
+                current = rank_precision_pointwise(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 1000, 10000)
                 print('\Validation recall@1: {}\n'.format(current))
                 if current is None:
                     warnings.warn('Can save best model only with %s available, '
@@ -342,8 +373,7 @@ class PointWiseTrainingDataGenerator(Sequence):
         self.paths = paths
         self.labels = labels
 
-        self.questions_shuffled, self.paths_shuffled, self.labels_shuffled = \
-            shuffle(self.questions, self.paths, self.labels)
+        self.questions_shuffled, self.paths_shuffled, self.labels_shuffled = self.questions, self.paths, self.labels
 
         self.batch_size = batch_size
 
@@ -351,7 +381,10 @@ class PointWiseTrainingDataGenerator(Sequence):
         return math.ceil(len(self.questions) / self.batch_size)
 
     def __getitem__(self, idx):
-        index = lambda x: np.concatenate(x[0], x[np.random.choice(np.arange(idx * self.batch_size+1,(idx + 1) * self.batch_size)), self.neg_paths_per_epoch]) # @TODO: fix this.
+        index = lambda x: np.concatenate((np.asarray([x[self.batch_size*idx]]), x[np.random.choice(np.arange((idx * self.batch_size)+1,(idx + 1) * self.batch_size), self.neg_paths_per_epoch)])) # @TODO: fix this.
+        # index = lambda x: np.concatenate(x[0], x[np.random.choice(np.arange(idx * self.batch_size+1,(idx + 1) * self.batch_size)), self.neg_paths_per_epoch]) # @TODO: fix this.
+        # index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
+
         batch_questions = index(self.questions_shuffled)
         batch_paths = index(self.paths_shuffled)
         batch_labels = index(self.labels_shuffled)
@@ -362,6 +395,7 @@ class PointWiseTrainingDataGenerator(Sequence):
 
         self.questions_shuffled, self.paths_shuffled, self.labels_shuffled = \
             shuffle(self.questions, self.paths, self.labels)
+
 
 class TrainingDataGenerator(Sequence):
 
@@ -514,20 +548,20 @@ class _Comparison(object):
         self.words = words
         self.model = Sequential()
         self.model.add(Dropout(dropout, input_shape=(nr_hidden*2,)))
-        self.model.add(Dense(nr_hidden, name='compare1', init='he_normal', W_regularizer=l2(L2)))
+        self.model.add(Dense(nr_hidden, name='compare1', init='he_normal', W_regularizer=l2(L2),activation='relu'))
         self.model.add(Activation('relu'))
         self.model.add(Dropout(dropout))
-        self.model.add(Dense(nr_hidden, name='compare2', W_regularizer=l2(L2), init='he_normal'))
+        self.model.add(Dense(nr_hidden, name='compare2', W_regularizer=l2(L2), init='he_normal',activation='relu'))
         self.model.add(Activation('relu'))
         self.model = TimeDistributed(self.model)
 
     def __call__(self, sent, align, **kwargs):
         result = self.model(merge([sent, align], mode='concat')) # Shape: (i, n)
         avged = GlobalAveragePooling1D()(result)
-        maxed = GlobalMaxPooling1D()(result)
-        merged = merge([avged, maxed])
-        result = BatchNormalization()(merged)
-        return result
+        # maxed = GlobalMaxPooling1D()(result)
+        # merged = merge([avged, maxed])
+        # result = BatchNormalization()(merged)
+        return avged
 
 
 class _Entailment(object):
@@ -535,11 +569,11 @@ class _Entailment(object):
         self.model = Sequential()
         self.model.add(Dropout(dropout, input_shape=(nr_hidden*2,)))
         self.model.add(Dense(nr_hidden, name='entail1',
-            init='he_normal', W_regularizer=l2(L2)))
+            init='he_normal', W_regularizer=l2(L2),activation='relu'))
         self.model.add(Activation('relu'))
         # self.model.add(Dropout(dropout))
         self.model.add(Dense(nr_out, name='entail_out',
-            init='he_normal', W_regularizer=l2(L2)))
+            init='he_normal', W_regularizer=l2(L2),activation='relu'))
         # self.model.add(Activation('relu'))
         # self.model.add(Dense(nr_out, name='entail_out', activation='softmax',
         #                 W_regularizer=l2(L2), init='zero'))
@@ -550,12 +584,13 @@ class _Entailment(object):
 
 
 class _GlobalSumPooling1D(Layer):
-    '''Global sum pooling operation for temporal data.
-    # Input shape
-        3D tensor with shape: `(samples, steps, features)`.
-    # Output shape
-        2D tensor with shape: `(samples, features)`.
-    '''
+    """
+        Global sum pooling operation for temporal data.
+        # Input shape
+            3D tensor with shape: `(samples, steps, features)`.
+        # Output shape
+            2D tensor with shape: `(samples, features)`.
+    """
     def __init__(self, **kwargs):
         super(_GlobalSumPooling1D, self).__init__(**kwargs)
         self.input_spec = [InputSpec(ndim=3)]
@@ -586,12 +621,53 @@ class _BiRNNEncoding(object):
 
 
 class _simple_BiRNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
-        self.model = Sequential()
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False, _name="encoder"):
+        self.model = Sequential(name=_name)
+        reg = L1L2(l1=0.0, l2=0.01)
         self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
                                           dropout_W=dropout,
-                                          dropout_U=dropout),
+                                          dropout_U=dropout, kernel_regularizer=reg, name="encoder_lstm"),
+                                     input_shape=(max_length, embedding_dims), name="encoder_bidirectional"))
+        # self.model.regularizers = [l2(0.01)]
+        #self.model.add(LSTM(units, return_sequences=False,
+        #                                 dropout_W=dropout, dropout_U=dropout))
+        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
+        # self.model.add(TimeDistributed(Dropout(0.2)))
+
+    def __call__(self, sentence):
+        return self.model(sentence)
+
+
+class _double_BiRNNEncoding(object):
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False, _name="doubleencoder"):
+        self.model = Sequential(name=_name)
+        reg = L1L2(l1=0.0, l2=0.01)
+        self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
+                                          dropout_W=dropout,
+                                          dropout_U=dropout, kernel_regularizer=reg),
                                      input_shape=(max_length, embedding_dims)))
+        self.model.add(Bidirectional(LSTM(units,dropout_W=dropout,
+                                          dropout_U=dropout, kernel_regularizer=reg)))
+        # self.model.regularizers = [l2(0.01)]
+        #self.model.add(LSTM(units, return_sequences=False,
+        #                                 dropout_W=dropout, dropout_U=dropout))
+        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
+        # self.model.add(TimeDistributed(Dropout(0.2)))
+
+    def __call__(self, sentence):
+        return self.model(sentence)
+
+
+class _simple_CNNEncoding(object):
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
+        self.model = Sequential()
+        self.model.add(Conv1D(units,5,
+                                     input_shape=(max_length, embedding_dims)))
+        self.model.add(MaxPooling1D(2))
+        self.model.add(Conv1D(units, 5))
+        self.model.add(MaxPooling1D(2))
+        self.model.add(Flatten())
+        self.model.add(Dense(128,activation='relu'))
         #self.model.add(LSTM(units, return_sequences=False,
         #                                 dropout_W=dropout, dropout_U=dropout))
         # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
@@ -604,15 +680,28 @@ class _simple_BiRNNEncoding(object):
 class _simpleDense(object):
     def __init__(self, l, w):
         self.model = Sequential()
-        self.model.add(Dense(w/2, input_shape=(w*2,)))
-        self.model.add(Dense(1))
+        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.01),activation='relu'))
 
-    def __call__(self, sentence_1, sentence_2):
-        # concatenated_vector = concatenate([sentence_1, sentence_2], axis=-1)
-        merged_vector = concatenate([sentence_1, sentence_2])
-        # print(K.shape(concatenated_vector))
-        # raw_input("Check shape of concatenated vector.")
-        return self.model(merged_vector)
+    def __call__(self, sentence_1):
+        return self.model(sentence_1)
+
+
+class _simpleTimeDistributedDense(object):
+    def __init__(self, l, w):
+        self.model = Sequential()
+        self.model.add(TimeDistributed(Dense(w/2,kernel_regularizer= l2(0.1)), input_shape=(w*2,)))
+
+    def __call__(self, sentence_1):
+        return self.model(sentence_1)
+
+
+class _parikhDense(object):
+    def __init__(self, l, w):
+        self.model = Sequential()
+        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.1)))
+
+    def __call__(self, sentence_1):
+        return self.model(sentence_1)
 
 
 class _StaticEmbedding(object):
@@ -685,6 +774,75 @@ def cross_correlation(x):
     return tf.cast(tf.real(ifft), 'float32')
 
 
+def load_pretrained_weights(_new_model, _trained_model_path):
+    """
+        Function used to put in weights of a pretrained in the layers of this new model.
+        Algo:
+            Try to see if we have weights of that previous model.
+            If not, load model, save weights.
+            Then load weights, get its layers' name.
+            Get layer names of this new model.
+            Put in weights of the old to new.
+            Return new.
+
+    :param _new_model: keras model.
+    :param _trained_model_path: str: path of the model (only the dict)
+    :return: keras model
+    """
+
+    if DEBUG: print("Trying to put the values from %s to this new model" % _trained_model_path)
+
+    _new_model.load_weights(os.path.join(_trained_model_path, 'model.h5'), by_name=True)
+
+    # layers_config = None
+    #
+    # try:
+    #     assert os.path.isfile(os.path.join(_trained_model_path, 'weights.h5'))
+    # except (IOError, AssertionError) as e:
+    #
+    #     # The weights file doesn't exist yet. Gotta load the model
+    #     metric = rank_precision_metric(10)
+    #     old_model = load_model(os.path.join(_trained_model_path, 'model.h5'), {'custom_loss':custom_loss, 'metric':metric})
+    #     layers_config = json.loads(json.load(open(os.path.join(_trained_model_path, 'model.json'))))['config']['layers']
+    #
+    #     # Save weights
+    #     old_model.save_weights(os.path.join(_trained_model_path, 'weights.h5'), {'custom_loss':custom_loss, 'metric':metric})
+    #
+    # finally:
+    #     weights = h5py.File(os.path.join(_trained_model_path, 'weights.h5'))
+    #
+    # # ################################
+    # # We have the weights in our hands
+    # # ################################
+    #
+    # # Prepare the dict of 'name':'layerobj' for the new model
+    # # layers_dict = dict([(layer.name, layer) for layer in _new_model.layers])
+    # for i in range(len(_new_model.layers)):
+    #
+    #     layer = _new_model.layers[i]
+    #     layer_config = layers_config[i]
+    #
+    #     # Try to find if the layer exists in the weights we just loacded
+    #     try:
+    #         assert layer.name in weights.keys()
+    #     except AssertionError:
+    #         # The layer isn't found.
+    #         if DEBUG:
+    #             warnings.warn("Layer %s of the new model didn't match anything in pre-trained model" % str(layer.name))
+    #             raw_input("Enter to continue")
+    #         continue
+    #
+    #     weights_layer = [weights[layer.name][x] for x in weights[layer.name].attrs['weight_names']]
+    #
+    #     _new_model.layers[i].set_weights(weights_layer)
+    #
+    #     if DEBUG:
+    #         print("Successfully loaded weights onto layer %s" % layer.name)
+    #         raw_input("Enter to continue")
+
+    return _new_model
+
+
 def remove_positive_path(positive_path, negative_paths):
     counter = 0
     new_negative_paths = []
@@ -709,30 +867,39 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
+        with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pairwise'}, file + ".mapped.npz")) as data:
             dataset = np.load(data)
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab = pickle.load(idx)
-            vectors = glove_embeddings[vocab.keys()]
+            vocab, vectors = vocab_master.load()
+            # vectors = glove_embeddings[sorted(vocab.keys())]
             return vectors, questions, pos_paths, neg_paths
     except (EOFError,IOError) as e:
-        with open(os.path.join(RAW_DATA_DIR, file)) as fp:
+        with open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, file)) as fp:
             dataset = json.load(fp)
             # dataset = dataset[:10]
-            questions = [i['uri']['question-id'] for i in dataset]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+
+            ignored = []
+
             pos_paths = []
             for i in dataset:
                 path_id = i['parsed-data']['path_id']
                 positive_path = []
-                for p in path_id:
-                    positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                    positive_path += relations[int(p[1:])][3].tolist()
+                try:
+                    for p in path_id:
+                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
+                        positive_path += relations[int(p[1:])][3].tolist()
+                except (TypeError, ValueError) as e:
+                    ignored.append(i)
+                    continue
                 pos_paths.append(positive_path)
 
+            questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
+            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
 
             neg_paths = []
-            for i in range(0,len(dataset)):
+            for i in range(0, len(pos_paths)):
+                if i in ignored:
+                    continue
                 datum = dataset[i]
                 negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
                 np.random.shuffle(negative_paths_id)
@@ -762,24 +929,28 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
                 neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
             neg_paths = np.asarray(neg_paths)
             pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-            all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
 
-            # ###################
-            # Map to new ID space
-            # ###################
+            # # Map to new ID space.
+            # try:
+            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, ".vocab.pickle")))
+            #     vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npz" )))
+            # except (IOError, EOFError) as e:
+            #     if DEBUG:
+            #         warnings.warn("Did not find the vocabulary.")
+            vocab, vectors = vocab_master.load()
 
-            uniques = np.unique(all)
-            try:
-                vocab = pickle.load(open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")))
-            except (IOError, EOFError) as e:
-                if DEBUG:
-                    warnings.warn("Did not find the vocabulary.")
-                vocab = {}
-                # Create Vocabulary
-                for i in range(len(uniques)):
-                    vocab[uniques[i]] = i
 
-            # vocab = {}
+            # all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
+            # # uniques = np.unique(all)
+            # try:
+            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, file + ".vocab.pickle")))
+            # except (IOError, EOFError) as e:
+            #     if DEBUG:
+            #         warnings.warn("Did not find the vocabulary.")
+            #     vocab = {}
+            #     # Create Vocabulary
+            #     for i in range(len(uniques)):
+            #         vocab[uniques[i]] = i
 
             # Map everything
             for i in range(len(questions)):
@@ -789,12 +960,8 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
                 for j in range(len(neg_paths[i])):
                     neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
-            # Create slimmer, better, faster, vectors file.
-            vectors = glove_embeddings[uniques]
-
-            with open(os.path.join(CACHE_DATA_PAIRWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
+            with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pairwise'} , file + ".mapped.npz"), "w+") as data:
                 np.savez(data, questions, pos_paths, neg_paths)
-                pickle.dump(vocab,idx)
 
             return vectors, questions, pos_paths, neg_paths
 
@@ -811,27 +978,34 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(CACHE_DATA_POINTWISE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")) as idx:
+        with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pointwise'}, file + ".mapped.npz")) as data:
             dataset = np.load(data)
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab = pickle.load(idx)
-            vectors = glove_embeddings[vocab.keys()]
+            vocab, vectors = vocab_master.load()
+            # vectors = glove_embeddings[vocab.keys()]
             return vectors, questions, pos_paths, neg_paths
-    except (EOFError, IOError) as e:
-        with open(os.path.join(RAW_DATA_DIR, file)) as fp:
+    except (EOFError,IOError) as e:
+        with open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, file)) as fp:
             dataset = json.load(fp)
             # dataset = dataset[:10]
-            questions = [i['uri']['question-id'] for i in dataset]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+
+            ignored = []
+
             pos_paths = []
             for i in dataset:
                 path_id = i['parsed-data']['path_id']
                 positive_path = []
-                for p in path_id:
-                    positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                    positive_path += relations[int(p[1:])][3].tolist()
+                try:
+                    for p in path_id:
+                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
+                        positive_path += relations[int(p[1:])][3].tolist()
+                except (TypeError, ValueError) as e:
+                    ignored.append(i)
+                    continue
                 pos_paths.append(positive_path)
 
+            questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
+            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
 
             neg_paths = []
             for i in range(0,len(dataset)):
@@ -864,22 +1038,32 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
                 neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
             neg_paths = np.asarray(neg_paths)
             pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-            all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
 
-            # ###################
-            # Map to new ID space
-            # ###################
+            # Map to new ID space.
+            # try:
+            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, ".vocab.pickle")))
+            #     vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npz" )))
+            # except (IOError, EOFError) as e:
+            #     if DEBUG:
+            #         warnings.warn("Did not find the vocabulary.")
+            vocab, vectors = vocab_master.load()
 
-            uniques = np.unique(all)
-            try:
-                vocab = pickle.load(open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle")))
-            except (IOError, EOFError) as e:
-                if DEBUG:
-                    warnings.warn("Did not find the vocabulary.")
-                vocab = {}
-                # Create Vocabulary
-                for i in range(len(uniques)):
-                    vocab[uniques[i]] = i
+            # all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
+            #
+            # # ###################
+            # # Map to new ID space
+            # # ###################
+            #
+            # uniques = np.unique(all)
+            # try:
+            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, file + ".vocab.pickle")))
+            # except (IOError, EOFError) as e:
+            #     if DEBUG:
+            #         warnings.warn("Did not find the vocabulary.")
+            #     vocab = {}
+            #     # Create Vocabulary
+            #     for i in range(len(uniques)):
+            #         vocab[uniques[i]] = i
 
             # vocab = {}
 
@@ -892,7 +1076,7 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
                     neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
             # Create slimmer, better, faster, vectors file.
-            vectors = glove_embeddings[uniques]
+            # vectors = glove_embeddings[uniques]
 
             # Repeat questions (to match the flattened paths)
             q = np.zeros((questions.shape[0] * 1000, questions.shape[1]))
@@ -900,7 +1084,6 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
 
             # Put in a positive path randomly somewhere in the thing.
             for i in range(neg_paths.shape[0]):
-                # j = np.random.randint(0, neg_paths[i].shape[0])
                 j = 0
                 neg_paths[i][j] = pos_paths[i]
                 labels[i][j] = 1
@@ -913,10 +1096,8 @@ def create_dataset_pointwise(file, max_sequence_length, relations):
             labels = labels.reshape((labels.shape[0]*labels.shape[1]))
             paths = neg_paths.reshape((neg_paths.shape[0] * neg_paths.shape[1], neg_paths.shape[2]))
 
-
-            with open(os.path.join(CACHE_DATA_POINTWISE_DIR, file + ".mapped.npz"), "w+") as data, open(os.path.join(RAW_DATA_DIR, file + ".vocab.pickle"), "w+") as idx:
+            with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pointwise'}, file + ".mapped.npz"), "w+") as data:
                 np.savez(data, questions, paths, labels)
-                pickle.dump(vocab, idx)
 
             return vectors, questions, paths, labels
 

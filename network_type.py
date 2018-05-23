@@ -15,6 +15,7 @@ from keras.models import Sequential, Model, model_from_json
 import network as n
 from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
+from utils import prepare_vocab_continous as vocab_master
 
 # Todos
 # @TODO: The model doesn't take the embedding vectors as input.
@@ -25,10 +26,11 @@ np.random.seed(42)
 
 # Some Macros
 DEBUG = True
-LCQUAD = True
 MAX_SEQ_LENGTH = 25
-RAW_DATASET_LOC = os.path.join(n.RAW_DATA_DIR, 'id_big_data.json')
-DATA_DIR = './data/models/type_existence/lcquad/' if LCQUAD else './data/models/type_existence/qald/'
+
+# RAW_DATASET_LOC = os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, 'id_big_data.json')
+# DATA_DIR = './data/models/type_existence/lcquad/' if LCQUAD else './data/models/type_existence/qald/'
+# DATA_DIR = os.path.join(n.MODEL_DIR % {'model':'type_existence', 'dataset':DATASET})
 
 # Model Macros
 EPOCHS = 300
@@ -61,8 +63,7 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 
 def get_x(_datum):
-    return np.asarray(embeddings_interface.vocabularize(nlutils.tokenize(_datum['parsed-data']['corrected_question'])),
-                      dtype=np.int64)
+    return np.asarray(_datum['uri']['question-id'])
 
 
 def get_y(_datum):
@@ -87,10 +88,20 @@ def create_dataset():
         Open file
         Call getX, getY on every datapoint
 
+        If we pull qald data, we have to:
+            1. Pull data from two different files, then remember the length of either one and make a split from the len
+
     :return: two lists of dataset (train+test)
     """
+    if DATASET == 'lcquad':
+        dataset = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME)))
+        index = None
+    else:
+        dataset_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME[0])))
+        dataset_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME[1])))
 
-    dataset = json.load(open(RAW_DATASET_LOC))
+        index = len(dataset_train) - 1
+        dataset = dataset_train + dataset_test
 
     X = np.zeros((len(dataset), MAX_SEQ_LENGTH), dtype=np.int64)
     Y = np.zeros((len(dataset), 3), dtype=np.int64)
@@ -115,8 +126,12 @@ def create_dataset():
     Y = Y[s]
 
     # Split
-    train_X, test_X = X[:int(X.shape[0]*0.8)], X[int(X.shape[0]*0.8):]
-    train_Y, test_Y = Y[:int(Y.shape[0]*0.8)], Y[int(Y.shape[0]*0.8):]
+    if DATASET == 'lcquad':
+        train_X, test_X = X[:int(X.shape[0]*0.8)], X[int(X.shape[0]*0.8):]
+        train_Y, test_Y = Y[:int(Y.shape[0]*0.8)], Y[int(Y.shape[0]*0.8):]
+    else:
+        train_X, test_X = X[:index], X[index:]
+        train_Y, test_Y = Y[:index], Y[index:]
 
     # # Save
     # np.save(open(os.path.join(MODEL_DIR, 'trainX.npy'), 'w+'), train_X)
@@ -134,33 +149,20 @@ def convert_new_ids(X, Y):
     :param Y: numpy mat n, 3
     :return: reduced embedding mat, X (converted), Y
     """
-    global vocab
+    global vocab, vectors
 
     # Collect the embedding matrix.
-    glove_embeddings = get_glove_embeddings()
+    # glove_embeddings = get_glove_embeddings()
 
     # See if we've already loaded the new vocab.
-    if not vocab:
-        try:
-            vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
-        except (IOError, EOFError) as e:
-            if DEBUG:
-                warnings.warn("Did not find the vocabulary.")
-            vocab = {}
-
-    # Collect uniques from X
-    uniques = np.unique(X)
-
-    # Update vocab in case of unseen questions
-    index = len(vocab)
-
-    for key in uniques:
-        try:
-            temp = vocab[key]
-        except KeyError:
-            # if key not in vocab.keys():
-            vocab[key] = index
-            index += 1
+    if not vocab or not vectors:
+        # try:
+        #     vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
+        # except (IOError, EOFError) as e:
+        #     if DEBUG:
+        #         warnings.warn("Did not find the vocabulary.")
+        #     vocab = {}
+        vocab, vectors = vocab_master.load()
 
     # Map X
     for i in range(X.shape[0]):
@@ -168,18 +170,15 @@ def convert_new_ids(X, Y):
 
             X[i][j] = vocab[X[i][j]]
 
-    # Reduce Embedding Matrix
-    vectors = glove_embeddings[uniques]
-
     # Return stuff
     return vectors, X, Y
 
 
-def get_glove_embeddings():
-    from utils.embeddings_interface import __check_prepared__
-    __check_prepared__('glove')
-    from utils.embeddings_interface import glove_embeddings
-    return glove_embeddings
+# def get_glove_embeddings():
+#     from utils.embeddings_interface import __check_prepared__
+#     __check_prepared__('glove')
+#     from utils.embeddings_interface import glove_embeddings
+#     return glove_embeddings
 
 
 def rnn_model(embedding_layer, X_train, Y_train, max_seq_length):
@@ -242,7 +241,24 @@ def run(vectors, X_train, Y_train, gpu):
 if __name__ == "__main__":
 
     gpu = sys.argv[1]
+    DATASET = sys.argv[2].strip()
+
+    # See if the args are valid.
+    while True:
+        try:
+            assert gpu in ['0', '1', '2', '3']
+            assert DATASET in ['lcquad', 'qald']
+            break
+        except AssertionError:
+            gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
+            DATASET = raw_input("Did not understand which Dataset to use. Please write it again: ")
+
+
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+
+    FILENAME = ['qald_id_big_data_train.json','qald_id_big_data_test.json'] if DATASET == 'qald' else 'id_big_data.json'
+    n.MODEL = 'type_existence'
+    n.DATASET = DATASET
 
     # n.NEGATIVE_SAMPLES = NEGATIVE_SAMPLES
     # n.BATCH_SIZE = BATCH_SIZE
@@ -262,5 +278,4 @@ if __name__ == "__main__":
     print("rnn model results are ", result/float(len(Y_test_cap)))
 
     # Time to save model.
-    n.MODEL_DIR = DATA_DIR
     n.smart_save_model(model)

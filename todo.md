@@ -13,3 +13,5 @@
 7. TEST THE NETWORK'S REFACTORED CODE!
 
 8. Check why isn't the data getting cached for birnn_dot model
+
+! one file to prepare vocab from all the stuff. 

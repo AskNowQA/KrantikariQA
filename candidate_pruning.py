@@ -14,6 +14,7 @@ import json
 import math
 import pickle
 import warnings
+import traceback
 import numpy as np
 import pandas as pd
 from progressbar import ProgressBar
@@ -43,23 +44,24 @@ EPOCHS = 300
 BATCH_SIZE = 880 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 NEGATIVE_SAMPLES = 1000
+CANDIDATES_SPACE = 1
 LOSS = 'categorical_crossentropy'
 OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 # Model Directories
-DATASET = 'lcquad'
+DATASET = 'qald'
 CORECHAIN_MODEL_NAME = 'birnn_dot'
 ID_BIG_DATA_FILENAME = 'id_big_data.json' if DATASET is 'lcquad' else 'qald_id_big_data.json'
-CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_11/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data':DATASET}
-RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_01/model.h5' % {'data':DATASET}
-RDFEXISTENCE_MODEL_DIR = './data/models/type_existence/%(data)s/model_01/model.h5' % {'data':DATASET}
-INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_01/model.h5' % {'data':DATASET}
+CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_00/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data':DATASET}
+RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_00/model.h5' % {'data':DATASET}
+RDFEXISTENCE_MODEL_DIR = './data/models/type_existence/%(data)s/model_00/model.h5' % {'data':DATASET}
+INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_02/model.h5' % {'data':'lcquad'}
 
 RELATIONS_LOC = os.path.join(n.COMMON_DATA_DIR, 'relations.pickle')
 RDF_TYPE_LOOKUP_LOC = 'data/data/common/rdf_type_lookup.json'
 
 # Configure at every run!
-GPU = '1'
+GPU = '2'
 os.environ['CUDA_VISIBLE_DEVICES'] = GPU
 
 # Set the seed to clamp the stochastic nature.
@@ -80,35 +82,46 @@ for keys in vocab:
 """
 sparql_1hop_template = {
     "-": '%(ask)s %(count)s WHERE { { ?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s> } UNION '
-                                 + '{ ?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s> } . %(rdf)s }',
+                                 + '{ ?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s> } UNION '
+                                 + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> }. %(rdf)s }',
     "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri } UNION '
-                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri } . %(rdf)s }',
+                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri } UNION'
+                                 + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> } . %(rdf)s }',
     "-c": '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . %(rdf)s }',
     "+c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . %(rdf)s }',
 }
 sparql_boolean_template = {
     "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> <%(te2)s> } UNION '
-                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } . %(rdf)s }'
+                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } UNION '
+                                 + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> } . %(rdf)s }'
     # "": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> <%(te2)s> } UNION '
     #                              + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } . %(rdf)s }',
 }
 sparql_2hop_1ent_template = {
     "++": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
-                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} . '
+                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} UNION '
+                                  + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?x} . '
                                   + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION'
-                                  + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} . %(rdf)s }',
+                                  + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} UNION'
+                                  + '{?x <http://purl.org/dc/terms/%(r2)s> ?uri} . %(rdf)s }',
     "-+": '%(ask)s %(count)s WHERE { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} .'
+                                  + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION '
+                                  + '{?x <http://purl.org/dc/terms/%(r1)s> <%(te1)s>} .'
                                   + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
-                                  + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} . %(rdf)s }',
+                                  + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} UNION '
+                                  + '{?x <http://purl.org/dc/terms/%(r2)s> ?uri} . %(rdf)s }',
     "--": '%(ask)s %(count)s WHERE { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} .'
+                                  + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION '
+                                  + '{?x <http://purl.org/dc/terms/%(r1)s> <%(te1)s>} .'
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} . %(rdf)s }',
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} UNION '
+                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> ?x} . %(rdf)s }',
     "+-": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
-                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} .'
+                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} UNION '
+                                  + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?x} .'
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} . %(rdf)s }',
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} UNION '
+                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> ?x} . %(rdf)s }',
     "++c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?x . ?x <%(r2)s> ?uri . %(rdf)s }',
     "-+c": '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?x <%(r2)s> ?uri . %(rdf)s }',
     "--c": '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?uri <%(r2)s> ?x . %(rdf)s }',
@@ -117,21 +130,29 @@ sparql_2hop_1ent_template = {
 
 sparql_2hop_2ent_template = {
     "+-": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri} UNION '
-                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} . '
+                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} UNION '
+                                  + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?uri} . '
                                   + '{<%(te2)s> <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
-                                  + '{<%(te2)s> <http://dbpedia.org/ontology/%(r2)s> ?uri} . %(rdf)s }',
+                                  + '{<%(te2)s> <http://dbpedia.org/ontology/%(r2)s> ?uri} UNION'
+                                  + '{<%(te2)s> <http://purl.org/dc/terms/%(r2)s> ?uri} . %(rdf)s }',
     "--": '%(ask)s %(count)s WHERE { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} . '
+                                  + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION '
+                                  + '{?uri <http://purl.org/dc/terms/s> <%(te1)s>} . '
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} . %(rdf)s }',
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} UNION '
+                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> <%(te2)s>} . %(rdf)s }',
     "-+": '%(ask)s %(count)s WHERE { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} .'
+                                  + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION'
+                                  + '{?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s>} .'
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} . %(rdf)s }',
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} UNION'
+                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> <%(te2)s>} . %(rdf)s }',
     "++": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri} UNION '
-                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} .'
+                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} UNION'
+                                  + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?uri} .'
                                   + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>}  . %(rdf)s }',
+                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} UNION'
+                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> <%(te2)s>}  . %(rdf)s }',
     "+-c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . <%(te2)s> <%(r2)s> ?uri . %(rdf)s }',
     "--c": '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s> . %(rdf)s }',
     "-+c": '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s> . %(rdf)s }',
@@ -250,13 +271,18 @@ def rel_id_to_rel(rel, _relations):
         value = _relations[key]
         if np.array_equal(value[3],np.asarray(rel)):
             occurrences.append(value)
+    # print occurrences
     if len(occurrences) == 1:
         return occurrences[0][0]
     else:
         '''
-            prefers ontology over properties
+            prefers /dc/terms/subject' and then ontology over properties
         '''
-        if 'property' in occurrences[0][3]:
+        if 'terms/subject' in occurrences[0][0]:
+            return occurrences[0][0]
+        if 'terms/subject' in occurrences[1][0]:
+            return occurrences[1][0]
+        if 'property' in occurrences[0][0]:
             return occurrences[1][0]
         else:
             return occurrences[0][0]
@@ -301,7 +327,7 @@ def id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True):
                 rel_1,rel_2 = path_id[1:index_sign_2],path_id[index_sign_2+1:]
                 rel_1 = rel_id_to_rel(rel_1,relations)
                 rel_2 = rel_id_to_rel(rel_2,relations)
-                sign_2 = index_sign_2
+                sign_2 = path_id[index_sign_2]
                 path = [return_sign(sign_1),rel_1,return_sign(sign_2),rel_2]
                 return path
         else:
@@ -359,12 +385,19 @@ def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, c
     # Convert them to continous IDs.
     for i in range(len(type_x_candidates)):
         for j in range(len(type_x_candidates[i])):
-            type_x_candidates[i][j] = vocab[type_x_candidates[i][j]]
-
+            try:
+                type_x_candidates[i][j] = vocab[type_x_candidates[i][j]]
+            except KeyError:
+                '''
+                    vocab[1] refers to unknow word.
+                '''
+                type_x_candidates[i][j] = vocab[1]
     for i in range(len(type_uri_candidates)):
         for j in range(len(type_uri_candidates[i])):
-            type_uri_candidates[i][j] = vocab[type_uri_candidates[i][j]]
-
+            try:
+                type_uri_candidates[i][j] = vocab[type_uri_candidates[i][j]]
+            except:
+                type_uri_candidates[i][j] = vocab[1]
     # Return based on given input.
     return type_x_candidates+type_uri_candidates
     # return type_x_candidates if only_x else type_uri_candidates
@@ -474,7 +507,7 @@ def convert_rdf_path_to_text(path):
     return [var, dbo_class]
 
 
-def construct_paths(data):
+def construct_paths(data,qald=False):
     """
     :param data: a data node of id_big_data
     :return: unpadded , continous id spaced question, positive path, negative paths
@@ -484,11 +517,16 @@ def construct_paths(data):
 
     # inverse id version of positive path and creating a numpy version
     positive_path_id = data['parsed-data']['path_id']
-    positive_path = []
-    for path in positive_path_id:
-        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(path[0])]
-        positive_path += relations[int(path[1:])][3].tolist()
-    positive_path = np.asarray(positive_path)
+    false_positive_path = False
+    if positive_path_id == [-1]:
+        positive_path = np.asarray([-1])
+        false_positive_path = True
+    else:
+        positive_path = []
+        for path in positive_path_id:
+            positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(path[0])]
+            positive_path += relations[int(path[1:])][3].tolist()
+        positive_path = np.asarray(positive_path)
     # padded_positive_path = pad_sequences([positive_path], maxlen=max_length, padding='post')
 
     # negative paths from id to surface form id
@@ -513,7 +551,8 @@ def construct_paths(data):
 
     # passing all the elements through vocab
     question = np.asarray([vocab[key] for key in question])
-    positive_path = np.asarray([vocab[key] for key in positive_path])
+    if not false_positive_path:
+        positive_path = np.asarray([vocab[key] for key in positive_path])
     for i in range(0, len(negative_paths)):
         # temp = []
         for j in xrange(0, len(negative_paths[i])):
@@ -523,7 +562,8 @@ def construct_paths(data):
                 negative_paths[i][j] = vocab[0]
                 # negative_paths[i] = np.asarray(temp)
                 # negative_paths[i] = np.asarray([vocab[key] for key in negative_paths[i] if key in vocab.keys()])
-
+    if qald:
+        return question, positive_path, negative_paths,false_positive_path
     return question,positive_path,negative_paths
 
 
@@ -697,7 +737,33 @@ def query_graph_to_sparql(_graph):
     return sparql
 
 
-def evaluate(test_sparql, true_sparql, type):
+def ground_truth_intent(data):
+    """
+        Legend: 010: ask
+                100: count
+                001: list
+    """
+
+    data = data['parsed-data']['sparql_query'][:data['parsed-data']['sparql_query'].lower().find('{')]
+    # Check for ask
+    if u'ask' in data.lower():
+        return 'ask'
+
+    if u'count' in data.lower():
+        return 'count'
+
+    return 'list'
+
+
+def sparql_answer(sparql):
+    test_answer = []
+    interface_test_answer = dbp.get_answer(sparql)
+    for key in interface_test_answer:
+        test_answer = test_answer + interface_test_answer[key]
+    return list(set(test_answer))
+
+
+def evaluate(test_sparql, true_sparql, type, ground_type):
     #@TODO: If the type of test and true are differnt code would return an error.
     """
         Fmeasure for ask and count are 0/1.
@@ -707,9 +773,15 @@ def evaluate(test_sparql, true_sparql, type):
         :param type: COUNT/ASK/LIST
         :return: f1,precision,recall
     """
+    '''
+        First evaluate based on type. If the type prediction is wrong. Don't proceded. The f,p,r =0
+    '''
+    if type != ground_type:
+        return 0.0,0.0,0.0
+
     if type == "list":
-        test_answer = list(set(dbp.get_answer(test_sparql)['uri']))
-        true_answer = list(set(dbp.get_answer(true_sparql)['uri']))
+        test_answer = sparql_answer(test_sparql)
+        true_answer = sparql_answer(true_sparql)
         total_retrived_resutls = len(test_answer)
         total_relevant_resutls = len(true_answer)
         common_results = total_retrived_resutls - len(list(set(test_answer)-set(true_answer)))
@@ -728,8 +800,8 @@ def evaluate(test_sparql, true_sparql, type):
         return f1,precision,recall
 
     if type == "count":
-        count_test = dbp.get_answer(test_sparql)['callret-0'][0]
-        count_true = dbp.get_answer(true_sparql)['callret-0'][0]
+        count_test = sparql_answer(test_sparql)
+        count_true = sparql_answer(true_sparql)
         if count_test == count_true:
             return 1.0,1.0,1.0
         else:
@@ -742,6 +814,35 @@ def evaluate(test_sparql, true_sparql, type):
             return 0.0,0.0,1.0
 
 
+def similarity(question,path,mode='mean'):
+    '''
+            Takes question and path mapped in continous space and computes similarity
+            mode = avg/sum
+    '''
+    question_v = np.asarray([vectors[x] for x in question])
+    path_v = np.asarray([vectors[x] for x in path])
+    if mode == 'sum':
+        question_avg = np.sum(question_v,axis=0)
+        path_avg = np.sum(path_v,axis=0)
+    else:
+        question_avg = np.mean(question_v, axis=0)
+        path_avg = np.mean(path_v, axis=0)
+    if np.sum(path_v) == 0 or np.sum(question_v) == 0:
+        return 0.0
+    else:
+        return np.dot(path_avg, question_avg) / (np.linalg.norm(question_avg) * np.linalg.norm(path_avg))
+
+
+def prune_candidate_space(question,paths,k=None):
+    sim = []
+    for p in paths:
+        sim.append(similarity(question,p))
+    if not k:
+        return np.argsort(sim)
+    if len(sim) > k:
+        return np.argsort(sim)[-k:]
+    else:
+        return np.argsort(sim)
 
 if __name__ is "__main__":
 
@@ -752,13 +853,17 @@ if __name__ is "__main__":
         reverse_relations[relations[keys][0]] = [keys] + relations[keys][1:]
     reverse_rdf_dict = load_reverse_rdf_type()
 
-    # Load the main data
-    id_data = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, ID_BIG_DATA_FILENAME)))
+    if DATASET == 'qald':
+        # Load qald test data
+        id_data_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, "qald_id_big_data_test.json")))
+    else:
+        # Load the main data
+        id_data = json.load(
+            open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, ID_BIG_DATA_FILENAME)))
 
-    # Split it.
-    id_data_test = test_split(id_data)
-    id_data_train = train_split(id_data)
-
+        # Split it.
+        id_data_test = test_split(id_data)
+        id_data_train = train_split(id_data)
     # Load all model
     with K.tf.device('/gpu:' + GPU):
         metric = rank_precision_metric(10)
@@ -777,41 +882,129 @@ if __name__ is "__main__":
     core_chain_counter = 0
     results = []
     avg = []
-    for data in iterator:
+    c = 0
+    i = 0
+    question_counter = 0
+    index_saver = []
+    counter = 0
+    total = 0
+    wv = 0
+    for data in id_data_test:
+        flag = False
 
         # Some macros which would be useful for constructing sparqls
+        print "the counter is ", str(question_counter)
+        if question_counter == 4:
+            print "skipping", str(question_counter)
+            question_counter = question_counter + 1
+            continue
+        question_counter = question_counter + 1
+
+        if DATASET == 'lcquad':
+            data['pop'] = True
         query_graph = {}
         rdf_type = True
+        no_positive_path = False
 
-        question, positive_path, negative_paths = construct_paths(data)
 
-        if len(negative_paths) == 0:
-            best_path = positive_path
-        else:
-            '''
-                The output is made by stacking positive path over negative paths.
-            '''
-            output = rank_precision_runtime(model_corechain, question, positive_path,
-                                            negative_paths, 10000, MAX_SEQ_LENGTH)
+        question, positive_path, negative_paths,no_positive_path = construct_paths(data,qald=True)
 
-            # Select the most plausible corechain.
-            best_path_index = np.argmax(output)
-            if best_path_index == 0:
-                best_path = positive_path
-                core_chain_counter = core_chain_counter +  1
-                print(core_chain_counter)
+        if not no_positive_path:
+            pp = [positive_path.tolist()]
+            nps = [n.tolist() for n in negative_paths]
+            paths = pp + nps
+            if CANDIDATES_SPACE:
+                index = prune_candidate_space(question, paths, CANDIDATES_SPACE)
+                if index[-1] == 0:
+                    flag = True
+                    wv = wv + 1
             else:
-                best_path = negative_paths[best_path_index-1]
-
-        # Best path is in continuous id space.
-        query_graph['best_path'] = best_path
+                index = prune_candidate_space(question, paths, len(paths))
+            paths = [paths[i] for i in index]
+        else:
+            nps = [n.tolist() for n in negative_paths]
+            pp = [positive_path.tolist()]
+            paths = pp + nps
+            if CANDIDATES_SPACE:
+                index = prune_candidate_space(question, paths, CANDIDATES_SPACE)
+            else:
+                index = prune_candidate_space(question, paths, len(paths))
+            paths = [paths[i] for i in index]
 
         padded_question = pad_question(question)
+        for i in range(len(paths)):
+            paths[i] = np.asarray(paths[i])
+        paths = np.asarray(paths)
 
         # Predicting the intent
         intent = question_intent(padded_question)
         # if     DEBUG: print("Intent of the question is : ", str(intent))
+        # intent = ground_truth_intent(data)
         query_graph['intent'] = intent
+
+
+        if query_graph['intent'] == 'ask':
+            print "in the intent loop"
+            if DATASET == 'qald':
+                if ground_truth_intent(data) == 'ask':
+                    if data['pop'] == True or len(negative_paths) != 0:
+                        if data['unparsed-qald-data']['answers'][0]['boolean']:
+                            results.append([1.0, 1.0, 1.0])
+                            avg.append(1.0)
+                            print(sum(avg) * 1.0 / len(avg))
+                        else:
+                            results.append([0.0, 0.0, 0.0])
+                            avg.append(0.0)
+                            print(sum(avg) * 1.0 / len(avg))
+                    else:
+                        if data['unparsed-qald-data']['answers'][0]['boolean']:
+                            results.append([0.0, 0.0, 0.0])
+                            avg.append(0.0)
+                            print(sum(avg) * 1.0 / len(avg))
+                        else:
+                            results.append([1.0, 1.0, 1.0])
+                            avg.append(1.0)
+                            print(sum(avg) * 1.0 / len(avg))
+                # raw_input()
+                continue
+
+        # if np.equal(positive_path,np.asarray([-1])):
+        #     no_positive_path = True
+
+        if no_positive_path and len(negative_paths) == 0:
+            results.append([0.0, 0.0, 0.0])
+            avg.append(0.0)
+            print(sum(avg) * 1.0 / len(avg))
+            # raw_input()
+            continue
+
+        if len(negative_paths) == 0:
+            best_path = positive_path
+            core_chain_counter = core_chain_counter + 1
+            print core_chain_counter
+        else:
+            '''
+                The output is made by stacking positive path over negative paths.
+            '''
+            output = rank_precision_runtime(model_corechain, question, paths[0],
+                                            paths, 10000, MAX_SEQ_LENGTH)
+            if flag:
+                print paths
+                best_path = paths[np.argmax(output[1:])]
+                if not np.array_equal(best_path,positive_path):
+                    raw_input('check')
+                flag = False
+            best_path = paths[np.argmax(output[1:])]
+
+            if not no_positive_path:
+                if np.array_equal(best_path,positive_path):
+                    core_chain_counter = core_chain_counter + 1
+
+        # Best path is in continuous id space.
+        query_graph['best_path'] = best_path
+
+
+
 
         # Predicting the rdf-constraint
         rdf_constraint = rdf_constraint_check(padded_question)
@@ -836,12 +1029,49 @@ if __name__ is "__main__":
             else:
                 query_graph['rdf_best_path'] = []
 
+
+
+        type_pred = query_graph['intent']
         sparql = query_graph_to_sparql(query_graph)
-
-        type = query_graph['intent']
-
-        f,p,r = evaluate(sparql, data['parsed-data']['sparql_query'], type)
+        f,p,r = evaluate(sparql, data['parsed-data']['sparql_query'], type_pred,ground_truth_intent(data))
 
         results.append([f,p,r])
         avg.append(f)
         print(sum(avg)*1.0/len(avg))
+        print sparql
+        print data['parsed-data']['sparql_query']
+
+
+
+def convert(paths):
+    paths_list = [p.tolist() for p in paths]
+    first_hop_properties = []
+    for p in paths_list:
+        try:
+            negative_index = p[1:].index(3)
+            first_prop = p[:negative_index+1]
+            first_hop_properties.append(first_prop)
+        except ValueError:
+            try:
+                positive_index = p[1:].index(3)
+                first_prop = p[:positive_index + 1]
+                first_hop_properties.append(first_prop)
+                continue
+            except ValueError:
+                continue
+    # fhp = [np.asarray(f) for f in first_hop_properties]
+    first_hop_properties = np.unique(np.asarray(first_hop_properties)).tolist()
+    return first_hop_properties
+
+
+def dicta(paths,fhp):
+    paths_list = [p.tolist() for p in paths]
+    l = len(fhp)
+    picked_paths = []
+    for p in paths_list:
+        try:
+            if p[:l] == fhp:
+                picked_paths.append(p)
+        except:
+            continue
+    return picked_paths

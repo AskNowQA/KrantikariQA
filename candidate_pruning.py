@@ -50,9 +50,11 @@ OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 # Model Directories
 DATASET = 'qald'
+MULTI_HOP = True
+MULTI_HOP_NUMBER = 2
 CORECHAIN_MODEL_NAME = 'birnn_dot'
 ID_BIG_DATA_FILENAME = 'id_big_data.json' if DATASET is 'lcquad' else 'qald_id_big_data.json'
-CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_00/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data':DATASET}
+CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_02/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': 'transfer-proper-qald'}
 RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_00/model.h5' % {'data':DATASET}
 RDFEXISTENCE_MODEL_DIR = './data/models/type_existence/%(data)s/model_00/model.h5' % {'data':DATASET}
 INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_02/model.h5' % {'data':'lcquad'}
@@ -844,6 +846,45 @@ def prune_candidate_space(question,paths,k=None):
     else:
         return np.argsort(sim)
 
+def convert(paths):
+    paths_list = [p.tolist() for p in paths]
+    first_hop_properties = []
+    for p in paths_list:
+        try:
+            negative_index = p[1:].index(3)
+            first_prop = p[:negative_index+1]
+            first_hop_properties.append(first_prop)
+        except ValueError:
+            try:
+                positive_index = p[1:].index(2)
+                first_prop = p[:positive_index + 1]
+                first_hop_properties.append(first_prop)
+                continue
+            except ValueError:
+                first_hop_properties.append(p)
+                continue
+    # fhp = [np.asarray(f) for f in first_hop_properties]
+    unique_fhp = []
+    for p in first_hop_properties:
+        if p not in unique_fhp:
+            unique_fhp.append(p)
+    # first_hop_properties = np.unique(np.asarray(first_hop_properties)).tolist()
+    return unique_fhp
+
+
+def dicta(paths,fhps):
+    paths_list = [p.tolist() for p in paths]
+    picked_paths = []
+    for fhp in fhps:
+        l = len(fhp)
+        for p in paths_list:
+            try:
+                if p[:l] == fhp:
+                    picked_paths.append(p)
+            except:
+                continue
+    return picked_paths
+
 if __name__ is "__main__":
 
     # Some more globals
@@ -907,8 +948,8 @@ if __name__ is "__main__":
         no_positive_path = False
 
 
-        question, positive_path, negative_paths,no_positive_path = construct_paths(data,qald=True)
 
+        question, positive_path, negative_paths,no_positive_path = construct_paths(data,qald=True)
         if not no_positive_path:
             pp = [positive_path.tolist()]
             nps = [n.tolist() for n in negative_paths]
@@ -923,8 +964,8 @@ if __name__ is "__main__":
             paths = [paths[i] for i in index]
         else:
             nps = [n.tolist() for n in negative_paths]
-            pp = [positive_path.tolist()]
-            paths = pp + nps
+            # pp = [positive_path.tolist()]
+            paths =  nps
             if CANDIDATES_SPACE:
                 index = prune_candidate_space(question, paths, CANDIDATES_SPACE)
             else:
@@ -986,15 +1027,35 @@ if __name__ is "__main__":
             '''
                 The output is made by stacking positive path over negative paths.
             '''
-            output = rank_precision_runtime(model_corechain, question, paths[0],
-                                            paths, 10000, MAX_SEQ_LENGTH)
-            if flag:
-                print paths
-                best_path = paths[np.argmax(output[1:])]
-                if not np.array_equal(best_path,positive_path):
-                    raw_input('check')
-                flag = False
+            if MULTI_HOP:
+                fhp = convert(paths)
+                fhp_numpy = [np.asarray(pa) for pa in fhp]
+                fhp_numpy = np.asarray(fhp_numpy)
+
+
+                output = rank_precision_runtime(model_corechain, question, fhp_numpy[0],
+                                                    fhp_numpy, 10000, MAX_SEQ_LENGTH)
+                if MULTI_HOP_NUMBER < (len(output)-1):
+                    indexes = np.argsort(output[1:])[-1*(MULTI_HOP_NUMBER):]
+                else:
+                    indexes = np.argsort(output[1:])
+
+                fhp = [fhp_numpy[ind].tolist() for ind in indexes]
+                picked_paths = dicta(paths, fhp)
+                picked_paths_numpy = [np.asarray(pa) for pa in picked_paths]
+                picked_paths_numpy = np.asarray(picked_paths_numpy)
+
+                output = rank_precision_runtime(model_corechain, question, picked_paths_numpy[0],
+                                                picked_paths_numpy, 10000, MAX_SEQ_LENGTH)
+                '''
+                    Find top k performing properties and then using it for the same
+                '''
+                paths = picked_paths_numpy
+
+
             best_path = paths[np.argmax(output[1:])]
+
+            # best_path = paths[np.argmax(output[1:])]
 
             if not no_positive_path:
                 if np.array_equal(best_path,positive_path):
@@ -1043,35 +1104,8 @@ if __name__ is "__main__":
 
 
 
-def convert(paths):
-    paths_list = [p.tolist() for p in paths]
-    first_hop_properties = []
-    for p in paths_list:
-        try:
-            negative_index = p[1:].index(3)
-            first_prop = p[:negative_index+1]
-            first_hop_properties.append(first_prop)
-        except ValueError:
-            try:
-                positive_index = p[1:].index(3)
-                first_prop = p[:positive_index + 1]
-                first_hop_properties.append(first_prop)
-                continue
-            except ValueError:
-                continue
-    # fhp = [np.asarray(f) for f in first_hop_properties]
-    first_hop_properties = np.unique(np.asarray(first_hop_properties)).tolist()
-    return first_hop_properties
 
 
-def dicta(paths,fhp):
-    paths_list = [p.tolist() for p in paths]
-    l = len(fhp)
-    picked_paths = []
-    for p in paths_list:
-        try:
-            if p[:l] == fhp:
-                picked_paths.append(p)
-        except:
-            continue
-    return picked_paths
+
+
+

@@ -61,7 +61,7 @@ OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 # Set up directories
 n.NEGATIVE_SAMPLES = 200
-n.BATCH_SIZE = 300
+n.BATCH_SIZE = BATCH_SIZE
 
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
 
@@ -254,5 +254,5 @@ if __name__ == "__main__":
     else:
         index = None
         vectors, questions, pos_paths, neg_paths = create_dataset()
-    n.BATCH_SIZE = 1
+    # n.BATCH_SIZE = BATCH_SIZE
     n_cc.bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 10, 200, _index=index)

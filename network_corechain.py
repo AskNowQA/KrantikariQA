@@ -20,7 +20,7 @@ import network as n
 
 # Macros
 DEBUG = True
-CHECK_VALIDATION_ACC_PERIOD = 5
+CHECK_VALIDATION_ACC_PERIOD = 10
 LCQUAD_BIRNN_MODEL = 'model_14'
 
 
@@ -1256,7 +1256,7 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
                 n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
-def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_paths_per_epoch_train = 10,
+def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_paths_per_epoch_train = 100,
                       _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None):
     """
         Data Time!
@@ -1338,42 +1338,43 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
 
 
         # model.fit(x=[train_questions, train_paths],y=train_labels, epochs = 10, verbose=1)
+
         # # Prepare training data
         training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_paths, train_labels,
-                                                     max_length, _neg_paths_per_epoch_train, n.BATCH_SIZE)
+                                                              max_length, _neg_paths_per_epoch_train, n.BATCH_SIZE*100)
 
-        if DEBUG:
-            print(train_questions.shape, train_paths.shape, train_labels.shape)
-            raw_input("Check and go ahead")
+        # if DEBUG:
+        #     print(train_questions.shape, train_paths.shape, train_labels.shape)
+        #     raw_input("Check and go ahead")
 
         # smart_save_model(model)
         json_desc, dir = n.get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
-        checkpoint = n.ModelCheckpoint(model_save_path,
-                                       monitor='val_metric',
-                                       verbose=1,
-                                       save_best_only=True,
-                                       mode='max',
-                                       period=CHECK_VALIDATION_ACC_PERIOD)
 
-        model.fit_generator(training_generator,
-                            epochs=n.EPOCHS,
-                            workers=3,
-                            use_multiprocessing=True)
-
-
-        # checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_paths, test_labels,
-        #                                        monitor='val_metric',
-        #                                        verbose=1,
-        #                                        save_best_only=True,
-        #                                        mode='max',
-        #                                        period=CHECK_VALIDATION_ACC_PERIOD)
+        # checkpoint = n.ModelCheckpoint(model_save_path,
+        #                                monitor='val_metric',
+        #                                verbose=1,
+        #                                save_best_only=True,
+        #                                mode='max',
+        #                                period=CHECK_VALIDATION_ACC_PERIOD)
         #
         # model.fit_generator(training_generator,
         #                     epochs=n.EPOCHS,
         #                     workers=3,
-        #                     use_multiprocessing=True,
-        #                     callbacks=[checkpoint])
+        #                     use_multiprocessing=True)
+
+        checkpointer = n.CustomPointWiseModelCheckpoint(model_save_path, test_questions, test_paths, test_labels,
+                                               monitor='val_metric',
+                                               verbose=1,
+                                               save_best_only=True,
+                                               mode='max',
+                                               period=CHECK_VALIDATION_ACC_PERIOD)
+
+        model.fit_generator(training_generator,
+                            epochs=n.EPOCHS,
+                            workers=3,
+                            use_multiprocessing=True,
+                            callbacks=[checkpointer])
         # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
 
         print("Precision (hits@1) = ",

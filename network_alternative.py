@@ -1,73 +1,61 @@
-"""
-    A file with MANY helper functions including losses etc which help with managing and implementing NNs.
-
-    Every other code must have its own load_data, and model, and train code, and use as much of this as possible.
-
-"""
-
 # Shared Feature Extraction Layer
 from __future__ import absolute_import
 import os
 import pickle
+import sys
 import json
 import math
-import h5py
-import warnings
-import numpy as np
-from sklearn.utils import shuffle
-
-import keras.backend.tensorflow_backend as K
 from keras.preprocessing.sequence import pad_sequences
-from keras.layers.merge import concatenate, dot
+import numpy as np
+import pandas as pd
+import keras.backend.tensorflow_backend as K
+from keras.layers.core import Layer
+from keras import initializers, regularizers, constraints
+from keras.models import Model, Sequential
+from keras.layers import Input, Layer, Lambda
+from keras.layers import Dense, BatchNormalization
+from keras.layers import Dropout
+from keras.layers import Activation, RepeatVector, Reshape, Bidirectional, TimeDistributed
+from keras.layers.recurrent import LSTM
+from keras.layers.merge import concatenate, dot, subtract, maximum, multiply
+from keras.layers import merge
+from keras.activations import softmax
 from keras import optimizers, metrics
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.utils import Sequence
 from keras.callbacks import Callback
-from keras.layers import InputSpec, Layer, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, TimeDistributed, Conv1D, MaxPooling1D, Embedding, Flatten
-from keras.layers import Bidirectional, LSTM, GRU
-from keras.models import Sequential
+from keras.layers import InputSpec, Layer, Input, Dense, merge
+from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
+from keras.layers import Bidirectional, GRU, LSTM
+from keras.layers.noise import GaussianNoise
+from keras.layers.advanced_activations import ELU
+from keras.models import Sequential, Model, model_from_json
 from keras.regularizers import l2
-from keras.layers.pooling import GlobalAveragePooling1D
-from keras.regularizers import L1L2
-from keras.models import load_model
+from keras.optimizers import Adam
+from keras.layers.normalization import BatchNormalization
+from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
+from keras.layers import Merge
+from sklearn.utils import shuffle
+from pprint import pprint
 
-# Custom imports
 from utils import embeddings_interface
-from utils import prepare_vocab_continous as vocab_master
-import prepare_transfer_learning as transfer_learning
+
 
 
 # Some Macros
 DEBUG = True
-MODEL = 'birnn_dot'
-DATASET = 'lcquad'
-
-# Data locations
-MODEL_DIR = './data/models/%(model)s/%(dataset)s/'
-MODEL_SPECIFIC_DATA_DIR = './data/data/%(model)s/%(dataset)s/'
-COMMON_DATA_DIR = './data/data/common/'
-DATASET_SPECIFIC_DATA_DIR = './data/data/%(dataset)s/'
-
-# Network Macros
-MAX_SEQ_LENGTH = 25
+DATA_DIR = './data/training/pairwise'
+RESOURCE_DIR = './resources_v8'
 EPOCHS = 300
-BATCH_SIZE = 880        # Around 11 splits for full training dataset
+BATCH_SIZE = 880 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
 NEGATIVE_SAMPLES = 1000
-OPTIMIZER = optimizers.Adam(LEARNING_RATE,beta_2 = 0.999)
+OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
-np.random.seed(42)
-
-
-# Better warning formatting. Ignore.
-def better_warning(message, category, filename, lineno, file=None, line=None):
-    return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
-
-
-"""
+'''
     F1 measure functions
-"""
+'''
 def recall(y_true, y_pred):
     """Recall metric.
     Only computes a batch-wise average of recall.
@@ -78,7 +66,6 @@ def recall(y_true, y_pred):
     possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
     recall = true_positives / (possible_positives + K.epsilon())
     return recall
-
 
 def fbeta_score(y_true, y_pred, beta=1):
     """Computes the F score.
@@ -129,6 +116,7 @@ def predicted_positives(y_true, y_pred):
     return K.sum(K.round(K.clip(y_pred, 0, 1)))
 
 
+
 def fmeasure(y_true, y_pred):
     """Computes the f-measure, the harmonic mean of precision and recall.
     Here it is only computed as a batch-wise average, not globally.
@@ -142,20 +130,20 @@ def get_smart_save_path(model):
         # Get the model description
         desc = model.to_json()
     except TypeError:
-        warnings.warn("Could not get model json")
+        print "Could not get model json"
         pass
 
     # Find the current model dirs in the data dir.
-    _, dirs, _ = os.walk(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}).next()
+    _, dirs, _ = os.walk(DATA_DIR).next()
 
     # If no folder found in there, create a new one.
     if len(dirs) == 0:
-        os.mkdir(os.path.join(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}, "model_00"))
+        os.mkdir(os.path.join(DATA_DIR, "model_00"))
         dirs = ["model_00"]
 
     # Find the latest folder in here
     dir_nums = sorted([ x[-2:] for x in dirs])
-    l_dir = os.path.join(MODEL_DIR  % {'model':MODEL, 'dataset':DATASET}, "model_" + dir_nums[-1])
+    l_dir = os.path.join(DATA_DIR, "model_" + dir_nums[-1])
 
     # Check if the latest dir has the same model as current
     try:
@@ -167,10 +155,9 @@ def get_smart_save_path(model):
             else:
                 new_num = str(new_num)
 
-            l_dir = os.path.join(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}, "model_" + new_num)
+            l_dir = os.path.join(DATA_DIR, "model_" + new_num)
             os.mkdir(l_dir)
     except:
-        # @TODO: Check which errors to catch.
         pass
     finally:
         return desc, l_dir
@@ -184,18 +171,15 @@ def smart_save_model(model):
 
     :return: None
     """
-    if DEBUG: print("@smart save model called")
     json_desc, l_dir = get_smart_save_path(model)
     path = os.path.join(l_dir, 'model.h5')
     if DEBUG:
-        print("network.py:smart_save_model by calling smart save function: Saving model in %s" % path)
+        print "network.py:smart_save_model: Saving model in %s" % path
     model.save(path)
     json.dump(json_desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
 
-
 def zeroloss(yt, yp):
     return 0.0
-
 
 def custom_loss(y_true, y_pred):
     '''
@@ -208,16 +192,10 @@ def custom_loss(y_true, y_pred):
     return K.sum(diff)
 
 
-def load_relation():
-    """
-        Function used once to load the relations dictionary
-        (which keeps the log of IDified relations, their uri and other things.)
 
-    :param relation_file: str
-    :return: dict
-    """
 
-    relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle')))
+def load_relation(relation_file):
+    relations = pickle.load(open(relation_file))
     inverse_relations = {}
     for key in relations:
         value = relations[key]
@@ -226,8 +204,6 @@ def load_relation():
         inverse_relations[new_key] = value
 
     return inverse_relations
-
-
 def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
     max_length = test_questions.shape[-1]
     questions = np.reshape(np.repeat(np.reshape(test_questions,
@@ -241,9 +217,8 @@ def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_pa
     outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)], batch_size=batch_size)[:,0]
     outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch+1))
 
-    precision = float(len(np.where(np.argmax(outputs, axis=1) == 0)[0]))/outputs.shape[0]
+    precision = float(len(np.where(np.argmax(outputs, axis=1)==0)[0]))/outputs.shape[0]
     return precision
-
 
 class CustomModelCheckpoint(Callback):
     """Save the model after every epoch.
@@ -325,15 +300,14 @@ class CustomModelCheckpoint(Callback):
                     if self.monitor_op(current, self.best):
                         if self.verbose > 0:
                             print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
-                                  ' saving model'
+                                  ' saving model to %s'
                                   % (epoch + 1, self.monitor, self.best,
-                                     current))
+                                     current, filepath))
                         self.best = current
                         if self.save_weights_only:
                             self.model.save_weights(filepath, overwrite=True)
                         else:
-                            smart_save_model(self.model)
-                            # self.model.save(filepath, overwrite=True)
+                            self.model.save(filepath, overwrite=True)
                     else:
                         if self.verbose > 0:
                             print('\nEpoch %05d: %s did not improve' %
@@ -344,8 +318,7 @@ class CustomModelCheckpoint(Callback):
                 if self.save_weights_only:
                     self.model.save_weights(filepath, overwrite=True)
                 else:
-                    smart_save_model(self.model)
-                    # self.model.save(filepath, overwrite=True)
+                    self.model.save(filepath, overwrite=True)
 
 
 class TrainingDataGenerator(Sequence):
@@ -389,6 +362,7 @@ class TrainingDataGenerator(Sequence):
         # else:
         #     batch_neg_paths = neg_paths[np.random.randint(0, neg_paths.shape[0], BATCH_SIZE)]
 
+
         return ([batch_questions, batch_pos_paths, batch_neg_paths], self.dummy_y)
 
     def on_epoch_end(self):
@@ -429,7 +403,8 @@ class ValidationDataGenerator(Sequence):
         # if self.firstDone == False:
         #     batch_neg_paths = index(self.neg_paths)
         # else:
-        #     batch_neg_paths = neg_paths[np.random.randint(0, neg_paths.shape[0], BATCH_SIZE)]bay
+        #     batch_neg_paths = neg_paths[np.random.randint(0, neg_paths.shape[0], BATCH_SIZE)]
+
 
         return ([batch_questions, batch_all_paths, np.zeros_like(batch_all_paths)], self.dummy_y)
 
@@ -448,7 +423,6 @@ def rank_precision_metric(neg_paths_per_epoch):
         # precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
         return precision
     return metric
-
 
 class _Attention(object):
     def __init__(self, max_length, nr_hidden, dropout=0.0, L2=0.0, activation='relu'):
@@ -469,8 +443,9 @@ class _Attention(object):
             att_ji = K.batch_dot(AB[1], K.permute_dimensions(AB[0], (0, 2, 1)))
             return K.permute_dimensions(att_ji,(0, 2, 1))
         return merge(
-                [self.model(sent1), self.model(sent2)],
-                mode=_outer, output_shape=(self.max_length, self.max_length))
+                [self.model(sent1), self.model(c)],
+                mode=_outer,
+                output_shape=(self.max_length, self.max_length))
 
 
 class _SoftAlignment(object):
@@ -490,7 +465,7 @@ class _SoftAlignment(object):
             sm_att = e / s
             return K.batch_dot(sm_att, mat)
         return merge([attention, sentence], mode=_normalize_attention,
-                     output_shape=(self.max_length, self.nr_hidden)) # Shape: (i, n)
+                      output_shape=(self.max_length, self.nr_hidden)) # Shape: (i, n)
 
 
 class _Comparison(object):
@@ -498,20 +473,22 @@ class _Comparison(object):
         self.words = words
         self.model = Sequential()
         self.model.add(Dropout(dropout, input_shape=(nr_hidden*2,)))
-        self.model.add(Dense(nr_hidden, name='compare1', init='he_normal', W_regularizer=l2(L2),activation='relu'))
+        self.model.add(Dense(nr_hidden, name='compare1',
+            init='he_normal', W_regularizer=l2(L2)))
         self.model.add(Activation('relu'))
         self.model.add(Dropout(dropout))
-        self.model.add(Dense(nr_hidden, name='compare2', W_regularizer=l2(L2), init='he_normal',activation='relu'))
+        self.model.add(Dense(nr_hidden, name='compare2',
+                        W_regularizer=l2(L2), init='he_normal'))
         self.model.add(Activation('relu'))
         self.model = TimeDistributed(self.model)
 
     def __call__(self, sent, align, **kwargs):
         result = self.model(merge([sent, align], mode='concat')) # Shape: (i, n)
         avged = GlobalAveragePooling1D()(result)
-        # maxed = GlobalMaxPooling1D()(result)
-        # merged = merge([avged, maxed])
-        # result = BatchNormalization()(merged)
-        return avged
+        maxed = GlobalMaxPooling1D()(result)
+        merged = merge([avged, maxed])
+        result = BatchNormalization()(merged)
+        return result
 
 
 class _Entailment(object):
@@ -519,11 +496,11 @@ class _Entailment(object):
         self.model = Sequential()
         self.model.add(Dropout(dropout, input_shape=(nr_hidden*2,)))
         self.model.add(Dense(nr_hidden, name='entail1',
-            init='he_normal', W_regularizer=l2(L2),activation='relu'))
+            init='he_normal', W_regularizer=l2(L2)))
         self.model.add(Activation('relu'))
         # self.model.add(Dropout(dropout))
         self.model.add(Dense(nr_out, name='entail_out',
-            init='he_normal', W_regularizer=l2(L2),activation='relu'))
+            init='he_normal', W_regularizer=l2(L2)))
         # self.model.add(Activation('relu'))
         # self.model.add(Dense(nr_out, name='entail_out', activation='softmax',
         #                 W_regularizer=l2(L2), init='zero'))
@@ -532,15 +509,13 @@ class _Entailment(object):
         features = merge([feats1, feats2], mode='concat')
         return self.model(features)
 
-
 class _GlobalSumPooling1D(Layer):
-    """
-        Global sum pooling operation for temporal data.
-        # Input shape
-            3D tensor with shape: `(samples, steps, features)`.
-        # Output shape
-            2D tensor with shape: `(samples, features)`.
-    """
+    '''Global sum pooling operation for temporal data.
+    # Input shape
+        3D tensor with shape: `(samples, steps, features)`.
+    # Output shape
+        2D tensor with shape: `(samples, features)`.
+    '''
     def __init__(self, **kwargs):
         super(_GlobalSumPooling1D, self).__init__(**kwargs)
         self.input_spec = [InputSpec(ndim=3)]
@@ -554,31 +529,12 @@ class _GlobalSumPooling1D(Layer):
         else:
             return K.sum(x, axis=1)
 
-
 class _BiRNNEncoding(object):
     def __init__(self, max_length, embedding_dims, units, dropout=0.0):
         self.model = Sequential()
-        self.model.add(Bidirectional(LSTM(units, return_sequences=True,
-                                          dropout_W=dropout, dropout_U=dropout),
-                                     input_shape=(max_length, embedding_dims)))
-        #self.model.add(LSTM(units, return_sequences=False,
-        #                                 dropout_W=dropout, dropout_U=dropout))
-        self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
-        self.model.add(TimeDistributed(Dropout(0.2)))
-
-    def __call__(self, sentence):
-        return self.model(sentence)
-
-
-class _simple_BiRNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False, _name="encoder"):
-        self.model = Sequential(name=_name)
-        # reg = L1L2(l1=0.0, l2=0.01)
-        self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
-                                          dropout_W=dropout,
-                                          dropout_U=dropout, name="encoder_lstm"),
-                                     input_shape=(max_length, embedding_dims), name="encoder_bidirectional"))
-        # self.model.regularizers = [l2(0.01)]
+        self.model.add(Bidirectional(LSTM(units, return_sequences=False,
+                                         dropout_W=dropout, dropout_U=dropout),
+                                         input_shape=(max_length, embedding_dims)))
         #self.model.add(LSTM(units, return_sequences=False,
         #                                 dropout_W=dropout, dropout_U=dropout))
         # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
@@ -586,80 +542,6 @@ class _simple_BiRNNEncoding(object):
 
     def __call__(self, sentence):
         return self.model(sentence)
-
-
-class _double_BiRNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False, _name="doubleencoder"):
-        self.model = Sequential(name=_name)
-        reg = L1L2(l1=0.0, l2=0.01)
-        self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
-                                          dropout_W=dropout,
-                                          dropout_U=dropout, kernel_regularizer=reg),
-                                     input_shape=(max_length, embedding_dims)))
-        self.model.add(Bidirectional(LSTM(units,dropout_W=dropout,
-                                          dropout_U=dropout, kernel_regularizer=reg)))
-        # self.model.regularizers = [l2(0.01)]
-        #self.model.add(LSTM(units, return_sequences=False,
-        #                                 dropout_W=dropout, dropout_U=dropout))
-        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
-        # self.model.add(TimeDistributed(Dropout(0.2)))
-
-    def __call__(self, sentence):
-        return self.model(sentence)
-
-
-class _simple_CNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
-        self.model = Sequential()
-        self.model.add(Conv1D(units,5,
-                                     input_shape=(max_length, embedding_dims)))
-        self.model.add(MaxPooling1D(2))
-        self.model.add(Conv1D(units, 5))
-        self.model.add(MaxPooling1D(2))
-        self.model.add(Flatten())
-        self.model.add(Dense(128,activation='relu'))
-        #self.model.add(LSTM(units, return_sequences=False,
-        #                                 dropout_W=dropout, dropout_U=dropout))
-        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
-        # self.model.add(TimeDistributed(Dropout(0.2)))
-
-    def __call__(self, sentence):
-        return self.model(sentence)
-
-
-class _simpleDense(object):
-    def __init__(self, l, w):
-        self.model = Sequential()
-        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.01),activation='relu'))
-
-    def __call__(self, sentence_1):
-        return self.model(sentence_1)
-
-class _simpleDense_with_units(object):
-    def __init__(self, l, w):
-        self.model = Sequential()
-        self.model.add(Dense(l, input_shape=(w*2,),kernel_regularizer= l2(0.01),activation='relu'))
-
-    def __call__(self, sentence_1):
-        return self.model(sentence_1)
-
-class _simpleTimeDistributedDense(object):
-    def __init__(self, l, w):
-        self.model = Sequential()
-        self.model.add(TimeDistributed(Dense(w/2,kernel_regularizer= l2(0.1)), input_shape=(w*2,)))
-
-    def __call__(self, sentence_1):
-        return self.model(sentence_1)
-
-
-class _parikhDense(object):
-    def __init__(self, l, w):
-        self.model = Sequential()
-        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.1)))
-
-    def __call__(self, sentence_1):
-        return self.model(sentence_1)
-
 
 class _StaticEmbedding(object):
     def __init__(self, vectors, max_length, nr_out, nr_tune=5000, dropout=0.0):
@@ -693,13 +575,12 @@ class _StaticEmbedding(object):
     def __call__(self, sentence):
         mod_sent = self.mod_ids(sentence)
         tuning = self.tune(mod_sent)
-        # tuning = merge([tuning, mod_sent],
+        #tuning = merge([tuning, mod_sent],
         #    mode=lambda AB: AB[0] * (K.clip(K.cast(AB[1], 'float32'), 0, 1)),
         #    output_shape=(self.max_length, self.nr_out))
         pretrained = self.project(self.embed(sentence))
         vectors = merge([pretrained, tuning], mode='sum')
         return vectors
-
 
 def get_glove_embeddings():
     from utils.embeddings_interface import __check_prepared__
@@ -707,7 +588,6 @@ def get_glove_embeddings():
 
     from utils.embeddings_interface import glove_embeddings
     return glove_embeddings
-
 
 class ValidationCallback(Callback):
     def __init__(self, test_data, test_questions, test_pos_paths, test_neg_paths):
@@ -721,6 +601,20 @@ class ValidationCallback(Callback):
             recall = rank_precision(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 1000, 10000)
             print('\Validation recall@1: {}\n'.format(recall))
 
+# class CustomLossHistory(Callback):
+#     def __init__(self, loss, validation_set):
+#         self.loss = loss
+#         self.validation_data = validation_set # validation_set = x, y
+#
+#     def on_train_begin(self, logs={}):
+#         self.losses = []
+#
+#     def on_batch_end(self, batch, logs={}):
+#         current_loss_value = self.loss(self.validation_data[1],
+#             self.model.predict(self.validation_data[0]))
+#         print current_loss_value
+#         self.losses.append(current_loss_value)
+#         # You could also print it out here.
 
 def cross_correlation(x):
     a, b = x
@@ -730,317 +624,288 @@ def cross_correlation(x):
     ifft = tf.ifft(tf.conj(a_fft) * b_fft)
     return tf.cast(tf.real(ifft), 'float32')
 
-
-def load_pretrained_weights(_new_model, _trained_model_path):
-    """
-        Function used to put in weights of a pretrained in the layers of this new model.
-        Algo:
-            Try to see if we have weights of that previous model.
-            If not, load model, save weights.
-            Then load weights, get its layers' name.
-            Get layer names of this new model.
-            Put in weights of the old to new.
-            Return new.
-
-    :param _new_model: keras model.
-    :param _trained_model_path: str: path of the model (only the dict)
-    :return: keras model
-    """
-
-    if DEBUG: print("Trying to put the values from %s to this new model" % _trained_model_path)
-
-    _new_model.load_weights(os.path.join(_trained_model_path, 'model.h5'), by_name=True)
-
-    # layers_config = None
-    #
-    # try:
-    #     assert os.path.isfile(os.path.join(_trained_model_path, 'weights.h5'))
-    # except (IOError, AssertionError) as e:
-    #
-    #     # The weights file doesn't exist yet. Gotta load the model
-    #     metric = rank_precision_metric(10)
-    #     old_model = load_model(os.path.join(_trained_model_path, 'model.h5'), {'custom_loss':custom_loss, 'metric':metric})
-    #     layers_config = json.loads(json.load(open(os.path.join(_trained_model_path, 'model.json'))))['config']['layers']
-    #
-    #     # Save weights
-    #     old_model.save_weights(os.path.join(_trained_model_path, 'weights.h5'), {'custom_loss':custom_loss, 'metric':metric})
-    #
-    # finally:
-    #     weights = h5py.File(os.path.join(_trained_model_path, 'weights.h5'))
-    #
-    # # ################################
-    # # We have the weights in our hands
-    # # ################################
-    #
-    # # Prepare the dict of 'name':'layerobj' for the new model
-    # # layers_dict = dict([(layer.name, layer) for layer in _new_model.layers])
-    # for i in range(len(_new_model.layers)):
-    #
-    #     layer = _new_model.layers[i]
-    #     layer_config = layers_config[i]
-    #
-    #     # Try to find if the layer exists in the weights we just loaded
-    #     try:
-    #         assert layer.name in weights.keys()
-    #     except AssertionError:
-    #         # The layer isn't found.
-    #         if DEBUG:
-    #             warnings.warn("Layer %s of the new model didn't match anything in pre-trained model" % str(layer.name))
-    #             raw_input("Enter to continue")
-    #         continue
-    #
-    #     weights_layer = [weights[layer.name][x] for x in weights[layer.name].attrs['weight_names']]
-    #
-    #     _new_model.layers[i].set_weights(weights_layer)
-    #
-    #     if DEBUG:
-    #         print("Successfully loaded weights onto layer %s" % layer.name)
-    #         raw_input("Enter to continue")
-
-    return _new_model
-
-
-def remove_positive_path(positive_path, negative_paths):
-    counter = 0
-    new_negative_paths = []
-    for i in range(0, len(negative_paths)):
-        if not np.array_equal(negative_paths[i], positive_path):
-            new_negative_paths.append(np.asarray(negative_paths[i]))
-        else:
-            counter += 1
-            # print counter
-    return new_negative_paths
-
-
-def create_dataset_pairwise(file, max_sequence_length, relations):
-    """
-        This file is meant to create data for core-chain ranking ONLY.
-
-    :param file: id_big_data file
-    :param max_sequence_length: for padding/cropping
-    :param relations: the relations file to backtrack and look up shit.
-    :return:
-    """
+def load_data(file, max_sequence_length, relations):
     glove_embeddings = get_glove_embeddings()
 
     try:
-        with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pairwise'}, file + ".mapped.npz")) as data:
+        with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz")) as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy")) as idx:
             dataset = np.load(data)
+            # dataset = dataset[:10]
             questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab, vectors = vocab_master.load()
-            # vectors = glove_embeddings[sorted(vocab.keys())]
+            index = np.load(idx)
+            vectors = glove_embeddings[index]
             return vectors, questions, pos_paths, neg_paths
     except (EOFError,IOError) as e:
-        with open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, file)) as fp:
+        with open(os.path.join(RESOURCE_DIR, file)) as fp:
             dataset = json.load(fp)
             # dataset = dataset[:10]
-
-            ignored = []
-
+            questions = [i['uri']['question-id'] for i in dataset]
+            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
             pos_paths = []
             for i in dataset:
                 path_id = i['parsed-data']['path_id']
                 positive_path = []
-                try:
-                    for p in path_id:
-                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                        positive_path += relations[int(p[1:])][3].tolist()
-                except (TypeError, ValueError) as e:
-                    ignored.append(i)
-                    continue
+                for p in path_id:
+                    positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
+                    positive_path += relations[int(p[1:])][3].tolist()
                 pos_paths.append(positive_path)
 
-            questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
 
-            neg_paths = []
-            for i in range(0, len(pos_paths)):
-                if i in ignored:
-                    continue
+            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+            neg_paths = np.zeros((len(questions), 1000, max_sequence_length))
+
+            for i in range(len(dataset)):
+
+                # For one question
+
                 datum = dataset[i]
                 negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
-                np.random.shuffle(negative_paths_id)
-                negative_paths = []
-                for neg_path in negative_paths_id:
+                negative_paths = np.zeros((10000, max_sequence_length))
+
+                # ##############################
+                # Assuming max of 1000 neg paths
+                # ##############################
+
+                # Id-fy the individual path
+                for j in range(len(negative_paths_id)):
+                    neg_path = negative_paths_id[j]
                     negative_path = []
                     for p in neg_path:
                         try:
                             negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
                         except ValueError:
                             negative_path += relations[int(p)][3].tolist()
-                    negative_paths.append(negative_path)
-                negative_paths = remove_positive_path(pos_paths[i],negative_paths)
-                try:
-                    negative_paths = np.random.choice(negative_paths,1000)
-                except ValueError:
-                    if len(negative_paths) == 0:
-                        negative_paths = neg_paths[-1]
-                        print("Using previous question's paths for this since no neg paths for this question.")
-                    else:
-                        index = np.random.randint(0, len(negative_paths), 1000)
-                        negative_paths = np.array(negative_paths)
-                        negative_paths = negative_paths[index]
-                neg_paths.append(negative_paths)
 
-            for i in range(0,len(neg_paths)):
-                neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
-            neg_paths = np.asarray(neg_paths)
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+                    # Neg path is one single path. Time to pad it before putting it in.
+                    padded_neg_path = np.zeros((max_sequence_length))
+                    padded_neg_path[:len(negative_path)] = negative_path
+                    negative_paths[j] = padded_neg_path
 
-            # # Map to new ID space.
-            # try:
-            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, ".vocab.pickle")))
-            #     vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npz" )))
-            # except (IOError, EOFError) as e:
-            #     if DEBUG:
-            #         warnings.warn("Did not find the vocabulary.")
-            vocab, vectors = vocab_master.load()
+                """
+                    Shuffle the negative paths for one question
+
+                    If no neg path at all, we just have a zero array:
+                        - add a random path
+                    If one or more neg paths, get indices covering all of them.
+                """
+                if len(negative_paths_id) > 0:
+
+                    # Create shufflable index
+                    index = np.random.randint(0, len(negative_paths_id), 1000)
+                    negative_paths = negative_paths[index]
+
+                else:
+
+                    # No negative paths found.
+                    dummy_path = np.array([2,400,1242])
+
+                    # Put this array in all the indices of negative_paths
+                    negative_paths = np.zeros((1000, max_sequence_length))
+                    negative_paths[:, :dummy_path.shape[0]] = np.repeat(dummy_path[np.newaxis,:],
+                                                                        1000,
+                                                                        axis=0)
 
 
-            # all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
-            # # uniques = np.unique(all)
-            # try:
-            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, file + ".vocab.pickle")))
-            # except (IOError, EOFError) as e:
-            #     if DEBUG:
-            #         warnings.warn("Did not find the vocabulary.")
-            #     vocab = {}
-            #     # Create Vocabulary
-            #     for i in range(len(uniques)):
-            #         vocab[uniques[i]] = i
+                # try:
+                #     negative_paths = np.random.choice(negative_paths,1000)
+                # except ValueError:
+                #     if len(negative_paths) == 0:
+                #         negative_paths = np.array([[2,400,1242]])
+                #         print "Using previous question's paths for this since no neg paths for this question."
+                #     index_new = np.random.randint(0, len(negative_paths), 1000)
+                #     negative_paths = np.array(negative_paths)
+                #     negative_paths = negative_paths[index_new]
+                # neg_paths.append(negative_paths)
 
-            # Map everything
-            for i in range(len(questions)):
-                questions[i] = np.asarray([vocab[key] for key in questions[i]])
-                pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+                # Put negative paths for this question in the global negative paths list
+                neg_paths[i] = negative_paths
 
-                for j in range(len(neg_paths[i])):
-                    neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
+            # unique_q = np.unique(questions)
+            # unique_p = np.unique(pos_paths)
+            unique_qp = np.unique(np.concatenate((questions.flatten(), pos_paths.flatten())))
+            unique_n = np.unique(neg_paths)
 
-            with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pairwise'} , file + ".mapped.npz"), "w+") as data:
+            index = np.int64(np.unique(np.concatenate((unique_n, unique_qp))))
+
+            # Join all the unique and compute one final set of uniques
+
+
+            # # pickle.dump(neg_paths,open('./resources_v8/interm_neg_paths.pickle','w+'))
+            # # neg_paths = [i[2] for i in dataset]
+            # neg_paths_flat = [path for paths in neg_paths for path in paths]
+            # # neg_paths = pad_sequences(neg_paths, maxlen=max_sequence_length, padding='post')
+			#
+			#
+            # all = np.concatenate([questions, pos_paths, neg_paths_flat], axis=0)
+            # mapped_all, index = pd.factorize(all.flatten(), sort=True)
+            # mapped_all = mapped_all.reshape((-1, max_sequence_length))
+            vectors = glove_embeddings[index]
+			#
+            # _, _, _ = np.split(mapped_all, [questions.shape[0], questions.shape[0]*2])
+            # neg_paths = np.reshape(neg_paths, (len(questions), NEGATIVE_SAMPLES, max_sequence_length))
+
+            with open(os.path.join(RESOURCE_DIR, file + ".mapped.npz"), "w") as data, open(os.path.join(RESOURCE_DIR, file + ".index.npy"), "w") as idx:
                 np.savez(data, questions, pos_paths, neg_paths)
+                np.save(idx, index)
 
             return vectors, questions, pos_paths, neg_paths
 
+def main():
 
-def create_dataset_pointwise(file, max_sequence_length, relations):
+    gpu = sys.argv[1]
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+
+
     """
-        This file is meant to create data for core-chain ranking ONLY.
-
-    :param file: id_big_data file
-    :param max_sequence_length: for padding/cropping
-    :param relations: the relations file to backtrack and look up shit.
-    :return:
+        Data Time!
     """
-    glove_embeddings = get_glove_embeddings()
+    # Pull the data up from disk
+    max_length = 50
+    relations = load_relation('resources_v8/relations.pickle')
+    vectors, questions, pos_paths, neg_paths = load_data("id_big_data.json", max_length,relations)
+    pickle.dump(questions,open('./resources_v8/questions_new.pickle','w+'))
+    pickle.dump(vectors,open('./resources_v8/vectors_new.pickle','w+'))
+    pickle.dump(pos_paths,open('./resources_v8/positive_paths_new.pickle','w+'))
+    pickle.dump(neg_paths,open('./resources_v8/negative_paths_new.pickle','w+'))
+    print "done with dumping everything"
+    # pad_till = abs(pos_paths.shape[1] - questions.shape[1])
+    # pad = lambda x: np.pad(x, [(0,0), (0,pad_till), (0,0)], 'constant', constant_values=0.)
+    # if pos_paths.shape[1] < questions.shape[1]:
+    #     pos_paths = pad(pos_paths)
+    #     neg_paths = pad(neg_paths)
+    # else:
+    #     questions = pad(questions)
 
-    try:
-        with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pointwise'}, file + ".mapped.npz")) as data:
-            dataset = np.load(data)
-            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab, vectors = vocab_master.load()
-            # vectors = glove_embeddings[vocab.keys()]
-            return vectors, questions, pos_paths, neg_paths
-    except (EOFError,IOError) as e:
-        with open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, file)) as fp:
-            dataset = json.load(fp)
-            # dataset = dataset[:10]
+    # Shuffle these matrices together @TODO this!
+    np.random.seed(0) # Random train/test splits stay the same between runs
 
-            ignored = []
+    # Divide the data into diff blocks
+    split_point = lambda x: int(len(x) * .80)
 
-            pos_paths = []
-            for i in dataset:
-                path_id = i['parsed-data']['path_id']
-                positive_path = []
-                try:
-                    for p in path_id:
-                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                        positive_path += relations[int(p[1:])][3].tolist()
-                except (TypeError, ValueError) as e:
-                    ignored.append(i)
-                    continue
-                pos_paths.append(positive_path)
+    def train_split(x):
+        return x[:split_point(x)]
+    def test_split(x):
+        return x[split_point(x):]
 
-            questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+    train_pos_paths = train_split(pos_paths)
+    train_neg_paths = train_split(neg_paths)
+    train_questions = train_split(questions)
 
-            neg_paths = []
-            for i in range(0,len(dataset)):
-                datum = dataset[i]
-                negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
-                np.random.shuffle(negative_paths_id)
-                negative_paths = []
-                for neg_path in negative_paths_id:
-                    negative_path = []
-                    for p in neg_path:
-                        try:
-                            negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
-                        except ValueError:
-                            negative_path += relations[int(p)][3].tolist()
-                    negative_paths.append(negative_path)
-                negative_paths = remove_positive_path(pos_paths[i],negative_paths)
-                try:
-                    negative_paths = np.random.choice(negative_paths,1000)
-                except ValueError:
-                    if len(negative_paths) == 0:
-                        negative_paths = neg_paths[-1]
-                        print("Using previous question's paths for this since no neg paths for this question.")
-                    else:
-                        index = np.random.randint(0, len(negative_paths), 1000)
-                        negative_paths = np.array(negative_paths)
-                        negative_paths = negative_paths[index]
-                neg_paths.append(negative_paths)
+    test_pos_paths = test_split(pos_paths)
+    test_neg_paths = test_split(neg_paths)
+    test_questions = test_split(questions)
 
-            for i in range(0,len(neg_paths)):
-                neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
-            neg_paths = np.asarray(neg_paths)
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+    neg_paths_per_epoch_train = 10
+    neg_paths_per_epoch_test = 1000
+    dummy_y_train = np.zeros(len(train_questions)*neg_paths_per_epoch_train)
+    dummy_y_test = np.zeros(len(test_questions)*(neg_paths_per_epoch_test+1))
 
-            # Map to new ID space.
-            # try:
-            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, ".vocab.pickle")))
-            #     vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npz" )))
-            # except (IOError, EOFError) as e:
-            #     if DEBUG:
-            #         warnings.warn("Did not find the vocabulary.")
-            vocab, vectors = vocab_master.load()
+    print train_questions.shape
+    print train_pos_paths.shape
+    print train_neg_paths.shape
 
-            # all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
+    print test_questions.shape
+    print test_pos_paths.shape
+    print test_neg_paths.shape
+
+    with K.tf.device('/gpu:' + gpu):
+        neg_paths_per_epoch_train = 10
+        neg_paths_per_epoch_test = 1000
+        K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
+        """
+            Model Time!
+        """
+        max_length = train_questions.shape[1]
+        # Define input to the models
+        x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
+        x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
+        x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
+
+        embedding_dims = vectors.shape[1]
+        nr_hidden = 128
+
+        # holographic_forward = Dense(1, activation='sigmoid')
+        # final_forward = Dense(1, activation='sigmoid')
+
+        embed = _StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.4)
+        encode = _BiRNNEncoding(max_length, embedding_dims,  nr_hidden, 0.4)
+        # encode = LSTM(max_length)(encode)
+        # attend = _Attention(max_length, nr_hidden, dropout=0.4, L2=0.01)
+        # align = _SoftAlignment(max_length, nr_hidden)
+        # compare = _Comparison(max_length, nr_hidden, dropout=0.4, L2=0.01)
+        # entail = _Entailment(nr_hidden, 1, dropout=0.4, L2=0.01)
+
+        def getScore(ques, path):
+            x_ques_embedded = embed(ques)
+            x_path_embedded = embed(path)
+
+            ques_encoded = encode(x_ques_embedded)
+            path_encoded = encode(x_path_embedded)
+
+            # holographic_score = holographic_forward(Lambda(lambda x: cross_correlation(x)) ([ques_encoded, path_encoded]))
+            dot_score = dot([ques_encoded, path_encoded], axes=-1)
+            # l1_score = Lambda(lambda x: K.abs(x[0]-x[1]))([ques_encoded, path_encoded])
+
+            # return final_forward(concatenate([holographic_score, dot_score, l1_score], axis=-1))
+            return dot_score
+
             #
-            # # ###################
-            # # Map to new ID space
-            # # ###################
+            # attention = attend(ques_encoded, path_encoded)
             #
-            # uniques = np.unique(all)
-            # try:
-            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, file + ".vocab.pickle")))
-            # except (IOError, EOFError) as e:
-            #     if DEBUG:
-            #         warnings.warn("Did not find the vocabulary.")
-            #     vocab = {}
-            #     # Create Vocabulary
-            #     for i in range(len(uniques)):
-            #         vocab[uniques[i]] = i
+            # align_ques = align(path_encoded, attention)
+            # align_path = align(ques_encoded, attention, transpose=True)
+            #
+            # feats_ques = compare(ques_encoded, align_ques)
+            # feats_path = compare(path_encoded, align_path)
+            #
+            # return entail(feats_ques, feats_path)
 
-            # vocab = {}
+        pos_score = getScore(x_ques, x_pos_path)
+        neg_score = getScore(x_ques, x_neg_path)
 
-            # Map everything
-            for i in range(len(questions)):
-                questions[i] = np.asarray([vocab[key] for key in questions[i]])
-                pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
 
-                for j in range(len(neg_paths[i])):
-                    neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
+        output = concatenate([pos_score, neg_score, loss], axis=-1)
 
-            # Create slimmer, better, faster, vectors file.
-            # vectors = glove_embeddings[uniques]
+        # Model time!
+        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+            outputs=[output])
 
-            with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pointwise'}, file + ".mapped.npz"), "w+") as data:
-                np.savez(data, questions, pos_paths, neg_paths)
-                # pickle.dump(vocab,idx)
+        print(model.summary())
 
-            return vectors, questions, pos_paths, neg_paths
+        model.compile(optimizer=OPTIMIZER,
+                      loss=custom_loss)
+
+        # Prepare training data
+        training_input = [train_questions, train_pos_paths, train_neg_paths]
+
+        training_generator = TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                  max_length, neg_paths_per_epoch_train, BATCH_SIZE)
+        validation_generator = ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                  max_length, neg_paths_per_epoch_test, 9999)
+
+
+        json_desc, dir = get_smart_save_path(model)
+        model_save_path = os.path.join(dir, 'model.h5')
+
+        checkpointer = CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,\
+            monitor='val_metric', verbose=1, save_best_only=True, mode='max', period=10)
+
+        model.fit_generator(training_generator, epochs=EPOCHS, workers=3, use_multiprocessing=True, callbacks=[checkpointer])
+            # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
+    # ])
+
+
+
+        # Prepare test data
+
+        print "Precision (hits@1) = ", rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000)
+
+    # print "Evaluation Complete"
+    # print "Loss     = ", results[0]
+    # print "F1 Score = ", results[1]
+    # print "Accuracy = ", results[2]
 
 
 if __name__ == "__main__":
-    warnings.warn("Code has been moved from this file to network_corechain. Please open that instead. Okay, auf weidersehen")
+    main()

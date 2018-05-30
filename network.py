@@ -208,12 +208,6 @@ def custom_loss(y_true, y_pred):
     return K.sum(diff)
 
 
-def point_wise_custom_loss(y_true, y_pred):
-    pos_score = y_true[0]
-    pos_score = y_true[1]
-
-    losses.binary_crossentropy(y_pred[:,0],)
-
 
 def load_relation():
     """
@@ -457,6 +451,193 @@ def rank_precision_metric(neg_paths_per_epoch):
     return metric
 
 
+def rank_precision_pointwise(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
+
+    max_length = test_questions.shape[-1]
+    questions = np.reshape(np.repeat(np.reshape(test_questions,
+                                                (test_questions.shape[0], 1, test_questions.shape[1])),
+                                     neg_paths_per_epoch + 1, axis=1), (-1, max_length))
+    pos_paths = np.reshape(test_pos_paths,
+                           (test_pos_paths.shape[0], 1, test_pos_paths.shape[1]))
+    neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
+    all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
+
+    outputs = model.predict([questions, all_paths], batch_size=batch_size)[:, 0]
+    outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch + 1))
+
+    precision = float(len(np.where(np.argmax(outputs, axis=1) == 0)[0])) / outputs.shape[0]
+    return precision
+
+class CustomPointWiseModelCheckpoint(Callback):
+    """Save the model after every epoch.
+    `filepath` can contain named formatting options,
+    which will be filled the value of `epoch` and
+    keys in `logs` (passed in `on_epoch_end`).
+    For example: if `filepath` is `weights.{epoch:02d}-{val_loss:.2f}.hdf5`,
+    then the model checkpoints will be saved with the epoch number and
+    the validation loss in the filename.
+    # Arguments
+        filepath: string, path to save the model file.
+        monitor: quantity to monitor.
+        verbose: verbosity mode, 0 or 1.
+        save_best_only: if `save_best_only=True`,
+            the latest best model according to
+            the quantity monitored will not be overwritten.
+        mode: one of {auto, min, max}.
+            If `save_best_only=True`, the decision
+            to overwrite the current save file is made
+            based on either the maximization or the
+            minimization of the monitored quantity. For `val_acc`,
+            this should be `max`, for `val_loss` this should
+            be `min`, etc. In `auto` mode, the direction is
+            automatically inferred from the name of the monitored quantity.
+        save_weights_only: if True, then only the model's weights will be
+            saved (`model.save_weights(filepath)`), else the full model
+            is saved (`model.save(filepath)`).
+        period: Interval (number of epochs) between checkpoints.
+    """
+
+    def __init__(self, filepath, test_questions, test_pos_paths, test_neg_paths, monitor='val_loss', verbose=0,
+                 save_best_only=False, save_weights_only=False,
+                 mode='auto', period=1):
+        super(CustomPointWiseModelCheckpoint, self).__init__()
+        self.monitor = monitor
+        self.verbose = verbose
+        self.filepath = filepath
+        self.save_best_only = save_best_only
+        self.save_weights_only = save_weights_only
+        self.period = period
+        self.epochs_since_last_save = 0
+        self.test_questions = test_questions
+        self.test_pos_paths = test_pos_paths
+        self.test_neg_paths = test_neg_paths
+
+        if mode not in ['auto', 'min', 'max']:
+            warnings.warn('ModelCheckpoint mode %s is unknown, '
+                          'fallback to auto mode.' % (mode),
+                          RuntimeWarning)
+            mode = 'auto'
+
+        if mode == 'min':
+            self.monitor_op = np.less
+            self.best = np.Inf
+        elif mode == 'max':
+            self.monitor_op = np.greater
+            self.best = -np.Inf
+        else:
+            if 'acc' in self.monitor or self.monitor.startswith('fmeasure'):
+                self.monitor_op = np.greater
+                self.best = -np.Inf
+            else:
+                self.monitor_op = np.less
+                self.best = np.Inf
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        self.epochs_since_last_save += 1
+        if self.epochs_since_last_save >= self.period:
+            self.epochs_since_last_save = 0
+            filepath = self.filepath.format(epoch=epoch + 1, **logs)
+            if self.save_best_only:
+                current = rank_precision_pointwise(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 100, 1000)
+                # current = rank_precision_pointwise(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 100, 1000)
+                print('\Validation recall@1: {}\n'.format(current))
+                if current is None:
+                    warnings.warn('Can save best model only with %s available, '
+                                  'skipping.' % (self.monitor), RuntimeWarning)
+                else:
+                    if self.monitor_op(current, self.best):
+                        if self.verbose > 0:
+                            print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
+                                  ' saving model to %s'
+                                  % (epoch + 1, self.monitor, self.best,
+                                     current, filepath))
+                        self.best = current
+                        if self.save_weights_only:
+                            self.model.save_weights(filepath, overwrite=True)
+                        else:
+                            smart_save_model(self.model)
+                            # self.model.save(filepath, overwrite=True)
+                    else:
+                        if self.verbose > 0:
+                            print('\nEpoch %05d: %s did not improve' %
+                                  (epoch + 1, self.monitor))
+            else:
+                if self.verbose > 0:
+                    print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
+                if self.save_weights_only:
+                    self.model.save_weights(filepath, overwrite=True)
+                else:
+                    smart_save_model(self.model)
+                    # self.model.save(filepath, overwrite=True)
+
+class PointWiseTrainingDataGenerator(Sequence):
+    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
+        self.firstDone = False
+
+        self.neg_paths_per_epoch = neg_paths_per_epoch
+
+        self.questions = np.reshape(np.repeat(np.reshape(questions,
+                                            (questions.shape[0], 1, questions.shape[1])),
+                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+
+        self.pos_paths = np.reshape(np.repeat(np.reshape(pos_paths,
+                                            (pos_paths.shape[0], 1, pos_paths.shape[1])),
+                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+
+        self.neg_paths = neg_paths
+        self.max_length = max_length
+
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
+                                            (-1, self.max_length))
+
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+
+        self.batch_size = batch_size
+        #
+        # print("Questions:", self.questions_shuffled.shape)
+        # print("PosPaths:", self.pos_paths_shuffled.shape)
+        # print("NegPaths:", self.neg_paths_shuffled.shape)
+        # print("MaxLen:", self.max_length)
+        # print("BatchSize:", self.batch_size)
+        # print("len:", math.ceil(len(self.questions) / self.batch_size))
+        # raw_input("Check training data generator")
+
+    def __len__(self):
+        return math.ceil(len(self.questions) / self.batch_size)
+
+    def __getitem__(self, idx):
+        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
+        batch_questions = index(self.questions_shuffled)
+        batch_pos_paths = index(self.pos_paths_shuffled)
+        batch_neg_paths = index(self.neg_paths_shuffled)
+
+        # Now, create a new array 2x the size of prev one
+        # where, each row either has a pos path and corresponding question. Or negative path and corresponding question.
+        batch_labels = np.concatenate([np.ones(batch_pos_paths.shape[0]), np.zeros(batch_neg_paths.shape[0])], axis=0)
+        batch_questions = np.concatenate([batch_questions, batch_questions], axis=0)
+        batch_paths = np.concatenate([batch_pos_paths, batch_neg_paths], axis=0)
+
+        # Now, create a mean index to shuffle.
+        index = np.arange(batch_questions.shape[0])
+        np.random.shuffle(index)
+        batch_labels = batch_labels[index]
+        batch_questions = batch_questions[index]
+        batch_paths = batch_paths[index]
+
+        # print batch_labels[:10]
+
+        return ([batch_questions, batch_paths], batch_labels)
+
+    def on_epoch_end(self):
+
+        self.firstDone = not self.firstDone
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
+                                            (-1, self.max_length))
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+
 class _Attention(object):
     def __init__(self, max_length, nr_hidden, dropout=0.0, L2=0.0, activation='relu'):
         self.max_length = max_length
@@ -656,8 +837,6 @@ class _simpler_CNNEncoding(object):
     def __call__(self, sentence):
         return self.model(sentence)
 
-
-
 class flatten_simple(object):
     def __init__(self):
         self.model = Sequential()
@@ -674,6 +853,7 @@ class flatten_simple(object):
 
     def __call__(self, sentence):
         return self.model(sentence)
+
 class _simpleDense(object):
     def __init__(self, l, w):
         self.model = Sequential()
@@ -698,7 +878,6 @@ class _simpleTimeDistributedDense(object):
     def __call__(self, sentence_1):
         return self.model(sentence_1)
 
-
 class _parikhDense(object):
     def __init__(self, l, w):
         self.model = Sequential()
@@ -706,7 +885,6 @@ class _parikhDense(object):
 
     def __call__(self, sentence_1):
         return self.model(sentence_1)
-
 
 class _StaticEmbedding(object):
     def __init__(self, vectors, max_length, nr_out, nr_tune=5000, dropout=0.0):
@@ -747,14 +925,12 @@ class _StaticEmbedding(object):
         vectors = merge([pretrained, tuning], mode='sum')
         return vectors
 
-
 def get_glove_embeddings():
     from utils.embeddings_interface import __check_prepared__
     __check_prepared__('glove')
 
     from utils.embeddings_interface import glove_embeddings
     return glove_embeddings
-
 
 class ValidationCallback(Callback):
     def __init__(self, test_data, test_questions, test_pos_paths, test_neg_paths):
@@ -768,7 +944,6 @@ class ValidationCallback(Callback):
             recall = rank_precision(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 1000, 10000)
             print('\Validation recall@1: {}\n'.format(recall))
 
-
 def cross_correlation(x):
     a, b = x
     tf = K.tf
@@ -776,7 +951,6 @@ def cross_correlation(x):
     b_fft = tf.fft(tf.complex(b, 0.0))
     ifft = tf.ifft(tf.conj(a_fft) * b_fft)
     return tf.cast(tf.real(ifft), 'float32')
-
 
 def load_pretrained_weights(_new_model, _trained_model_path):
     """
@@ -846,7 +1020,6 @@ def load_pretrained_weights(_new_model, _trained_model_path):
 
     return _new_model
 
-
 def remove_positive_path(positive_path, negative_paths):
     counter = 0
     new_negative_paths = []
@@ -857,7 +1030,6 @@ def remove_positive_path(positive_path, negative_paths):
             counter += 1
             # print counter
     return new_negative_paths
-
 
 def create_dataset_pairwise(file, max_sequence_length, relations):
     """
@@ -968,7 +1140,6 @@ def create_dataset_pairwise(file, max_sequence_length, relations):
                 np.savez(data, questions, pos_paths, neg_paths)
 
             return vectors, questions, pos_paths, neg_paths
-
 
 def create_dataset_pointwise(file, max_sequence_length, relations):
     """

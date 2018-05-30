@@ -98,7 +98,7 @@ def create_dataset():
             pos_paths = []
             neg_paths = []
 
-            for i in range(len(dataset)):
+            for i in range(len(dataset[:int(.80*len(dataset))])):
 
                 datum = dataset[i]
 
@@ -255,4 +255,4 @@ if __name__ == "__main__":
         index = None
         vectors, questions, pos_paths, neg_paths = create_dataset()
     # n.BATCH_SIZE = BATCH_SIZE
-    n_cc.bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 10, 200, _index=index)
+    n_cc.bidirectional_dot(gpu, vectors, questions, pos_paths, neg_paths, 10, 200, _index=index,rdf=True)

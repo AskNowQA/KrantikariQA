@@ -635,7 +635,7 @@ class _simple_CNNEncoding(object):
         return self.model(sentence)
 
 class _simpler_CNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False,dense=True):
         input_shape = Input(shape=(max_length, embedding_dims))
         a = Conv1D(units,5)(input_shape)
         a_pool = MaxPooling1D(2)(a)
@@ -645,13 +645,18 @@ class _simpler_CNNEncoding(object):
         c_pool = MaxPooling1D(2)(c)
         merged = concatenate([a_pool,b_pool,c_pool],axis=1)
         global_max_pool = GlobalMaxPooling1D()(merged)
-        # merged = Flatten()(merged)
-        denser = Dense(128,activation='relu')(global_max_pool)
-        self.model = Model(input_shape,denser)
+        if dense:
+            denser = Dense(128, activation='relu')(global_max_pool)
+            self.model = Model(input_shape, denser)
+        else:
+            self.model = Model(input_shape, global_max_pool)
+
 
 
     def __call__(self, sentence):
         return self.model(sentence)
+
+
 
 class flatten_simple(object):
     def __init__(self):

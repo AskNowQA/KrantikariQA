@@ -631,10 +631,8 @@ def bidirectional_dense_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    if _index:
-        split_point = index + 1
-    else:
-        split_point = lambda x: int(len(x) * .70)
+    if _index: split_point = lambda x: _index+1
+    else: split_point = lambda x: int(len(x) * .70)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -739,7 +737,7 @@ def bidirectional_dense_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg
                                                verbose=1,
                                                save_best_only=True,
                                                mode='max',
-                                               period=10)
+                                               period=CHECK_VALIDATION_ACC_PERIOD)
 
         model.fit_generator(training_generator,
                             epochs=n.EPOCHS,
@@ -775,10 +773,8 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    if _index:
-        split_point = index + 1
-    else:
-        split_point = lambda x: int(len(x) * .70)
+    if _index: split_point = lambda x: _index+1
+    else: split_point = lambda x: int(len(x) * .70)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -786,7 +782,8 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
     def test_split(x):
         if _index:
             return x[split_point(x):]
-        return x[split_point(x):int(.80 * len(x))]
+        else:
+            return x[split_point(x):int(.80 * len(x))]
 
     train_pos_paths = train_split(pos_paths)
     train_neg_paths = train_split(neg_paths)
@@ -886,7 +883,7 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
                                                verbose=1,
                                                save_best_only=True,
                                                mode='max',
-                                               period=10)
+                                               period=CHECK_VALIDATION_ACC_PERIOD)
 
         model.fit_generator(training_generator,
                             epochs=n.EPOCHS,
@@ -918,16 +915,16 @@ def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_
     np.random.seed(0) # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    if _index:
-        split_point = index + 1
-    else:
-        split_point = lambda x: int(len(x) * .80)
+    if _index: split_point = lambda x: _index+1
+    else: split_point = lambda x: int(len(x) * .70)
 
     def train_split(x):
         return x[:split_point(x)]
     def test_split(x):
-        return x[split_point(x):]
-
+        if _index:
+            return x[split_point(x):]
+        else:
+            return x[split_point(x):int(.80 * len(x))]
     train_pos_paths = train_split(pos_paths)
     train_neg_paths = train_split(neg_paths)
     train_questions = train_split(questions)
@@ -976,7 +973,7 @@ def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_
         align = n._SoftAlignment(max_length, nr_hidden)
         compare = n._Comparison(max_length, nr_hidden, dropout=0.6, L2=0.01)
         entail = n._Entailment(nr_hidden, 1, dropout=0.4, L2=0.01)
-        dense = n._simpleDense(max_length*2,nr_hidden*2)
+        dense = n._simpleDense(max_length*2,nr_hidden)
         # encode_step_2 = n._simple_CNNEncoding(max_length*2, embedding_dims, nr_hidden, 0.5)
 
 
@@ -1031,7 +1028,7 @@ def parikh(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_
 
             # new_ques = encode_step_2(feats_ques)
             # new_path = encode_step_2(feats_path)
-            dot_score = n.dot([dense_ques, dense_path], axes=-1, normalize=True)
+            dot_score = n.dot([dense_ques, dense_path], axes=-1)
             # dot_score = n.dot([feats_ques, feats_path], axes=-1, normalize=True)
             return dot_score
 
@@ -1101,10 +1098,8 @@ def maheshwari(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
     np.random.seed(0) # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    if _index:
-        split_point = index + 1
-    else:
-        split_point = lambda x: int(len(x) * .80)
+    if _index: split_point = lambda x: _index+1
+    else: split_point = lambda x: int(len(x) * .70)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -1250,10 +1245,8 @@ def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    if _index:
-        split_point = index + 1
-    else:
-        split_point = lambda x: int(len(x) * .80)
+    if _index: split_point = lambda x: _index+1
+    else: split_point = lambda x: int(len(x) * .70)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -1445,10 +1438,8 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    if _index:
-        split_point = index + 1
-    else:
-        split_point = lambda x: int(len(x) * .70)
+    if _index: split_point = lambda x: _index+1
+    else: split_point = lambda x: int(len(x) * .70)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -1563,7 +1554,7 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
                                                verbose=1,
                                                save_best_only=True,
                                                mode='max',
-                                               period=10)
+                                               period=CHECK_VALIDATION_ACC_PERIOD)
 
         model.fit_generator(training_generator,
                             epochs=n.EPOCHS,
@@ -1600,10 +1591,8 @@ def cnn_dense_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_p
     np.random.seed(0)  # Random train/test splits stay the same between runs
 
     # Divide the data into diff blocks
-    if _index:
-        split_point = index + 1
-    else:
-        split_point = lambda x: int(len(x) * .70)
+    if _index: split_point = lambda x: _index+1
+    else: split_point = lambda x: int(len(x) * .70)
 
     def train_split(x):
         return x[:split_point(x)]
@@ -1719,7 +1708,7 @@ def cnn_dense_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_p
                                                verbose=1,
                                                save_best_only=True,
                                                mode='max',
-                                               period=10)
+                                               period=CHECK_VALIDATION_ACC_PERIOD)
 
         model.fit_generator(training_generator,
                             epochs=n.EPOCHS,
@@ -1766,12 +1755,12 @@ if __name__ == "__main__":
     if DATASET == 'qald':
 
         id_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_train.json")))
-        id_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_test.json")))
+        # id_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, "qald_id_big_data_test.json")))
 
-        index = len(id_train) - 1
+        index = int(7.0*(len(id_train))/8.0) - 1
         FILENAME = 'combined_qald.json'
 
-        json.dump(id_train + id_test, open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, FILENAME), 'w+'))
+        json.dump(id_train, open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, FILENAME), 'w+'))
 
     elif DATASET == 'lcquad':
         # n.BATCH_SIZE = 1760
@@ -1837,7 +1826,7 @@ if __name__ == "__main__":
     elif model == 'parikh':
 
         print("About to run Parikh et al model")
-        parikh(GPU, vectors, questions, pos_paths, neg_paths, index, _transfer_model_path=TRANSFER_MODEL_PATH)
+        parikh(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
     elif model == 'maheshwari':
 

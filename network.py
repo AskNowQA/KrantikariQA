@@ -19,11 +19,11 @@ from sklearn.utils import shuffle
 import keras.backend.tensorflow_backend as K
 from keras.preprocessing.sequence import pad_sequences
 from keras.layers.merge import concatenate, dot
-from keras import optimizers, metrics
+from keras import optimizers, metrics, losses, Model
 from keras.utils import Sequence
 from keras.callbacks import Callback
 from keras.layers import InputSpec, Layer, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, TimeDistributed, Conv1D, MaxPooling1D, Embedding, Flatten
+from keras.layers import Lambda, Activation, Dropout, TimeDistributed, Conv1D, MaxPooling1D, Embedding, Flatten, GlobalMaxPooling1D, Input
 from keras.layers import Bidirectional, LSTM, GRU
 from keras.models import Sequential
 from keras.regularizers import l2
@@ -206,6 +206,13 @@ def custom_loss(y_true, y_pred):
     diff = y_pred[:,-1]
     # return K.sum(K.maximum(1.0 - diff, 0.))
     return K.sum(diff)
+
+
+def point_wise_custom_loss(y_true, y_pred):
+    pos_score = y_true[0]
+    pos_score = y_true[1]
+
+    losses.binary_crossentropy(y_pred[:,0],)
 
 
 def load_relation():
@@ -616,7 +623,8 @@ class _simple_CNNEncoding(object):
         self.model.add(MaxPooling1D(2))
         self.model.add(Conv1D(units, 5))
         self.model.add(MaxPooling1D(2))
-        self.model.add(Flatten())
+        self.model.add(GlobalMaxPooling1D())
+        # self.model.add(Flatten())
         self.model.add(Dense(128,activation='relu'))
         #self.model.add(LSTM(units, return_sequences=False,
         #                                 dropout_W=dropout, dropout_U=dropout))
@@ -626,7 +634,41 @@ class _simple_CNNEncoding(object):
     def __call__(self, sentence):
         return self.model(sentence)
 
+class _simpler_CNNEncoding(object):
+    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
+        input_shape = Input(shape=(max_length, embedding_dims))
+        a = Conv1D(units,5)(input_shape)
+        a_pool = MaxPooling1D(2)(a)
+        b = Conv1D(units,5)(input_shape)
+        b_pool = MaxPooling1D(2)(b)
+        c = Conv1D(units,5)(input_shape)
+        c_pool = MaxPooling1D(2)(c)
+        merged = concatenate([a_pool,b_pool,c_pool],axis=1)
+        global_max_pool = GlobalMaxPooling1D()(merged)
+        # merged = Flatten()(merged)
+        denser = Dense(128,activation='relu')(global_max_pool)
+        self.model = Model(input_shape,denser)
 
+
+    def __call__(self, sentence):
+        return self.model(sentence)
+
+class flatten_simple(object):
+    def __init__(self):
+        self.model = Sequential()
+        self.model.add(Flatten())
+        # self.model.add(Conv1D(units, 5))
+        # self.model.add(MaxPooling1D(2))
+        # self.model.add(GlobalMaxPooling1D())
+        # self.model.add(Flatten())
+        # self.model.add(Dense(128,activation='relu'))
+        #self.model.add(LSTM(units, return_sequences=False,
+        #                                 dropout_W=dropout, dropout_U=dropout))
+        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
+        # self.model.add(TimeDistributed(Dropout(0.2)))
+
+    def __call__(self, sentence):
+        return self.model(sentence)
 class _simpleDense(object):
     def __init__(self, l, w):
         self.model = Sequential()

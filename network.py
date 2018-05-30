@@ -246,33 +246,48 @@ def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_pa
     return precision
 
 
-def rank_precision_pointwise(model, test_questions, test_paths, test_labels, neg_paths_per_epoch=100, batch_size=1000):
+def rank_precision_pointwise(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
+    # max_length = test_questions.shape[-1]
+    #
+    # # Don't have to change questions' shape.
+    #
+    #
+    # outputs = model.predict(x=[test_questions, test_paths], batch_size=batch_size)
+    #
+    # # Output is a 1D array which I need to compute cross entropy loss over.
+    #
+    # score = np.zeros((2,2))
+    # for i in range(len(outputs)):
+    #     if test_labels[i] == 0:
+    #         if outputs[i] < 0.5:
+    #             score[0][0] += 1
+    #         if outputs[i] >= 0.5:
+    #             score[0][1] += 1
+    #     if test_labels[i] == 1:
+    #         if outputs[i] < 0.5:
+    #             score[1][0] += 1
+    #         if outputs[i] >= 0.5:
+    #             score[1][1] += 1
+    #
+    # # Done with matrix.
+    # precision = float(score[0][0] + score[1][1])/len(outputs)
+    #
+    # # precision = float(len(np.where(np.argmax(outputs, axis=1) == 0)[0]))/outputs.shape[0]
+    # return precision
+
     max_length = test_questions.shape[-1]
+    questions = np.reshape(np.repeat(np.reshape(test_questions,
+                                                (test_questions.shape[0], 1, test_questions.shape[1])),
+                                     neg_paths_per_epoch + 1, axis=1), (-1, max_length))
+    pos_paths = np.reshape(test_pos_paths,
+                           (test_pos_paths.shape[0], 1, test_pos_paths.shape[1]))
+    neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
+    all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
 
-    # Don't have to change questions' shape.
+    outputs = model.predict([questions, all_paths], batch_size=batch_size)[:, 0]
+    outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch + 1))
 
-
-    outputs = model.predict(x=[test_questions, test_paths], batch_size=batch_size)
-
-    # Output is a 1D array which I need to compute cross entropy loss over.
-
-    score = np.zeros((2,2))
-    for i in range(len(outputs)):
-        if test_labels[i] == 0:
-            if outputs[i] < 0.5:
-                score[0][0] += 1
-            if outputs[i] >= 0.5:
-                score[0][1] += 1
-        if test_labels[i] == 1:
-            if outputs[i] < 0.5:
-                score[1][0] += 1
-            if outputs[i] >= 0.5:
-                score[1][1] += 1
-
-    # Done with matrix.
-    precision = float(score[0][0] + score[1][1])/len(outputs)
-
-    # precision = float(len(np.where(np.argmax(outputs, axis=1) == 0)[0]))/outputs.shape[0]
+    precision = float(len(np.where(np.argmax(outputs, axis=1) == 0)[0])) / outputs.shape[0]
     return precision
 
 
@@ -348,6 +363,7 @@ class CustomPointWiseModelCheckpoint(Callback):
             filepath = self.filepath.format(epoch=epoch + 1, **logs)
             if self.save_best_only:
                 current = rank_precision_pointwise(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 100, 1000)
+                # current = rank_precision_pointwise(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 100, 1000)
                 print('\Validation recall@1: {}\n'.format(current))
                 if current is None:
                     warnings.warn('Can save best model only with %s available, '
@@ -483,36 +499,71 @@ class CustomModelCheckpoint(Callback):
 
 
 class PointWiseTrainingDataGenerator(Sequence):
-    def __init__(self, questions, paths, labels, max_length, neg_paths_per_epoch, batch_size):
+    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
+        self.firstDone = False
 
         self.neg_paths_per_epoch = neg_paths_per_epoch
-        self.max_length = max_length
-        self.questions = questions
-        self.paths = paths
-        self.labels = labels
 
-        self.questions_shuffled, self.paths_shuffled, self.labels_shuffled = self.questions, self.paths, self.labels
+        self.questions = np.reshape(np.repeat(np.reshape(questions,
+                                            (questions.shape[0], 1, questions.shape[1])),
+                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+
+        self.pos_paths = np.reshape(np.repeat(np.reshape(pos_paths,
+                                            (pos_paths.shape[0], 1, pos_paths.shape[1])),
+                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+
+        self.neg_paths = neg_paths
+        self.max_length = max_length
+
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
+                                            (-1, self.max_length))
+
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
 
         self.batch_size = batch_size
+        #
+        # print("Questions:", self.questions_shuffled.shape)
+        # print("PosPaths:", self.pos_paths_shuffled.shape)
+        # print("NegPaths:", self.neg_paths_shuffled.shape)
+        # print("MaxLen:", self.max_length)
+        # print("BatchSize:", self.batch_size)
+        # print("len:", math.ceil(len(self.questions) / self.batch_size))
+        # raw_input("Check training data generator")
 
     def __len__(self):
         return math.ceil(len(self.questions) / self.batch_size)
 
     def __getitem__(self, idx):
-        index = lambda x: np.concatenate((np.asarray([x[self.batch_size*idx]]), x[np.random.choice(np.arange((idx * self.batch_size)+1,(idx + 1) * self.batch_size), self.neg_paths_per_epoch)])) # @TODO: fix this.
-        # index = lambda x: np.concatenate(x[0], x[np.random.choice(np.arange(idx * self.batch_size+1,(idx + 1) * self.batch_size)), self.neg_paths_per_epoch]) # @TODO: fix this.
-        # index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
-
+        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
         batch_questions = index(self.questions_shuffled)
-        batch_paths = index(self.paths_shuffled)
-        batch_labels = index(self.labels_shuffled)
-        # print(batch_paths.shape, batch_labels.shape)
+        batch_pos_paths = index(self.pos_paths_shuffled)
+        batch_neg_paths = index(self.neg_paths_shuffled)
+
+        # Now, create a new array 2x the size of prev one
+        # where, each row either has a pos path and corresponding question. Or negative path and corresponding question.
+        batch_labels = np.concatenate([np.ones(batch_pos_paths.shape[0]), np.zeros(batch_neg_paths.shape[0])], axis=0)
+        batch_questions = np.concatenate([batch_questions, batch_questions], axis=0)
+        batch_paths = np.concatenate([batch_pos_paths, batch_neg_paths], axis=0)
+
+        # Now, create a mean index to shuffle.
+        index = np.arange(batch_questions.shape[0])
+        np.random.shuffle(index)
+        batch_labels = batch_labels[index]
+        batch_questions = batch_questions[index]
+        batch_paths = batch_paths[index]
+
+        # print batch_labels[:10]
+
         return ([batch_questions, batch_paths], batch_labels)
 
     def on_epoch_end(self):
 
-        self.questions_shuffled, self.paths_shuffled, self.labels_shuffled = \
-            shuffle(self.questions, self.paths, self.labels)
+        self.firstDone = not self.firstDone
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
+                                            (-1, self.max_length))
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
 
 
 class TrainingDataGenerator(Sequence):

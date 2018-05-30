@@ -10,6 +10,8 @@ import sys
 import json
 import warnings
 import numpy as np
+from sklearn.utils import shuffle
+
 
 import keras.backend.tensorflow_backend as K
 from keras.models import Model
@@ -1255,8 +1257,34 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
         print("Precision (hits@1) = ",
                 n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
+def prepare_validation_data(questions, pos_paths, neg_paths, neg_paths_per_epoch, max_length):
+    """
+        Function which twists the data in the same way as a training data generator for pointwise does.
+    """
 
-def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_paths_per_epoch_train = 100,
+    questions = np.reshape(np.repeat(np.reshape(questions,
+                                                     (questions.shape[0], 1, questions.shape[1])),
+                                          neg_paths_per_epoch, axis=1), (-1, max_length))
+
+    pos_paths = np.reshape(np.repeat(np.reshape(pos_paths,
+                                                     (pos_paths.shape[0], 1, pos_paths.shape[1])),
+                                          neg_paths_per_epoch, axis=1), (-1, max_length))
+
+    neg_paths_sampled = np.reshape(
+        neg_paths[:, np.random.randint(0, 1000, neg_paths_per_epoch), :],
+        (-1, max_length))
+
+    questions_shuffled, pos_paths_shuffled, neg_paths_shuffled = \
+        shuffle(questions, pos_paths, neg_paths_sampled)
+
+    labels = np.concatenate([np.ones(pos_paths.shape[0]), np.zeros(neg_paths.shape[0])], axis=0)
+    questions = np.concatenate([questions, questions], axis=0)
+    paths = np.concatenate([pos_paths, neg_paths], axis=0)
+
+    return labels, questions, paths
+
+
+def pointwise_bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 100,
                       _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None):
     """
         Data Time!
@@ -1269,33 +1297,38 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
 
     # Divide the data into diff blocks
     if _index:
-        split_point = lambda x: index + 1
+        split_point = index + 1
     else:
-        split_point = lambda x: int(len(x) * .80)
+        split_point = lambda x: int(len(x) * .70)
 
     def train_split(x):
         return x[:split_point(x)]
 
     def test_split(x):
-        return x[split_point(x):]
+        if _index: return x[split_point(x):]
+        else: return x[split_point(x):int(.80 * len(x))]
 
+
+    train_pos_paths = train_split(pos_paths)
+    train_neg_paths = train_split(neg_paths)
     train_questions = train_split(questions)
-    train_paths = train_split(paths)
-    train_labels = train_split(labels)
-    train_labels = train_labels.reshape(train_labels.shape[0],1)
 
+    test_pos_paths = test_split(pos_paths)
+    test_neg_paths = test_split(neg_paths)
     test_questions = test_split(questions)
-    test_paths = test_split(paths)
-    test_labels = test_split(labels)
-    test_labels = test_labels.reshape(test_labels.shape[0],1)
+
+    neg_paths_per_epoch_train = _neg_paths_per_epoch_train
+    neg_paths_per_epoch_test = _neg_paths_per_epoch_test
+    dummy_y_train = np.zeros(len(train_questions) * neg_paths_per_epoch_train)
+    dummy_y_test = np.zeros(len(test_questions) * (neg_paths_per_epoch_test + 1))
 
     print(train_questions.shape)
-    print(train_paths.shape)
-    print(train_labels.shape)
+    print(train_pos_paths.shape)
+    print(train_neg_paths.shape)
 
     print(test_questions.shape)
-    print(test_paths.shape)
-    print(test_labels.shape)
+    print(test_pos_paths.shape)
+    print(test_neg_paths.shape)
 
     with K.tf.device('/gpu:' + gpu):
         K.set_session(K.tf.Session(config=K.tf.ConfigProto(allow_soft_placement=True)))
@@ -1311,7 +1344,7 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
         embedding_dims = vectors.shape[1]
         nr_hidden = 128
 
-        embed = n._StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
+        embed = n._StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.3)
         encode = n._simple_BiRNNEncoding(max_length, embedding_dims, nr_hidden, 0.5, _name="encoder")
 
         def getScore(ques, path):
@@ -1327,6 +1360,9 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
 
         dotscore = getScore(x_ques, x_path)
 
+        dotscore = Lambda(lambda x: K.sigmoid(x))(dotscore)
+        # dotscore = K.sigmoid(dotscore)
+
         # Model time!
         model = Model(inputs=[x_ques, x_path],
                       outputs=[dotscore])
@@ -1340,8 +1376,8 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
         # model.fit(x=[train_questions, train_paths],y=train_labels, epochs = 10, verbose=1)
 
         # # Prepare training data
-        training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_paths, train_labels,
-                                                              max_length, _neg_paths_per_epoch_train, n.BATCH_SIZE*100)
+        training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                              max_length, _neg_paths_per_epoch_train, n.BATCH_SIZE)
 
         # if DEBUG:
         #     print(train_questions.shape, train_paths.shape, train_labels.shape)
@@ -1363,7 +1399,9 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
         #                     workers=3,
         #                     use_multiprocessing=True)
 
-        checkpointer = n.CustomPointWiseModelCheckpoint(model_save_path, test_questions, test_paths, test_labels,
+        # test_labels, test_questions, test_paths = prepare_validation_data(test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch_test, max_length)
+
+        checkpointer = n.CustomPointWiseModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
                                                monitor='val_metric',
                                                verbose=1,
                                                save_best_only=True,
@@ -1378,7 +1416,7 @@ def pointwise_bidirectional_dot(_gpu, vectors, questions, paths, labels, _neg_pa
         # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
 
         print("Precision (hits@1) = ",
-                n.rank_precision(model, test_questions, test_paths, test_labels, 1000, 10000))
+                n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 
 if __name__ == "__main__":
@@ -1515,11 +1553,13 @@ if __name__ == "__main__":
     elif model == 'pointwise_birnn_dot':
 
         # Load relations and the data
-        vectors, questions, paths, labels = n.create_dataset_pointwise("id_big_data.json", n.MAX_SEQ_LENGTH,
-                                                                       relations)
+        # vectors, questions, paths, labels = n.create_dataset_pointwise("id_big_data.json", n.MAX_SEQ_LENGTH,
+        #                                                                relations)
+        vectors, questions, pos_paths, neg_paths = n.create_dataset_pairwise(FILENAME, n.MAX_SEQ_LENGTH,
+                                                                             relations)
 
         print("About to run Pointwise BidirectionalRNN with a dot at the helm. God save the queen.")
-        pointwise_bidirectional_dot(GPU, vectors, questions, paths, labels, _index=index)
+        pointwise_bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train=10, _index=index)
 
     else:
         warnings.warn("Did not choose any model.")

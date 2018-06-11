@@ -21,8 +21,8 @@ short_forms = {
 }
 
 
-QALD = True
-QALD_TRAIN = True
+QALD = False
+QALD_TRAIN = False
 
 FINAL_LCQUAD_FILE_NAME = 'id_big_data.json'
 FINAL_QALD_FILE_NAME_TEST = 'qald_id_big_data_test.json'
@@ -151,12 +151,14 @@ for i in range(0,len(big_data)):
 		else:
 			new_path_id = [str(path_id[0][0]),int(path_id[0][1:]), str(path_id[1][0]),int(path_id[1][1:])]
 			data['uri']['hop-2-properties'].remove(new_path_id)
+		data['pop'] = True
 	except:
 		print traceback.print_exc()
 		# pprint(data['parsed-data'])
 		# pprint(data)
 		# raw_input('check')
 		if QALD and not QALD_TRAIN:
+			data['pop'] = False
 			id_big_data_test.append(data)
 		continue
 

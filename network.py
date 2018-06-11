@@ -53,7 +53,7 @@ MAX_SEQ_LENGTH = 25
 EPOCHS = 300
 BATCH_SIZE = 880        # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
-LOSS = 'categorical_crossentropy'
+LOSS = 'binary_crossentropy'
 NEGATIVE_SAMPLES = 1000
 OPTIMIZER = optimizers.Adam(LEARNING_RATE,beta_2 = 0.999)
 

@@ -338,8 +338,8 @@ class Krantikari_v2:
 		# Filter out the literals, and keep uniques.
 		intermediate_entities = list(set([x for x in intermediate_entities if x.startswith('http://dbpedia.org/resource')]))
 
-		if len(intermediate_entities) > 1000:
-			intermediate_entities = intermediate_entities[0:1000]
+		if len(intermediate_entities) > 100:
+			intermediate_entities = intermediate_entities[0:100]
 		left_predicates, right_predicates = [], []  # Places to store data.
 
 		for entity in intermediate_entities:
@@ -914,7 +914,7 @@ def generate_training_data(start,end,qald=False):
 
 	parsing_error = []
 	# Parse it
-	for x in iterator:
+	for x in dataset:
 
 		try:
 			temp_big_data = {}
@@ -958,10 +958,10 @@ def generate_training_data(start,end,qald=False):
 
 
 			if parsed_data['sparql_template_id'] == 151:
-				qa = Krantikari_v2(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp,
+				qa = KN.Krantikari_v2(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp,
 								   _training=True, _ask=True)
 			else:
-				qa = Krantikari_v2(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True,_ask=False)
+				qa = KN.Krantikari_v2(_question=q, _entities=e, _model_interpreter=model, _dbpedia_interface=dbp, _training=True,_ask=False)
 			fps = qa.training_paths
 
 			temp_big_data['uri'] = qa.data
@@ -995,7 +995,9 @@ def generate_training_data(start,end,qald=False):
 			temp_big_data['label-data'] = [q,e,tp,fps,_id]
 			big_data.append(temp_big_data)
 		except Exception:
+			print traceback.print_exc()
 			except_log.append(x)
+			raw_input()
 
 			# results.append(evaluate(parsed_data, qa.best_path))
 

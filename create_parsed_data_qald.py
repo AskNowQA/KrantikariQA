@@ -13,7 +13,7 @@ import qald_parser as qp
 DEBUG = False
 
 
-TEST = False
+TEST = True
 
 
 FINAL_QALD_FILE_NAME_TEST = 'qald_big_data_test.json'
@@ -57,7 +57,7 @@ def parsed_data(node):
 	'''
 	try:
 		if data[0][0][1:] == 'http://dbpedia.org/ontology/type':
-			parsed_data['path'] = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+			parsed_data['path'] = [data[0][0][0]+'http://www.w3.org/1999/02/22-rdf-syntax-ns#type']
 	except:
 		parsed_data['path'] = [-1]
 	parsed_data['sparql_query'] = node['unparsed-qald-data']['query']['sparql']

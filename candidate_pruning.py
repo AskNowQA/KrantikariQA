@@ -921,6 +921,12 @@ if __name__ is "__main__":
     if DEBUG: print("the length of test data is ", len(id_data_test))
 
     core_chain_counter = 0
+    '''
+        Core chain accuracy counter counts the number of time the core chain predicated is same as 
+        positive path. This also includes for ask query.
+        The counter might confuse the property and the ontology. 
+    '''
+    core_chain_accuracy_counter = 0
     results = []
     avg = []
     c = 0
@@ -933,23 +939,22 @@ if __name__ is "__main__":
     for data in id_data_test:
         flag = False
 
-        # Some macros which would be useful for constructing sparqls
-        print "the counter is ", str(question_counter)
-        if question_counter == 4:
-            print "skipping", str(question_counter)
-            question_counter = question_counter + 1
-            continue
-        question_counter = question_counter + 1
+        # # Some macros which would be useful for constructing sparqls
+        # print "the counter is ", str(question_counter)
+        # if question_counter == 4:
+        #     print "skipping", str(question_counter)
+        #     question_counter = question_counter + 1
+        #     continue
+        # question_counter = question_counter + 1
 
-        if DATASET == 'lcquad':
-            data['pop'] = True
+        # if DATASET == 'lcquad':
+        #     data['pop'] = True
         query_graph = {}
         rdf_type = True
         no_positive_path = False
 
-
-
         question, positive_path, negative_paths,no_positive_path = construct_paths(data,qald=True)
+
         if not no_positive_path:
             pp = [positive_path.tolist()]
             nps = [n.tolist() for n in negative_paths]
@@ -1101,11 +1106,3 @@ if __name__ is "__main__":
         print(sum(avg)*1.0/len(avg))
         print sparql
         print data['parsed-data']['sparql_query']
-
-
-
-
-
-
-
-

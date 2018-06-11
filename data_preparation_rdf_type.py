@@ -356,5 +356,5 @@ def qald_run(test = True):
 		json.dump(rdf_type_lookup, open(COMMON_DIR + 'rdf_type_lookup.json', 'w+'))
 
 if __name__ == "__main__":
-	qald_run()
+	qald_run(test=True)
 

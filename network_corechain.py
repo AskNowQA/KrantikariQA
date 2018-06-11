@@ -171,7 +171,7 @@ def bidirectional_dot_sigmoidloss(_gpu, vectors, questions, pos_paths, neg_paths
 
 
 def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None,rdf=False) :
+                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None,rdf=False,pointwise=True) :
     """
         Data Time!
     """
@@ -242,7 +242,8 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
         # Define input to the models
         x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
         x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
-        x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
+        if not pointwise:
+            x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
         embedding_dims = vectors.shape[1]
         nr_hidden = 256
@@ -265,20 +266,29 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
             return dot_score
 
         pos_score = getScore(x_ques, x_pos_path)
-        neg_score = getScore(x_ques, x_neg_path)
+        if not pointwise:
+            neg_score = getScore(x_ques, x_neg_path)
 
-        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
+        if not pointwise:
+            loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
 
-        output = n.concatenate([pos_score, neg_score, loss], axis=-1)
+            output = n.concatenate([pos_score, neg_score, loss], axis=-1)
 
         # Model time!
-        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+            model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
                       outputs=[output])
 
-        print(model.summary())
+            print(model.summary())
 
-        model.compile(optimizer=n.OPTIMIZER,
+            model.compile(optimizer=n.OPTIMIZER,
                       loss=n.custom_loss)
+        else:
+            pos_score = Lambda(lambda x: K.sigmoid(x))(pos_score)
+            model = Model(inputs=[x_ques, x_pos_path],
+                          outputs=[pos_score])
+            print(model.summary())
+            model.compile(optimizer=n.OPTIMIZER,
+                          loss=n.LOSS)
 
         """
             Check if we intend to transfer weights from any other model.
@@ -286,30 +296,51 @@ def bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths
         if _transfer_model_path:
             model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
-        # Prepare training data
-        training_input = [train_questions, train_pos_paths, train_neg_paths]
 
-        training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                     max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
-        validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                         max_length, neg_paths_per_epoch_test, 9999)
+
+        if not pointwise:
+            # Prepare training data
+            # training_input = [train_questions, train_pos_paths, train_neg_paths]
+            training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                         max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
+            # validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+            #                                                  max_length, neg_paths_per_epoch_test, 9999)
+        else:
+            training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                                  max_length, _neg_paths_per_epoch_train, n.BATCH_SIZE)
+
 
         # smart_save_model(model)
         json_desc, dir = n.get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
-        checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
-                                               monitor='val_metric',
-                                               verbose=1,
-                                               save_best_only=True,
-                                               mode='max',
-                                               period=CHECK_VALIDATION_ACC_PERIOD)
+        if not pointwise:
+            checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
+                                                   monitor='val_metric',
+                                                   verbose=1,
+                                                   save_best_only=True,
+                                                   mode='max',
+                                                   period=CHECK_VALIDATION_ACC_PERIOD)
 
-        model.fit_generator(training_generator,
-                            epochs=n.EPOCHS,
-                            workers=3,
-                            use_multiprocessing=True,
-                            callbacks=[checkpointer])
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
+        else:
+            checkpointer = n.CustomPointWiseModelCheckpoint(model_save_path, test_questions, test_pos_paths,
+                                                            test_neg_paths,
+                                                            monitor='val_metric',
+                                                            verbose=1,
+                                                            save_best_only=True,
+                                                            mode='max',
+                                                            period=CHECK_VALIDATION_ACC_PERIOD)
+
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
         # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
 
         print("Precision (hits@1) = ",
@@ -608,7 +639,7 @@ def two_bidirectional_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_p
 
 
 def bidirectional_dense_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                            _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None):
+                            _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None,pointwise=False):
     """
         Data Time!
     """
@@ -674,7 +705,8 @@ def bidirectional_dense_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg
         # Define input to the models
         x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
         x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
-        x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
+        if not pointwise:
+            x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
         embedding_dims = vectors.shape[1]
         nr_hidden = 256
@@ -698,59 +730,86 @@ def bidirectional_dense_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg
             return dot_score
 
         pos_score = getScore(x_ques, x_pos_path)
-        neg_score = getScore(x_ques, x_neg_path)
+        if not pointwise:
+            neg_score = getScore(x_ques, x_neg_path)
 
-        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
+        if not pointwise:
+            loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
 
-        output = n.concatenate([pos_score, neg_score, loss], axis=-1)
+            output = n.concatenate([pos_score, neg_score, loss], axis=-1)
 
-        # Model time!
-        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+            # Model time!
+            model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
                       outputs=[output])
 
-        print(model.summary())
-        # if DEBUG: raw_input("Check the summary before going ahead!")
+            print(model.summary())
+            # if DEBUG: raw_input("Check the summary before going ahead!")
 
-        model.compile(optimizer=n.OPTIMIZER,
+            model.compile(optimizer=n.OPTIMIZER,
                       loss=n.custom_loss)
-
+        else:
+            pos_score = Lambda(lambda x: K.sigmoid(x))(pos_score)
+            model = Model(inputs=[x_ques, x_pos_path],
+                          outputs=[pos_score])
+            print(model.summary())
+            model.compile(optimizer=n.OPTIMIZER,
+                          loss=n.LOSS)
         """
             Check if we intend to transfer weights from any other model.
         """
         if _transfer_model_path:
             model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
-        # Prepare training data
-        training_input = [train_questions, train_pos_paths, train_neg_paths]
+        if not pointwise:
+            # Prepare training data
+            # training_input = [train_questions, train_pos_paths, train_neg_paths]
 
-        training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                     max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
-        validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                         max_length, neg_paths_per_epoch_test, 9999)
+            training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                         max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
+            # validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                             # max_length, neg_paths_per_epoch_test, 9999)
+        else:
+            training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                                  max_length, _neg_paths_per_epoch_train, n.BATCH_SIZE)
 
         # smart_save_model(model)
         json_desc, dir = n.get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
-        checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
-                                               monitor='val_metric',
-                                               verbose=1,
-                                               save_best_only=True,
-                                               mode='max',
-                                               period=CHECK_VALIDATION_ACC_PERIOD)
+        if not pointwise:
+            checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
+                                                   monitor='val_metric',
+                                                   verbose=1,
+                                                   save_best_only=True,
+                                                   mode='max',
+                                                   period=CHECK_VALIDATION_ACC_PERIOD)
 
-        model.fit_generator(training_generator,
-                            epochs=n.EPOCHS,
-                            workers=3,
-                            use_multiprocessing=True,
-                            callbacks=[checkpointer])
-        # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
+            # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
+        else:
+            checkpointer = n.CustomPointWiseModelCheckpoint(model_save_path, test_questions, test_pos_paths,
+                                                            test_neg_paths,
+                                                            monitor='val_metric',
+                                                            verbose=1,
+                                                            save_best_only=True,
+                                                            mode='max',
+                                                            period=CHECK_VALIDATION_ACC_PERIOD)
+
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
 
         print("Precision (hits@1) = ",
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
 
 def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                            _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None):
+                            _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None,pointwise=False):
     """
         Data Time!
     """
@@ -817,7 +876,8 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
         # Define input to the models
         x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
         x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
-        x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
+        if not pointwise:
+            x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
         embedding_dims = vectors.shape[1]
         nr_hidden = 256
@@ -843,22 +903,31 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
             return dot_score
 
         pos_score = getScore(x_ques, x_pos_path)
-        neg_score = getScore(x_ques, x_neg_path)
+        if not pointwise:
+            neg_score = getScore(x_ques, x_neg_path)
 
-        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
-        output = Lambda(lambda x: n.concatenate([x[0], x[1], x[2]], axis=-1))([pos_score, neg_score,loss])
+        if not pointwise:
+            loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
+            output = Lambda(lambda x: K.concatenate([x[0], x[1], x[2]], axis=-1))([pos_score, neg_score,loss])
 
-        # output = n.concatenate([pos_score, neg_score, loss], axis=-1)
+            # output = n.concatenate([pos_score, neg_score, loss], axis=-1)
 
-        # Model time!
-        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
-                      outputs=[output])
+            # Model time!
+            model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+                          outputs=[output])
 
-        print(model.summary())
-        # if DEBUG: raw_input("Check the summary before going ahead!")
+            print(model.summary())
+            # if DEBUG: raw_input("Check the summary before going ahead!")
 
-        model.compile(optimizer=n.OPTIMIZER,
-                      loss=n.custom_loss)
+            model.compile(optimizer=n.OPTIMIZER,
+                          loss=n.custom_loss)
+        else:
+            pos_score = Lambda(lambda x: K.sigmoid(x))(pos_score)
+            model = Model(inputs=[x_ques, x_pos_path],
+                          outputs=[pos_score])
+            print(model.summary())
+            model.compile(optimizer=n.OPTIMIZER,
+                          loss=n.LOSS)
 
         """
             Check if we intend to transfer weights from any other model.
@@ -866,30 +935,49 @@ def bidirectional_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_pat
         if _transfer_model_path:
             model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
-        # Prepare training data
-        training_input = [train_questions, train_pos_paths, train_neg_paths]
+        if not pointwise:
+            # Prepare training data
+            training_input = [train_questions, train_pos_paths, train_neg_paths]
 
-        training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                     max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
-        validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                         max_length, neg_paths_per_epoch_test, 9999)
+            training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                         max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
+            validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                             max_length, neg_paths_per_epoch_test, 9999)
+        else:
+            training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                                  max_length, _neg_paths_per_epoch_train, n.BATCH_SIZE)
 
         # smart_save_model(model)
         json_desc, dir = n.get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
-        checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
-                                               monitor='val_metric',
-                                               verbose=1,
-                                               save_best_only=True,
-                                               mode='max',
-                                               period=CHECK_VALIDATION_ACC_PERIOD)
+        if not pointwise:
+            checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
+                                                   monitor='val_metric',
+                                                   verbose=1,
+                                                   save_best_only=True,
+                                                   mode='max',
+                                                   period=CHECK_VALIDATION_ACC_PERIOD)
 
-        model.fit_generator(training_generator,
-                            epochs=n.EPOCHS,
-                            workers=3,
-                            use_multiprocessing=True,
-                            callbacks=[checkpointer])
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
+        else:
+            checkpointer = n.CustomPointWiseModelCheckpoint(model_save_path, test_questions, test_pos_paths,
+                                                            test_neg_paths,
+                                                            monitor='val_metric',
+                                                            verbose=1,
+                                                            save_best_only=True,
+                                                            mode='max',
+                                                            period=CHECK_VALIDATION_ACC_PERIOD)
+
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
         # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
 
         print("Precision (hits@1) = ",
@@ -1415,7 +1503,7 @@ def parikh_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_ep
 
 
 def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None,dense=False):
+                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None,dense=False,pointwise=False):
     """
         Data Time!
     """
@@ -1482,13 +1570,14 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
         # Define input to the models
         x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
         x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
-        x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
+        if not pointwise:
+           x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
         embedding_dims = vectors.shape[1]
         nr_hidden = 128
 
         embed = n._StaticEmbedding(vectors, max_length, embedding_dims, dropout=0.2)
-        encode = n._simpler_CNNEncoding(max_length, embedding_dims, nr_hidden, 0.5,dense=dense)
+        encode = n._simpler_CNNEncoding(max_length, embedding_dims, nr_hidden, 0.1,dense=dense)
         def getScore(ques, path):
             x_ques_embedded = embed(ques)
             x_path_embedded = embed(path)
@@ -1516,20 +1605,29 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
             return dot_score
 
         pos_score = getScore(x_ques, x_pos_path)
-        neg_score = getScore(x_ques, x_neg_path)
+        if not pointwise:
+            neg_score = getScore(x_ques, x_neg_path)
 
-        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
+        if not pointwise:
+            loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
 
-        output = n.concatenate([pos_score, neg_score, loss], axis=-1)
+            output = n.concatenate([pos_score, neg_score, loss], axis=-1)
 
-        # Model time!
-        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
-                      outputs=[output])
+            # Model time!
+            model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+                          outputs=[output])
 
-        print(model.summary())
+            print(model.summary())
 
-        model.compile(optimizer=n.OPTIMIZER,
-                      loss=n.custom_loss)
+            model.compile(optimizer=n.OPTIMIZER,
+                          loss=n.custom_loss)
+        else:
+            pos_score = Lambda(lambda x: K.sigmoid(x))(pos_score)
+            model = Model(inputs=[x_ques, x_pos_path],
+                          outputs=[pos_score])
+            print(model.summary())
+            model.compile(optimizer=n.OPTIMIZER,
+                          loss=n.LOSS)
 
         """
             Check if we intend to transfer weights from any other model.
@@ -1537,30 +1635,48 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
         if _transfer_model_path:
             model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
-        # Prepare training data
-        training_input = [train_questions, train_pos_paths, train_neg_paths]
+        if not pointwise:
+            # Prepare training data
+            # training_input = [train_questions, train_pos_paths, train_neg_paths]
+            training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                         max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
+            # validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+            #                                                  max_length, neg_paths_per_epoch_test, 9999)
+        else:
+            training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                                  max_length, _neg_paths_per_epoch_train, n.BATCH_SIZE)
 
-        training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                     max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
-        validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                         max_length, neg_paths_per_epoch_test, 9999)
-
-        # smart_save_model(model)
+            # smart_save_model(model)
         json_desc, dir = n.get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
-        checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
-                                               monitor='val_metric',
-                                               verbose=1,
-                                               save_best_only=True,
-                                               mode='max',
-                                               period=CHECK_VALIDATION_ACC_PERIOD)
+        if not pointwise:
+            checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
+                                                   monitor='val_metric',
+                                                   verbose=1,
+                                                   save_best_only=True,
+                                                   mode='max',
+                                                   period=CHECK_VALIDATION_ACC_PERIOD)
 
-        model.fit_generator(training_generator,
-                            epochs=n.EPOCHS,
-                            workers=3,
-                            use_multiprocessing=True,
-                            callbacks=[checkpointer])
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
+        else:
+            checkpointer = n.CustomPointWiseModelCheckpoint(model_save_path, test_questions, test_pos_paths,
+                                                            test_neg_paths,
+                                                            monitor='val_metric',
+                                                            verbose=1,
+                                                            save_best_only=True,
+                                                            mode='max',
+                                                            period=CHECK_VALIDATION_ACC_PERIOD)
+
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
         # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
 
         print("Precision (hits@1) = ",
@@ -1568,7 +1684,7 @@ def cnn_dot(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch
 
 
 def cnn_dense_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_per_epoch_train = 10,
-                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None,dense=True):
+                      _neg_paths_per_epoch_test = 1000, _index=None, _transfer_model_path=None,dense=True,pointwise=False):
     """
         Data Time!
     """
@@ -1635,7 +1751,8 @@ def cnn_dense_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_p
         # Define input to the models
         x_ques = Input(shape=(max_length,), dtype='int32', name='x_ques')
         x_pos_path = Input(shape=(max_length,), dtype='int32', name='x_pos_path')
-        x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
+        if not pointwise:
+            x_neg_path = Input(shape=(max_length,), dtype='int32', name='x_neg_path')
 
         embedding_dims = vectors.shape[1]
         nr_hidden = 128
@@ -1672,18 +1789,27 @@ def cnn_dense_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_p
             return dot_score
 
         pos_score = getScore(x_ques, x_pos_path)
-        neg_score = getScore(x_ques, x_neg_path)
+        if not pointwise:
+            neg_score = getScore(x_ques, x_neg_path)
 
-        loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
-        output = Lambda(lambda x: n.concatenate([x[0], x[1], x[2]], axis=-1))([pos_score, neg_score, loss])
-        # Model time!
-        model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
-                      outputs=[output])
+        if not pointwise:
+            loss = Lambda(lambda x: K.maximum(0., 1.0 - x[0] + x[1]))([pos_score, neg_score])
+            output = Lambda(lambda x: n.concatenate([x[0], x[1], x[2]], axis=-1))([pos_score, neg_score, loss])
+            # Model time!
+            model = Model(inputs=[x_ques, x_pos_path, x_neg_path],
+                          outputs=[output])
 
-        print(model.summary())
+            print(model.summary())
 
-        model.compile(optimizer=n.OPTIMIZER,
-                      loss=n.custom_loss)
+            model.compile(optimizer=n.OPTIMIZER,
+                          loss=n.custom_loss)
+        else:
+            pos_score = Lambda(lambda x: K.sigmoid(x))(pos_score)
+            model = Model(inputs=[x_ques, x_pos_path],
+                          outputs=[pos_score])
+            print(model.summary())
+            model.compile(optimizer=n.OPTIMIZER,
+                          loss=n.LOSS)
 
         """
             Check if we intend to transfer weights from any other model.
@@ -1691,31 +1817,51 @@ def cnn_dense_dense(_gpu, vectors, questions, pos_paths, neg_paths, _neg_paths_p
         if _transfer_model_path:
             model = n.load_pretrained_weights(_new_model=model, _trained_model_path=_transfer_model_path)
 
-        # Prepare training data
-        training_input = [train_questions, train_pos_paths, train_neg_paths]
+        if not pointwise:
+            # Prepare training data
+            training_input = [train_questions, train_pos_paths, train_neg_paths]
 
-        training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
-                                                     max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
-        validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+            training_generator = n.TrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                         max_length, neg_paths_per_epoch_train, n.BATCH_SIZE)
+            validation_generator = n.ValidationDataGenerator(train_questions, train_pos_paths, train_neg_paths,
                                                          max_length, neg_paths_per_epoch_test, 9999)
+        else:
+            training_generator = n.PointWiseTrainingDataGenerator(train_questions, train_pos_paths, train_neg_paths,
+                                                                  max_length, _neg_paths_per_epoch_train, n.BATCH_SIZE)
 
         # smart_save_model(model)
         json_desc, dir = n.get_smart_save_path(model)
         model_save_path = os.path.join(dir, 'model.h5')
 
-        checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
-                                               monitor='val_metric',
-                                               verbose=1,
-                                               save_best_only=True,
-                                               mode='max',
-                                               period=CHECK_VALIDATION_ACC_PERIOD)
 
-        model.fit_generator(training_generator,
-                            epochs=n.EPOCHS,
-                            workers=3,
-                            use_multiprocessing=True,
-                            callbacks=[checkpointer])
-        # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
+        if not pointwise:
+            checkpointer = n.CustomModelCheckpoint(model_save_path, test_questions, test_pos_paths, test_neg_paths,
+                                                   monitor='val_metric',
+                                                   verbose=1,
+                                                   save_best_only=True,
+                                                   mode='max',
+                                                   period=CHECK_VALIDATION_ACC_PERIOD)
+
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
+            # callbacks=[EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto') ])
+        else:
+            checkpointer = n.CustomPointWiseModelCheckpoint(model_save_path, test_questions, test_pos_paths,
+                                                            test_neg_paths,
+                                                            monitor='val_metric',
+                                                            verbose=1,
+                                                            save_best_only=True,
+                                                            mode='max',
+                                                            period=CHECK_VALIDATION_ACC_PERIOD)
+
+            model.fit_generator(training_generator,
+                                epochs=n.EPOCHS,
+                                workers=3,
+                                use_multiprocessing=True,
+                                callbacks=[checkpointer])
 
         print("Precision (hits@1) = ",
               n.rank_precision(model, test_questions, test_pos_paths, test_neg_paths, 1000, 10000))
@@ -1734,8 +1880,8 @@ if __name__ == "__main__":
     while True:
         try:
             assert GPU in ['0', '1', '2', '3']
-            assert model in ['birnn_dot', 'parikh', 'birnn_dense_dot', 'maheshwari', 'birnn_dense_sigmoid','cnn','cnn_dense_dot',
-                             'cnn_dense_dense','parikh_dot','birnn_dot_qald', 'two_birnn_dot','birnn_dense','birnn_dot_pointwise']
+            assert model in ['birnn_dot','pointwise_birnn_dot','parikh', 'birnn_dense_dot','pointwise_birnn_dense_dot', 'maheshwari', 'birnn_dense_sigmoid','cnn','pointwise_cnn','cnn_dense_dot',
+                             'pointwise_cnn_dense','cnn_dense_dense','pointwise_cnn_dense_dense','parikh_dot','birnn_dot_qald', 'two_birnn_dot','birnn_dense','pointwise_birnn_dense','birnn_dot_pointwise']
             assert DATASET in ['lcquad', 'qald', 'transfer-a', 'transfer-b', 'transfer-c', 'transfer-proper-qald']
             break
         except AssertionError:
@@ -1803,6 +1949,11 @@ if __name__ == "__main__":
         print("About to run BiDirectionalRNN with Dot")
         bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
 
+    if model == 'pointwise_birnn_dot':
+
+        print("About to run BiDirectionalRNN with Dot pointwise")
+        bidirectional_dot(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH,pointwise=True)
+
     elif model == 'two_birnn_dot':
 
         print("About to run BiDirectionalRNN with Dot")
@@ -1816,12 +1967,22 @@ if __name__ == "__main__":
     elif model == 'birnn_dense_dot':
 
         print("About to run BiDirectionalRNN with Dense")
-        bidirectional_dense_dot(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
+        bidirectional_dense_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
+
+    elif model == 'pointwise_birnn_dense_dot':
+
+        print("About to run BiDirectionalRNN with Dense pointwise")
+        bidirectional_dense_dot(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH,pointwise=True)
 
     elif model == 'birnn_dense':
 
         print("About to run BiDirectionalRNN with Dense")
         bidirectional_dense(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
+
+    elif model == 'pointwise_birnn_dense':
+
+        print("About to run BiDirectionalRNN with Dense")
+        bidirectional_dense(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH,pointwise=True)
 
     elif model == 'parikh':
 
@@ -1837,10 +1998,14 @@ if __name__ == "__main__":
 
         print("About to run cnn et al model")
         cnn_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH)
+    elif model == 'pointwise_cnn':
+
+        print("About to run cnn et al model pointwise")
+        cnn_dot(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH,pointwise=True)
 
     elif model == 'parikh_dot':
 
-        print("About to run cnn et al model")
+        print("About to run parikh dot et al model")
         parikh_dot(GPU, vectors, questions, pos_paths, neg_paths, index, _transfer_model_path=TRANSFER_MODEL_PATH)
     elif model == 'birnn_dot_pointwise':
 
@@ -1852,10 +2017,19 @@ if __name__ == "__main__":
         print("About to run cnn_dense_dot ")
         cnn_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH,dense=True)
 
+    elif model == 'pointwise_cnn_dense_dot':
+
+        print("About to run cnn_dense_dot ")
+        cnn_dot(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH,dense=True,pointwise=True)
+
     elif model == 'cnn_dense_dense':
 
         print("About to run cnn_dense_dense ")
         cnn_dense_dense(GPU, vectors, questions, pos_paths, neg_paths, 100, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH,dense=True)
+    elif model == 'pointwise_cnn_dense_dense':
+
+        print("About to run pointwise cnn_dense_dense ")
+        cnn_dense_dense(GPU, vectors, questions, pos_paths, neg_paths, 10, 1000, index, _transfer_model_path=TRANSFER_MODEL_PATH,dense=True,pointwise=True)
     else:
         warnings.warn("Did not choose any model.")
         if DEBUG:

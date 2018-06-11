@@ -45,12 +45,13 @@ OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 # Model Directories
 DATASET = 'lcquad'
-MULTI_HOP = True
+MULTI_HOP = False
 MULTI_HOP_NUMBER = 5
-CORECHAIN_MODEL_NAME = 'birnn_dot'
+CORECHAIN_MODEL_NAME = 'birnn_dense'
 ID_BIG_DATA_FILENAME = 'id_big_data.json' if DATASET is 'lcquad' else 'qald_id_big_data.json'
 DENIS_FILE_LOCATION = 'drogon:8001/slotptr20/test.out'
 DENIS = False
+POINTWISE = False
 # #@lc-quad
 # CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_17/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': DATASET}
 # RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_04/model.h5' % {'data':DATASET}
@@ -59,8 +60,11 @@ DENIS = False
 
 
 #@sda-srv04
-CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_03/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': DATASET}
-RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_00/model.h5' % {'data':DATASET}
+CORECHAIN_MODEL_DIR = './data/models/core_chain/cnn_dense_dense/lcquad/model_00/model.h5'
+#
+# CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_05/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': DATASET}
+# CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_00/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': DATASET}
+RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_01/model.h5' % {'data':DATASET}
 RDFEXISTENCE_MODEL_DIR = './data/models/type_existence/%(data)s/model_00/model.h5' % {'data':DATASET}
 INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_00/model.h5' % {'data':'lcquad'}
 
@@ -68,7 +72,7 @@ RELATIONS_LOC = os.path.join(n.COMMON_DATA_DIR, 'relations.pickle')
 RDF_TYPE_LOOKUP_LOC = 'data/data/common/rdf_type_lookup.json'
 
 # Configure at every run!
-GPU = '2'
+GPU = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = GPU
 
 # Set the seed to clamp the stochastic nature.
@@ -202,7 +206,7 @@ def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_pa
     return precision
 
 
-def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_length=50):
+def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_length=50,rdf=False):
     '''
         A function to pad the data for the model, run model.predict on it and get the resuts.
 
@@ -228,7 +232,10 @@ def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_leng
         else:
             paths[i+1,:min(id_fps[i].shape[0], question.shape[1])] = id_fps[i]
     # Pass em through the model
-    results = model.predict([question, paths, np.zeros_like(paths)], batch_size=batch_size)[:,0]
+    if POINTWISE and not rdf:
+        results = model.predict([question, paths], batch_size=batch_size)[:,0]
+    else:
+        results = model.predict([question, paths, np.zeros_like(paths)], batch_size=batch_size)[:,0]
     return results
 
 
@@ -945,22 +952,26 @@ def pred_to_rel(pred,relations):
         rel_string = [sign_1,rel1,sign_2,rel2]
     return rel_string
 
-def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_counter,model_corechain):
+def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_counter,model_corechain,printer=True):
     '''
 
 
     '''
+    mrr = 0
     if no_positive_path and len(negative_paths) == 0:
         results.append([0.0, 0.0, 0.0])
         avg.append(0.0)
         print(sum(avg) * 1.0 / len(avg))
         # raw_input()
-        return question,paths,positive_path,negative_paths,core_chain_counter, ''
+        if printer: print "in the first if condition"
+        return question,paths,positive_path,negative_paths,core_chain_counter, '',mrr
 
     if len(negative_paths) == 0:
         best_path = positive_path
         core_chain_counter = core_chain_counter + 1
-        return question, paths, positive_path, negative_paths, core_chain_counter, best_path
+        mrr = 1
+        if printer: print "in the second  if condition and mrr should be 1"
+        return question, paths, positive_path, negative_paths, core_chain_counter, best_path,mrr
     else:
         '''
             The output is made by stacking positive path over negative paths.
@@ -977,6 +988,8 @@ def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_c
             else:
                 indexes = np.argsort(output[1:])
 
+
+            print "at the numpy selection point"
             fhp = [fhp_numpy[ind].tolist() for ind in indexes]
             picked_paths = dicta(paths, fhp)
             picked_paths_numpy = [np.asarray(pa) for pa in picked_paths]
@@ -988,16 +1001,30 @@ def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_c
                 Find top k performing properties and then using it for the same
             '''
             paths = picked_paths_numpy
+            '''
+                MRR implementation is still not done.
+            '''
+            # if positive_path:
+            #     index_positive_path = ''
+            #     for p in range(len(paths)):
+            #         if np.array_equal(p,positive_path):
+            #             index_positive_path = p
+            #     else:
+            #         index_positive_path = ''
             best_path = paths[np.argmax(output[1:])]
         else:
             if no_positive_path:
                 output = rank_precision_runtime(model_corechain, question, negative_paths[0],
                                                 negative_paths, 10000, MAX_SEQ_LENGTH)
                 best_path = negative_paths[np.argmax(output[1:])]
+                mrr = 0
             else:
                 output = rank_precision_runtime(model_corechain, question, positive_path, negative_paths, 10000, MAX_SEQ_LENGTH)
 
                 best_path_index = np.argmax(output)
+                mrr_output = np.argsort(output)[::-1]
+                mrr_output = mrr_output.tolist()
+                mrr = mrr_output.index(0) + 1
                 if best_path_index == 0:
                     best_path = positive_path
                 else:
@@ -1009,7 +1036,7 @@ def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_c
         if not no_positive_path:
             if np.array_equal(best_path, positive_path):
                 core_chain_counter = core_chain_counter + 1
-        return question, paths, positive_path, negative_paths, core_chain_counter, best_path
+        return question, paths, positive_path, negative_paths, core_chain_counter, best_path,mrr
 
 if __name__ is "__main__":
 
@@ -1094,6 +1121,7 @@ if __name__ is "__main__":
         keeps avg of fmeasure for each question. A real time fmeasure
     '''
     avg = []
+    MRR = []
     counter = 0
     for cnm in range(0,len(id_data_test)):
         data = id_data_test[cnm]
@@ -1169,7 +1197,12 @@ if __name__ is "__main__":
             '''
             previous_core_accuracy = core_chain_accuracy_counter
             if no_positive_path and DENIS:
-                question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path = core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_accuracy_counter,model_corechain)
+                question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path, mrr = core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_accuracy_counter,model_corechain)
+                if mrr != 0:
+                    MRR.append(1.0/mrr)
+                else:
+                    MRR.append(0.0)
+
             elif DENIS:
                 print "@denis"
                 best_path = denis_pred[cnm]['vocab_path_id']
@@ -1177,11 +1210,15 @@ if __name__ is "__main__":
                     core_chain_accuracy_counter = core_chain_accuracy_counter + 1
             else:
                 print "debug"
-                question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path = core_chain_accuracy(
+                question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path, mrr = core_chain_accuracy(
                     question, paths, positive_path, negative_paths, core_chain_accuracy_counter, model_corechain)
-
+                print "the mmr is ", str(mrr)
+                if mrr != 0:
+                    MRR.append(1.0/mrr)
+                else:
+                    MRR.append(0.0)
+            print "mrr is ", (sum(MRR) * 1.0 / len(MRR))
             query_graph['best_path'] = best_path
-
             if previous_core_accuracy + 1 == core_chain_accuracy_counter:
                 c_flag = True
             padded_question = pad_question(question)
@@ -1266,7 +1303,7 @@ if __name__ is "__main__":
                 '''
                 if rdf_candidates:
                     output = rank_precision_runtime(model_rdf_type_check, question, rdf_candidates[0],
-                                                    rdf_candidates, 180, MAX_SEQ_LENGTH)
+                                                    rdf_candidates, 180, MAX_SEQ_LENGTH,rdf=True)
                     # rdf_best_path = convert_path_to_text(rdf_candidates[np.argmax(output[1:])])
                     query_graph['rdf_best_path'] = rdf_candidates[np.argmax(output[1:])]
                 else:
@@ -1281,6 +1318,7 @@ if __name__ is "__main__":
             results.append([f, p, r])
             avg.append(f)
             print(sum(avg) * 1.0 / len(avg))
+            print "corechain accuracy is ", str(core_chain_accuracy_counter)
             # print sparql
             # print data['parsed-data']['sparql_query']
             if i_flag and c_flag and r_flag and rt_flag :
@@ -1289,8 +1327,15 @@ if __name__ is "__main__":
         except UnboundLocalError:
             print traceback.print_exc()
             results.append([0.0, 0.0, 0.0])
-            avg.append(f)
+            avg.append(0)
             print(sum(avg) * 1.0 / len(avg))
             continue
-
-# UnboundLocalError: local variable 'response' referenced before assignment
+    print"f1 is ",str((sum(avg) * 1.0 / len(avg)))
+    print "corechaibn accuracy is ", core_chain_accuracy_counter
+    print "the final MRR is ", (sum(MRR) * 1.0 / len(MRR))
+    print "the length of MRR is ", str(len(MRR))
+    precision = [p[1] for p in results]
+    recall = [r[2] for r in results]
+    print "precision is ", str((sum(precision) * 1.0 / len(avg)))
+    print "recall is ", str((sum(recall) * 1.0 / len(avg)))
+    print CORECHAIN_MODEL_DIR

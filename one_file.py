@@ -521,7 +521,7 @@ def convert_rdf_path_to_text(path):
     return [var, dbo_class]
 
 
-def construct_paths(data,qald=False):
+def construct_paths(data,relations,qald=False):
     """
     :param data: a data node of id_big_data
     :return: unpadded , continous id spaced question, positive path, negative paths
@@ -581,7 +581,7 @@ def construct_paths(data,qald=False):
     return question,positive_path,negative_paths
 
 
-def question_intent(padded_question):
+def question_intent(model_question_intent,padded_question):
     """
         predicting the intent of the question.
             List, Ask, Count.
@@ -590,7 +590,7 @@ def question_intent(padded_question):
     return ['count', 'ask', 'list'][intent]
 
 
-def rdf_constraint_check(padded_question):
+def rdf_constraint_check(padded_question,model_rdf_type_existence):
     """
         predicting the existence of rdf type constraints.
     """
@@ -610,7 +610,7 @@ def pad_question(question):
 
 
 plus_id, minus_id = None, None # These are vocab IDs
-def reconstruct_corechain(_chain):
+def reconstruct_corechain(_chain,relations):
     """
         Expects a corechain made of continous IDs, and returns it in its text format (uri form)
         @TODO: TEST!
@@ -683,7 +683,7 @@ def query_graph_to_sparql(_graph):
     entities = _graph['entities']
 
     # Convert the corechain to glove embeddings
-    corechain_signs, corechain_uris = reconstruct_corechain(_graph['best_path'])
+    corechain_signs, corechain_uris = reconstruct_corechain(_graph['best_path'],relations)
 
     # Construct the stuff outside the where clause
     sparql_value["ask"] = 'ASK' if _graph['intent'] == 'ask' else 'SELECT DISTINCT'
@@ -952,7 +952,7 @@ def pred_to_rel(pred,relations):
         rel_string = [sign_1,rel1,sign_2,rel2]
     return rel_string
 
-def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_counter,model_corechain,printer=True):
+def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_counter,model_corechain,no_positive_path,printer=True):
     '''
 
 
@@ -1037,6 +1037,15 @@ def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_c
             if np.array_equal(best_path, positive_path):
                 core_chain_counter = core_chain_counter + 1
         return question, paths, positive_path, negative_paths, core_chain_counter, best_path,mrr
+
+
+# Some more globals
+relations = load_relation()
+reverse_relations = {}
+for keys in relations:
+    reverse_relations[relations[keys][0]] = [keys] + relations[keys][1:]
+reverse_rdf_dict = load_reverse_rdf_type()
+
 
 if __name__ is "__main__":
 
@@ -1143,7 +1152,7 @@ if __name__ is "__main__":
                 no_positive_path :- if the path had -1
             '''
 
-            question, positive_path, negative_paths, no_positive_path = construct_paths(data, qald=True)
+            question, positive_path, negative_paths, no_positive_path = construct_paths(data, qald=True,relations=relations)
 
             '''
                 if the dataset is LC-QUAD and data['pop'] is false then the positive path has been forcefully inserted and needs to be removed.
@@ -1211,7 +1220,7 @@ if __name__ is "__main__":
             else:
                 print "debug"
                 question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path, mrr = core_chain_accuracy(
-                    question, paths, positive_path, negative_paths, core_chain_accuracy_counter, model_corechain)
+                    question, paths, positive_path, negative_paths, core_chain_accuracy_counter, model_corechain,no_positive_path)
                 print "the mmr is ", str(mrr)
                 if mrr != 0:
                     MRR.append(1.0/mrr)
@@ -1283,7 +1292,7 @@ if __name__ is "__main__":
                 continue
 
             # Predicting the rdf-constraint
-            rdf_constraint = rdf_constraint_check(padded_question)
+            rdf_constraint = rdf_constraint_check(padded_question,model_rdf_type_existence)
             query_graph['rdf_constraint'] = False if rdf_constraint == 2 else True
 
 

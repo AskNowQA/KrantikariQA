@@ -134,8 +134,8 @@ def relation_lookup(rel):
         # counter = counter + 1
         value = [counter, surface_form, surface_form_tokenized, surface_form_tokenized_id]
         new_key = value[0]
-        value[0] = key
-        value.append(new_key)
+        value[0] = rel
+        # value.append(new_key)
         relations[new_key] = value
         return non_inverse_relations[rel][0]
 
@@ -166,74 +166,97 @@ def rel_to_id(data):
 core_chain_accuracy_counter = 0
 rank_precision_runtime = 0
 
-if __name__ == '__main__':
-    while FLAG:
-        '''
-            main computation loop
-        '''
-        #@TODO: All the inputs need to be sasnitized when deploying.
 
+def return_sparql(question,entity=False):
+    '''
+        The main logic or the core of krantikari.
 
-        mode = raw_input('online or test mode :')
-        if mode == 'test':
-            ground_truth = raw_input('enter sparql :')
-        question = raw_input('enter question :')
-        entites = return_entites(question)
+    :return: sparql,query_graph,error_code
 
+    error_code = 'no_entity' --> No entity returned by the entity linker
+                = 'no_best_path' --> No path created
+                = 'entity_server_error' --> some server issue at entity linking server
+
+    '''
+    error_code = ''
+    if not entity:
+        try:
+            entites = return_entites(question)
+        except ValueError:
+            return '', '', 'entity_server_error'
+        try:
+            entites.remove('null')
+        except ValueError:
+            pass
+        if len(entites) >= 3:
+            entites = entites[:1]
+        if not entites:
+            return '','','no_entity'
         '''
             Use krantikari_new file to fetch the sub-graph in the form of paths.
         '''
+    else:
+        entites = entity
 
-        query_graph = {}
-        query_graph['question'] = question
+    query_graph = {}
+    query_graph['question'] = question
 
-        question_vector = embeddings_interface.vocabularize(nlutils.tokenize(question), _embedding=EMBEDDING)
-        question_vector_inverse_vocab = np.asarray([vocab[key] for key in question_vector])
-        question_vector_padded = of.pad_question(question_vector_inverse_vocab)
+    question_vector = embeddings_interface.vocabularize(nlutils.tokenize(question), _embedding=EMBEDDING)
+    question_vector_inverse_vocab = np.asarray([vocab[key] for key in question_vector])
+    question_vector_padded = of.pad_question(question_vector_inverse_vocab)
 
-        intent = of.question_intent(model_question_intent,question_vector_padded)
-        query_graph['intent'] = intent
+    intent = of.question_intent(model_question_intent, question_vector_padded)
+    query_graph['intent'] = intent
 
-        if intent == 'ask':
-            training_data = kn.Krantikari_v2(_question=question, _entities=entites, _model_interpreter="",
-                                          _dbpedia_interface=dbp,
-                                          _training=True, _ask=True, _qald=True)
-        else:
-            training_data = kn.Krantikari_v2(_question=question, _entities=entites, _model_interpreter="",
-                                          _dbpedia_interface=dbp,
-                                          _training=True, _ask=False, _qald=True)
-        # final_uri_data = training_data.data
-        final_uri_data = {}
-        final_uri_data['uri'] = training_data.data
-        '''
-            >Idfy thee relation
-            >Change the format of data
-            >Pass it through create dataset function.
-        '''
-        final_uri_data = rel_to_id(final_uri_data)
-        question, positive_path, negative_paths, no_positive_path = of.construct_paths(final_uri_data,relations=relations, qald = True)
-        nps = [ne.tolist() for ne in negative_paths]
-        # pp = [positive_path.tolist()]
-        paths = nps
+    if intent == 'ask':
+        training_data = kn.Krantikari_v2(_question=question, _entities=entites, _model_interpreter="",
+                                         _dbpedia_interface=dbp,
+                                         _training=True, _ask=True, _qald=True)
+    else:
+        training_data = kn.Krantikari_v2(_question=question, _entities=entites, _model_interpreter="",
+                                         _dbpedia_interface=dbp,
+                                         _training=True, _ask=False, _qald=True)
+    # final_uri_data = training_data.data
+    final_uri_data = {}
+    final_uri_data['uri'] = training_data.data
+    '''
+        >Idfy thee relation
+        >Change the format of data
+        >Pass it through create dataset function.
+    '''
+    final_uri_data = rel_to_id(final_uri_data)
+    final_uri_data['parsed-data']['entity'] = entites
+    question, positive_path, negative_paths, no_positive_path = of.construct_paths(final_uri_data, relations=relations,
+                                                                                   qald=True)
+    nps = [ne.tolist() for ne in negative_paths]
+    # pp = [positive_path.tolist()]
+    paths = nps
 
-        index = of.prune_candidate_space(question, paths, len(paths))
-        paths = [paths[i] for i in index]
+    index = of.prune_candidate_space(question, paths, len(paths))
+    paths = [paths[i] for i in index]
 
-        '''
-            Converting paths to numpy array
-        '''
-        for i in range(len(paths)):
-            paths[i] = np.asarray(paths[i])
-        paths = np.asarray(paths)
+    '''
+        Converting paths to numpy array
+    '''
+    for i in range(len(paths)):
+        paths[i] = np.asarray(paths[i])
+    paths = np.asarray(paths)
 
-        '''
-            Ranking for the best core chain
-        '''
+    '''
+        Ranking for the best core chain
+    '''
+    core_chain_accuracy_counter = 0
+    question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path, mrr = of.core_chain_accuracy(
+        question, paths, positive_path, negative_paths, core_chain_accuracy_counter, model_corechain, no_positive_path)
 
-        question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path, mrr = of.core_chain_accuracy(
-            question, paths, positive_path, negative_paths, core_chain_accuracy_counter, model_corechain,no_positive_path)
+    query_graph['best_path'] = best_path
 
-        query_graph['best_path'] = best_path
+    if intent == 'ask' and best_path != '':
+        return 'true',query_graph,''
+    elif intent == 'ask' and best_path == '':
+        return 'false',query_graph,''
+
+    if best_path != '':
 
         '''
             rdf type contraints.
@@ -242,21 +265,23 @@ if __name__ == '__main__':
         query_graph['rdf_constraint'] = False if rdf_constraint == 2 else True
         query_graph['rdf_constraint_type'] = ['x', 'uri', 'none'][rdf_constraint]
 
-
         if rdf_constraint != 2:
             rdf_candidates = of.rdf_type_candidates(final_uri_data, best_path, vocab, relations, reverse_vocab,
-                                                 only_x=rdf_constraint == 0,
-                                                 core_chain=True)
+                                                    only_x=rdf_constraint == 0,
+                                                    core_chain=True)
             if rdf_candidates:
                 output = of.rank_precision_runtime(model_rdf_type_check, question, rdf_candidates[0],
-                                                rdf_candidates, 180, MAX_SEQ_LENGTH, rdf=True)
+                                                   rdf_candidates, 180, MAX_SEQ_LENGTH, rdf=True)
                 # rdf_best_path = convert_path_to_text(rdf_candidates[np.argmax(output[1:])])
                 query_graph['rdf_best_path'] = rdf_candidates[np.argmax(output[1:])]
             else:
                 query_graph['rdf_best_path'] = []
         query_graph['entities'] = entites
         sparql = of.query_graph_to_sparql(query_graph)
-        print sparql
+        return sparql, query_graph, error_code
+    else:
+        return '', '', 'no_best_path'
+
 
 
 

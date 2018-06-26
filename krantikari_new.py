@@ -859,7 +859,10 @@ class Krantikari_v2:
 
 		else:
 			if self.training_paths:
-				self.best_path = np.random.choice(self.training_paths)
+				if len(self.training_paths) == 1:
+					self.best_path = self.training_paths[0]
+				else:
+					self.best_path = np.random.choice(self.training_paths)
 			else:
 				return None
 

@@ -47,7 +47,7 @@ OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 DATASET = 'lcquad'
 MULTI_HOP = False
 MULTI_HOP_NUMBER = 5
-CORECHAIN_MODEL_NAME = 'birnn_dense'
+CORECHAIN_MODEL_NAME = 'birnn_dot'
 ID_BIG_DATA_FILENAME = 'id_big_data.json' if DATASET is 'lcquad' else 'qald_id_big_data.json'
 DENIS_FILE_LOCATION = 'drogon:8001/slotptr20/test.out'
 DENIS = False
@@ -60,9 +60,9 @@ POINTWISE = False
 
 
 #@sda-srv04
-CORECHAIN_MODEL_DIR = './data/models/core_chain/cnn_dense_dense/lcquad/model_00/model.h5'
+# CORECHAIN_MODEL_DIR = './data/models/core_chain/cnn_dense_dense/lcquad/model_00/model.h5'
 #
-# CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_05/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': DATASET}
+CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_05/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': DATASET}
 # CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_00/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': DATASET}
 RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_01/model.h5' % {'data':DATASET}
 RDFEXISTENCE_MODEL_DIR = './data/models/type_existence/%(data)s/model_00/model.h5' % {'data':DATASET}
@@ -682,6 +682,8 @@ def query_graph_to_sparql(_graph):
     # Find entities
     entities = _graph['entities']
 
+    print _graph
+
     # Convert the corechain to glove embeddings
     corechain_signs, corechain_uris = reconstruct_corechain(_graph['best_path'],relations)
 
@@ -1046,6 +1048,42 @@ for keys in relations:
     reverse_relations[relations[keys][0]] = [keys] + relations[keys][1:]
 reverse_rdf_dict = load_reverse_rdf_type()
 
+'''
+    Core chain accuracy counter counts the number of time the core chain predicated is same as 
+    positive path. This also includes for ask query.
+    The counter might confuse the property and the ontology. 
+
+    Similar functionality with rdf_type and intent
+'''
+core_chain_accuracy_counter = 0
+intent_accuracy_counter = 0
+rdf_type_existence_accuracy_counter = 0
+query_graph_accuracy_counter = 0
+
+'''
+    c_flag  is true if the core_chain was correctly predicted. same is the case for i_flag and r_flag, rt_flag (correct candidate for rdf type)
+'''
+c_flag, i_flag, r_flag, rt_flag = False, False, False, False
+
+'''
+    Counts the number of times just using  word2vec similarity, the best path came the most similar. This will only work if
+    CANDIDATE_SPACE is not none.
+'''
+word_vector_accuracy_counter = 0
+
+'''
+    Stores tuple of (fmeasure,precision,recall)
+'''
+results = []
+'''
+    keeps avg of fmeasure for each question. A real time fmeasure
+'''
+avg = []
+MRR = []
+counter = 0
+logging = []
+
+
 
 if __name__ is "__main__":
 
@@ -1099,39 +1137,7 @@ if __name__ is "__main__":
     if DEBUG: print("the length of test data is ", len(id_data_test))
     if DEBUG: print("the dataset loaded is ", DATASET)
 
-    '''
-        Core chain accuracy counter counts the number of time the core chain predicated is same as 
-        positive path. This also includes for ask query.
-        The counter might confuse the property and the ontology. 
-        
-        Similar functionality with rdf_type and intent
-    '''
-    core_chain_accuracy_counter = 0
-    intent_accuracy_counter = 0
-    rdf_type_existence_accuracy_counter = 0
-    query_graph_accuracy_counter = 0
 
-    '''
-        c_flag  is true if the core_chain was correctly predicted. same is the case for i_flag and r_flag, rt_flag (correct candidate for rdf type)
-    '''
-    c_flag,i_flag,r_flag,rt_flag = False,False,False,False
-
-    '''
-        Counts the number of times just using  word2vec similarity, the best path came the most similar. This will only work if
-        CANDIDATE_SPACE is not none.
-    '''
-    word_vector_accuracy_counter = 0
-
-    '''
-        Stores tuple of (fmeasure,precision,recall)
-    '''
-    results = []
-    '''
-        keeps avg of fmeasure for each question. A real time fmeasure
-    '''
-    avg = []
-    MRR = []
-    counter = 0
     for cnm in range(0,len(id_data_test)):
         data = id_data_test[cnm]
         print counter
@@ -1233,7 +1239,7 @@ if __name__ is "__main__":
             padded_question = pad_question(question)
 
             # Predicting the intent of the question
-            intent = question_intent(padded_question)
+            intent = question_intent(model_question_intent,padded_question)
             query_graph['intent'] = intent
 
             if intent == ground_truth_intent(data):

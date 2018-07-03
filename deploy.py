@@ -163,6 +163,15 @@ def rel_to_id(data):
 
     return data
 
+
+def retrive_answer(sparql,intent):
+    if intent != 'ask':
+        '''
+            create its own json
+        '''
+        test_answer = 'true'
+    test_answer = of.sparql_answer(sparql)
+    return test_answer
 core_chain_accuracy_counter = 0
 rank_precision_runtime = 0
 

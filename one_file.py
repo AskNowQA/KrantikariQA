@@ -172,11 +172,9 @@ sparql_2hop_2ent_template = {
 
 rdf_constraint_template = ' ?%(var)s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <%(uri)s> . '
 
-
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
-
 
 def custom_loss(y_true, y_pred):
     """
@@ -187,7 +185,6 @@ def custom_loss(y_true, y_pred):
     diff = y_pred[:,-1]
     # return K.sum(K.maximum(1.0 - diff, 0.))
     return K.sum(diff)
-
 
 def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
     max_length = test_questions.shape[-1]
@@ -204,7 +201,6 @@ def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_pa
 
     precision = float(len(np.where(np.argmax(outputs, axis=1)==0)[0]))/outputs.shape[0]
     return precision
-
 
 def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_length=50,rdf=False):
     '''
@@ -238,7 +234,6 @@ def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_leng
         results = model.predict([question, paths, np.zeros_like(paths)], batch_size=batch_size)[:,0]
     return results
 
-
 def rank_precision_metric(neg_paths_per_epoch):
     def metric(y_true, y_pred):
         scores = y_pred[:, 0]
@@ -248,7 +243,6 @@ def rank_precision_metric(neg_paths_per_epoch):
         # precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
         return precision
     return metric
-
 
 def get_glove_embeddings():
     """
@@ -262,7 +256,6 @@ def get_glove_embeddings():
     from utils.embeddings_interface import glove_embeddings
     return glove_embeddings
 
-
 def cross_correlation(x):
     a, b = x
     tf = K.tf
@@ -270,7 +263,6 @@ def cross_correlation(x):
     b_fft = tf.fft(tf.complex(b, 0.0))
     ifft = tf.ifft(tf.conj(a_fft) * b_fft)
     return tf.cast(tf.real(ifft), 'float32')
-
 
 def rel_id_to_rel(rel, _relations):
     """
@@ -301,13 +293,11 @@ def rel_id_to_rel(rel, _relations):
         else:
             return occurrences[0][0]
 
-
 def return_sign(sign):
     if sign == 2:
         return '+'
     else:
         return '-'
-
 
 def id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True):
     '''
@@ -355,7 +345,6 @@ def id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True):
         sign_1 = path_id[1]
         rel_1 = rel_id_to_rel(path_id[2:],relations)
         pass
-
 
 def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, core_chain = True):
     '''
@@ -416,7 +405,6 @@ def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, c
     return type_x_candidates+type_uri_candidates
     # return type_x_candidates if only_x else type_uri_candidates
 
-
 def load_relation():
     relations = pickle.load(open(RELATIONS_LOC))
     inverse_relations = {}
@@ -428,7 +416,6 @@ def load_relation():
         inverse_relations[new_key] = value
 
     return inverse_relations
-
 
 def create_true_positive_rdf_path(data):
     '''
@@ -476,7 +463,6 @@ def rdf_type_check(question,model_rdf_type_check, max_length = 30):
     else:
         return False
 
-
 def remove_positive_path(positive_path, negative_paths):
     new_negative_paths = []
     for i in range(0, len(negative_paths)):
@@ -484,14 +470,12 @@ def remove_positive_path(positive_path, negative_paths):
             new_negative_paths.append(np.asarray(negative_paths[i]))
     return positive_path, np.asarray(new_negative_paths)
 
-
 def load_reverse_rdf_type():
     rdf_type = json.load(open(RDF_TYPE_LOOKUP_LOC))
     rdf = {}
     for classes in rdf_type:
         rdf[classes] = embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(classes)))
     return rdf
-
 
 def convert_rdf_path_to_text(path):
     """
@@ -519,7 +503,6 @@ def convert_rdf_path_to_text(path):
             break
 
     return [var, dbo_class]
-
 
 def construct_paths(data,relations,qald=False):
     """
@@ -580,7 +563,6 @@ def construct_paths(data,relations,qald=False):
         return question, positive_path, negative_paths,false_positive_path
     return question,positive_path,negative_paths
 
-
 def question_intent(model_question_intent,padded_question):
     """
         predicting the intent of the question.
@@ -589,13 +571,11 @@ def question_intent(model_question_intent,padded_question):
     intent = np.argmax(model_question_intent.predict(padded_question))
     return ['count', 'ask', 'list'][intent]
 
-
 def rdf_constraint_check(padded_question,model_rdf_type_existence):
     """
         predicting the existence of rdf type constraints.
     """
     return np.argmax(model_rdf_type_existence.predict(padded_question))
-
 
 def pad_question(question):
     """
@@ -607,7 +587,6 @@ def pad_question(question):
     padded_question[:min(MAX_SEQ_LENGTH, len(question))] = question[:min(MAX_SEQ_LENGTH, len(question))]
     padded_question = padded_question.reshape((1, padded_question.shape[0]))
     return padded_question
-
 
 plus_id, minus_id = None, None # These are vocab IDs
 def reconstruct_corechain(_chain,relations):
@@ -659,7 +638,6 @@ def reconstruct_corechain(_chain,relations):
         return [], []
 
     return signs, uris
-
 
 def query_graph_to_sparql(_graph):
     """
@@ -752,7 +730,6 @@ def query_graph_to_sparql(_graph):
 
     return sparql
 
-
 def ground_truth_intent(data):
     """
         Legend: 010: ask
@@ -769,7 +746,6 @@ def ground_truth_intent(data):
         return 'count'
 
     return 'list'
-
 
 
 def ground_truth_rdf(data):
@@ -1041,6 +1017,19 @@ def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_c
         return question, paths, positive_path, negative_paths, core_chain_counter, best_path,mrr
 
 
+
+def construct_query_graph(data):
+    '''
+
+        The function takes in data node from id_big_data file and creates query grah which could then be used for evaluation.
+    :return: query_graph
+    '''
+
+    try:
+        print "in try loop"
+
+    except:
+        pass
 # Some more globals
 relations = load_relation()
 reverse_relations = {}
@@ -1081,8 +1070,15 @@ results = []
 avg = []
 MRR = []
 counter = 0
-logging = []
 
+Logging = {}
+
+Logging['dataset'] = DATASET
+Logging['CORECHAIN_MODEL_DIR'] = CORECHAIN_MODEL_DIR
+Logging['RDFCHECK_MODEL_DIR'] = RDFCHECK_MODEL_DIR
+Logging['RDFEXISTENCE_MODEL_DIR'] = RDFEXISTENCE_MODEL_DIR
+Logging['INTENT_MODEL_DIR'] = INTENT_MODEL_DIR
+Logging['main_log'] = []
 
 
 if __name__ is "__main__":
@@ -1139,7 +1135,10 @@ if __name__ is "__main__":
 
 
     for cnm in range(0,len(id_data_test)):
+        log = {}
         data = id_data_test[cnm]
+        log['id_data_text'] = data
+
         print counter
         counter = counter + 1
         if counter == 336-1:
@@ -1295,6 +1294,9 @@ if __name__ is "__main__":
                 avg.append(0.0)
                 print(sum(avg) * 1.0 / len(avg))
                 i_flag, c_flag, r_flag, rt_flag = False, False, False, False
+                log['result'] = [0.0,0.0,0.0]
+                log['query_graph'] = query_graph
+                Logging['main_log'].append(log)
                 continue
 
             # Predicting the rdf-constraint
@@ -1329,6 +1331,7 @@ if __name__ is "__main__":
                 f,p,r = 0,0,0
             else:
                 sparql = query_graph_to_sparql(query_graph)
+                query_graph['sparql'] = sparql
                 f, p, r = evaluate(sparql, data['parsed-data']['sparql_query'], type_pred, ground_truth_intent(data))
             results.append([f, p, r])
             avg.append(f)
@@ -1339,11 +1342,17 @@ if __name__ is "__main__":
             if i_flag and c_flag and r_flag and rt_flag :
                 query_graph_accuracy_counter = query_graph_accuracy_counter + 1
             i_flag,c_flag,r_flag,rt_flag = False,False,False,False
+            log['result'] = [f,p,r]
+            log['query_graph'] = query_graph
+            Logging['main_log'].append(log)
         except UnboundLocalError:
             print traceback.print_exc()
             results.append([0.0, 0.0, 0.0])
             avg.append(0)
             print(sum(avg) * 1.0 / len(avg))
+            log['result'] = results
+            log['query_graph'] = query_graph
+            Logging['main_log'].append(log)
             continue
     print"f1 is ",str((sum(avg) * 1.0 / len(avg)))
     print "corechaibn accuracy is ", core_chain_accuracy_counter

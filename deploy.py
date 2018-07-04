@@ -47,13 +47,8 @@ INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_00/model.h5' % {'data':'
 RELATIONS_LOC = os.path.join(n.COMMON_DATA_DIR, 'relations.pickle')
 RDF_TYPE_LOOKUP_LOC = 'data/data/common/rdf_type_lookup.json'
 
-
-# Configure at every run!
-GPU = '3'
-os.environ['CUDA_VISIBLE_DEVICES'] = GPU
-
 # Set the seed to clamp the stochastic nature.
-np.random.seed(42) # Random train/test splits stay the same between runs
+np.random.seed(42)  # Random train/test splits stay the same between runs
 
 # Global variables
 
@@ -65,14 +60,12 @@ reverse_vocab = {}
 for keys in vocab:
     reverse_vocab[vocab[keys]] = keys
 
-
 # sparql template supported by krantikari currently.
 sparql_1hop_template = of.sparql_1hop_template
 sparql_boolean_template = of.sparql_boolean_template
 sparql_2hop_1ent_template = of.sparql_2hop_1ent_template
 sparql_2hop_2ent_template = of.sparql_2hop_2ent_template
 rdf_constraint_template = of.rdf_constraint_template
-
 
 # some auxilary modules
 relations = of.load_relation()
@@ -84,12 +77,43 @@ for keys in relations:
 
 reverse_rdf_dict = of.load_reverse_rdf_type()
 
-with K.tf.device('/gpu:' + GPU):
-    metric = of.rank_precision_metric(10)
-    model_corechain = load_model(CORECHAIN_MODEL_DIR, {'custom_loss': of.custom_loss, 'metric': metric})
-    model_rdf_type_check = load_model(RDFCHECK_MODEL_DIR, {'custom_loss': of.custom_loss, 'metric': metric})
-    model_rdf_type_existence = load_model(RDFEXISTENCE_MODEL_DIR)
-    model_question_intent = load_model(INTENT_MODEL_DIR)
+DEVICE = 'GPU'
+GPU = 3
+
+
+
+
+def run(device,gpu_number):
+    DEVICE = device
+
+    if DEVICE == 'GPU':
+        # Configure at every run!
+        GPU = gpu_number
+    else:
+        GPU = ''
+
+    print "GPU no is ", str(GPU), "device name is ", str(DEVICE)
+    os.environ['CUDA_VISIBLE_DEVICES'] = GPU
+
+
+    if DEVICE == 'GPU':
+        with K.tf.device('/gpu:' + GPU):
+            metric = of.rank_precision_metric(10)
+            model_corechain = load_model(CORECHAIN_MODEL_DIR, {'custom_loss': of.custom_loss, 'metric': metric})
+            model_rdf_type_check = load_model(RDFCHECK_MODEL_DIR, {'custom_loss': of.custom_loss, 'metric': metric})
+            model_rdf_type_existence = load_model(RDFEXISTENCE_MODEL_DIR)
+            model_question_intent = load_model(INTENT_MODEL_DIR)
+    else:
+        with K.tf.device('/cpu'):
+            metric = of.rank_precision_metric(10)
+            model_corechain = load_model(CORECHAIN_MODEL_DIR, {'custom_loss': of.custom_loss, 'metric': metric})
+            model_rdf_type_check = load_model(RDFCHECK_MODEL_DIR, {'custom_loss': of.custom_loss, 'metric': metric})
+            model_rdf_type_existence = load_model(RDFEXISTENCE_MODEL_DIR)
+            model_question_intent = load_model(INTENT_MODEL_DIR)
+
+    return model_corechain,model_rdf_type_check,model_rdf_type_existence,model_question_intent
+
+
 
 '''
     Some aux functions 
@@ -176,7 +200,7 @@ core_chain_accuracy_counter = 0
 rank_precision_runtime = 0
 
 
-def return_sparql(question,entity=False):
+def return_sparql(model_corechain, model_rdf_type_check, model_rdf_type_existence, model_question_intent,question,entity=False):
     '''
         The main logic or the core of krantikari.
 
@@ -293,7 +317,8 @@ def return_sparql(question,entity=False):
 
 
 
-
+if __name__ == '__main__':
+    model_corechain, model_rdf_type_check, model_rdf_type_existence, model_question_intent = run(DEVICE,GPU)
 
 
 

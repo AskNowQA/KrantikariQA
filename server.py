@@ -6,6 +6,7 @@
         1 - URL
         2 - PORT
         3 - GPU number
+        Note - If GPU number is -1 then model is loaded on CPU instead of GPU
 
     >urls
         /answer -> returns answers to the user question
@@ -23,7 +24,7 @@
     >possible error codes are
         'no_entity' --> No entity returned by the entity linker
         'no_best_path' --> No candidate paths created
-        'entity_server_error' --> some server issue at entity linking server
+        'entity_server_error' --> server issues at entity linking server
         '500' --> 'Internal Server Error'
 
     >Curl request
@@ -55,7 +56,7 @@ def find_node():
         # headers = {'Accept': 'text/plain', 'Content-type': 'application/json'}
         # b = requests.get('http://localhost:9000/answer',data={'question':a},headers=headers)
         question = request.forms['question']
-        sparql, query_graph, error_code = dep.return_sparql(question)
+        sparql, query_graph, error_code = dep.return_sparql(model_corechain, model_rdf_type_check, model_rdf_type_existence, model_question_intent,question)
         if error_code == '':
             answer = dep.retrive_answer(sparql,query_graph['intent'])
             response.content_type = 'application/json'
@@ -93,7 +94,7 @@ if __name__== "__main__":
     except IndexError, TypeError:
         pass
     try:
-        GPU = int(sys.argv[2])
+        GPU = int(sys.argv[3])
     except:
         pass
 
@@ -101,10 +102,17 @@ if __name__== "__main__":
     print "initilizing models and databases ... "
 
     import deploy as dep
-    dep.GPU = GPU
+    if GPU == -1:
+        dep.DEVICE = 'CPU'
+        dep.GPU = -1
+    else:
+        dep.DEVICE = 'GPU'
+        dep.GPU = GPU
+
+    model_corechain, model_rdf_type_check, model_rdf_type_existence, model_question_intent = dep.run(dep.DEVICE,dep.GPU)
 
     try:
-        sparql, query_graph, error_code = dep.return_sparql("what is the capital of India ?")
+        sparql, query_graph, error_code = dep.return_sparql(model_corechain, model_rdf_type_check, model_rdf_type_existence, model_question_intent,"what is the capital of India ?")
         print "done initilizing model"
     except:
         print "some issues initilizing model"

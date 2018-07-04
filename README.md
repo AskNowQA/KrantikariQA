@@ -12,6 +12,7 @@ python server.py localhost 9000 3
         1 - URL
         2 - PORT
         3 - GPU number
+        Note: if the GPU number is specified to be -1, then the model is loaded on CPU instead of GPU.
 ```
 
 #### Template requests code

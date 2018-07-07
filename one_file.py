@@ -1,5 +1,4 @@
 
-
 from __future__ import absolute_import
 
 # Generic imporrts
@@ -47,7 +46,7 @@ OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 DATASET = 'lcquad'
 MULTI_HOP = False
 MULTI_HOP_NUMBER = 5
-CORECHAIN_MODEL_NAME = 'birnn_dense'
+CORECHAIN_MODEL_NAME = 'birnn_dot'
 ID_BIG_DATA_FILENAME = 'id_big_data.json' if DATASET is 'lcquad' else 'qald_id_big_data.json'
 DENIS_FILE_LOCATION = 'drogon:8001/slotptr20/test.out'
 DENIS = False
@@ -59,14 +58,14 @@ POINTWISE = False
 # INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_03/model.h5' % {'data':'lcquad'}
 
 
-#@sda-srv04
-CORECHAIN_MODEL_DIR = './data/models/core_chain/cnn_dense_dense/lcquad/model_00/model.h5'
+# @sda-srv04
+# CORECHAIN_MODEL_DIR = './data/models/core_chain/cnn_dense_dense/lcquad/model_00/model.h5'
 #
-# CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_05/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': DATASET}
+CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_05/model.h5' % {'model' :CORECHAIN_MODEL_NAME, 'data': DATASET}
 # CORECHAIN_MODEL_DIR = './data/models/core_chain/%(model)s/%(data)s/model_00/model.h5' % {'model':CORECHAIN_MODEL_NAME, 'data': DATASET}
-RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_01/model.h5' % {'data':DATASET}
-RDFEXISTENCE_MODEL_DIR = './data/models/type_existence/%(data)s/model_00/model.h5' % {'data':DATASET}
-INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_00/model.h5' % {'data':'lcquad'}
+RDFCHECK_MODEL_DIR = './data/models/rdf/%(data)s/model_01/model.h5' % {'data' :DATASET}
+RDFEXISTENCE_MODEL_DIR = './data/models/type_existence/%(data)s/model_00/model.h5' % {'data' :DATASET}
+INTENT_MODEL_DIR = './data/models/intent/%(data)s/model_00/model.h5' % {'data' :'lcquad'}
 
 RELATIONS_LOC = os.path.join(n.COMMON_DATA_DIR, 'relations.pickle')
 RDF_TYPE_LOOKUP_LOC = 'data/data/common/rdf_type_lookup.json'
@@ -93,46 +92,46 @@ for keys in vocab:
 """
 sparql_1hop_template = {
     "-": '%(ask)s %(count)s WHERE { { ?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s> } UNION '
-                                 + '{ ?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s> } UNION '
-                                 + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> }. %(rdf)s }',
+         + '{ ?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s> } UNION '
+         + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> }. %(rdf)s }',
     "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri } UNION '
-                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri } UNION'
-                                 + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> } . %(rdf)s }',
+         + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri } UNION'
+         + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> } . %(rdf)s }',
     "-c": '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . %(rdf)s }',
     "+c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . %(rdf)s }',
 }
 sparql_boolean_template = {
     "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> <%(te2)s> } UNION '
-                                 + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } UNION '
-                                 + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> } . %(rdf)s }'
+         + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } UNION '
+         + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> } . %(rdf)s }'
     # "": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> <%(te2)s> } UNION '
     #                              + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> <%(te2)s> } . %(rdf)s }',
 }
 sparql_2hop_1ent_template = {
     "++": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
-                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} UNION '
-                                  + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?x} . '
-                                  + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION'
-                                  + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} UNION'
-                                  + '{?x <http://purl.org/dc/terms/%(r2)s> ?uri} . %(rdf)s }',
+          + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} UNION '
+          + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?x} . '
+          + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION'
+          + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} UNION'
+          + '{?x <http://purl.org/dc/terms/%(r2)s> ?uri} . %(rdf)s }',
     "-+": '%(ask)s %(count)s WHERE { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?x <http://purl.org/dc/terms/%(r1)s> <%(te1)s>} .'
-                                  + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
-                                  + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} UNION '
-                                  + '{?x <http://purl.org/dc/terms/%(r2)s> ?uri} . %(rdf)s }',
+          + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION '
+          + '{?x <http://purl.org/dc/terms/%(r1)s> <%(te1)s>} .'
+          + '{?x <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
+          + '{?x <http://dbpedia.org/ontology/%(r2)s> ?uri} UNION '
+          + '{?x <http://purl.org/dc/terms/%(r2)s> ?uri} . %(rdf)s }',
     "--": '%(ask)s %(count)s WHERE { {?x <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?x <http://purl.org/dc/terms/%(r1)s> <%(te1)s>} .'
-                                  + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} UNION '
-                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> ?x} . %(rdf)s }',
+          + '{?x <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION '
+          + '{?x <http://purl.org/dc/terms/%(r1)s> <%(te1)s>} .'
+          + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
+          + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} UNION '
+          + '{?uri <http://purl.org/dc/terms/%(r2)s> ?x} . %(rdf)s }',
     "+-": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?x} UNION '
-                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} UNION '
-                                  + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?x} .'
-                                  + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} UNION '
-                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> ?x} . %(rdf)s }',
+          + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?x} UNION '
+          + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?x} .'
+          + '{?uri <http://dbpedia.org/property/%(r2)s> ?x} UNION '
+          + '{?uri <http://dbpedia.org/ontology/%(r2)s> ?x} UNION '
+          + '{?uri <http://purl.org/dc/terms/%(r2)s> ?x} . %(rdf)s }',
     "++c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?x . ?x <%(r2)s> ?uri . %(rdf)s }',
     "-+c": '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?x <%(r2)s> ?uri . %(rdf)s }',
     "--c": '%(ask)s %(count)s WHERE { ?x <%(r1)s> <%(te1)s> . ?uri <%(r2)s> ?x . %(rdf)s }',
@@ -141,29 +140,29 @@ sparql_2hop_1ent_template = {
 
 sparql_2hop_2ent_template = {
     "+-": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri} UNION '
-                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} UNION '
-                                  + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?uri} . '
-                                  + '{<%(te2)s> <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
-                                  + '{<%(te2)s> <http://dbpedia.org/ontology/%(r2)s> ?uri} UNION'
-                                  + '{<%(te2)s> <http://purl.org/dc/terms/%(r2)s> ?uri} . %(rdf)s }',
+          + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} UNION '
+          + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?uri} . '
+          + '{<%(te2)s> <http://dbpedia.org/property/%(r2)s> ?uri} UNION '
+          + '{<%(te2)s> <http://dbpedia.org/ontology/%(r2)s> ?uri} UNION'
+          + '{<%(te2)s> <http://purl.org/dc/terms/%(r2)s> ?uri} . %(rdf)s }',
     "--": '%(ask)s %(count)s WHERE { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?uri <http://purl.org/dc/terms/s> <%(te1)s>} . '
-                                  + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} UNION '
-                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> <%(te2)s>} . %(rdf)s }',
+          + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION '
+          + '{?uri <http://purl.org/dc/terms/s> <%(te1)s>} . '
+          + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION '
+          + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} UNION '
+          + '{?uri <http://purl.org/dc/terms/%(r2)s> <%(te2)s>} . %(rdf)s }',
     "-+": '%(ask)s %(count)s WHERE { {?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s>} UNION '
-                                  + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION'
-                                  + '{?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s>} .'
-                                  + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} UNION'
-                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> <%(te2)s>} . %(rdf)s }',
+          + '{?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s>} UNION'
+          + '{?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s>} .'
+          + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
+          + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} UNION'
+          + '{?uri <http://purl.org/dc/terms/%(r2)s> <%(te2)s>} . %(rdf)s }',
     "++": '%(ask)s %(count)s WHERE { {<%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri} UNION '
-                                  + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} UNION'
-                                  + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?uri} .'
-                                  + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
-                                  + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} UNION'
-                                  + '{?uri <http://purl.org/dc/terms/%(r2)s> <%(te2)s>}  . %(rdf)s }',
+          + '{<%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri} UNION'
+          + '{<%(te1)s> <http://purl.org/dc/terms/%(r1)s> ?uri} .'
+          + '{?uri <http://dbpedia.org/property/%(r2)s> <%(te2)s>} UNION'
+          + '{?uri <http://dbpedia.org/ontology/%(r2)s> <%(te2)s>} UNION'
+          + '{?uri <http://purl.org/dc/terms/%(r2)s> <%(te2)s>}  . %(rdf)s }',
     "+-c": '%(ask)s %(count)s WHERE { <%(te1)s> <%(r1)s> ?uri . <%(te2)s> <%(r2)s> ?uri . %(rdf)s }',
     "--c": '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s> . %(rdf)s }',
     "-+c": '%(ask)s %(count)s WHERE { ?uri <%(r1)s> <%(te1)s> . ?uri <%(r2)s> <%(te2)s> . %(rdf)s }',
@@ -172,11 +171,9 @@ sparql_2hop_2ent_template = {
 
 rdf_constraint_template = ' ?%(var)s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <%(uri)s> . '
 
-
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
-
 
 def custom_loss(y_true, y_pred):
     """
@@ -184,29 +181,27 @@ def custom_loss(y_true, y_pred):
     """
     # y_pos = y_pred[0]
     # y_neg= y_pred[1]
-    diff = y_pred[:,-1]
+    diff = y_pred[: ,-1]
     # return K.sum(K.maximum(1.0 - diff, 0.))
     return K.sum(diff)
-
 
 def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
     max_length = test_questions.shape[-1]
     questions = np.reshape(np.repeat(np.reshape(test_questions,
-                                            (test_questions.shape[0], 1, test_questions.shape[1])),
-                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
+                                                (test_questions.shape[0], 1, test_questions.shape[1])),
+                                     neg_paths_per_epoc h +1, axis=1), (-1, max_length))
     pos_paths = np.reshape(test_pos_paths,
-                                    (test_pos_paths.shape[0], 1, test_pos_paths.shape[1]))
+                           (test_pos_paths.shape[0], 1, test_pos_paths.shape[1]))
     neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
     all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
 
-    outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)], batch_size=batch_size)[:,0]
-    outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch+1))
+    outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)], batch_size=batch_size)[: ,0]
+    outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoc h +1))
 
-    precision = float(len(np.where(np.argmax(outputs, axis=1)==0)[0]))/outputs.shape[0]
+    precision = float(len(np.where(np.argmax(outputs, axis=1 )= =0)[0]) ) /outputs.shape[0]
     return precision
 
-
-def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_length=50,rdf=False):
+def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_length=50 ,rdf=False):
     '''
         A function to pad the data for the model, run model.predict on it and get the resuts.
 
@@ -219,36 +214,34 @@ def rank_precision_runtime(model, id_q, id_tp, id_fps, batch_size=1000, max_leng
     '''
 
     # Create empty matrices
-    question = np.zeros((len(id_fps)+1, max_length))
-    paths = np.zeros((len(id_fps)+1, max_length))
+    question = np.zeros((len(id_fps ) +1, max_length))
+    paths = np.zeros((len(id_fps ) +1, max_length))
 
     # Fill them in
-    question[:,:id_q.shape[0]] = np.repeat(id_q[np.newaxis,:min(id_q.shape[0], question.shape[1])],
+    question[: ,:id_q.shape[0]] = np.repeat(id_q[np.newaxis ,:min(id_q.shape[0], question.shape[1])],
                                            question.shape[0], axis=0)
     paths[0, :id_tp.shape[0]] = id_tp
     for i in range(len(id_fps)):
         if len(id_fps[i]) > max_length:
-            paths[i+1,:min(id_fps[i].shape[0],question.shape[1])] = id_fps[i][:max_length]
+            paths[ i +1 ,:min(id_fps[i].shape[0] ,question.shape[1])] = id_fps[i][:max_length]
         else:
-            paths[i+1,:min(id_fps[i].shape[0], question.shape[1])] = id_fps[i]
+            paths[ i +1 ,:min(id_fps[i].shape[0], question.shape[1])] = id_fps[i]
     # Pass em through the model
     if POINTWISE and not rdf:
-        results = model.predict([question, paths], batch_size=batch_size)[:,0]
+        results = model.predict([question, paths], batch_size=batch_size)[: ,0]
     else:
-        results = model.predict([question, paths, np.zeros_like(paths)], batch_size=batch_size)[:,0]
+        results = model.predict([question, paths, np.zeros_like(paths)], batch_size=batch_size)[: ,0]
     return results
-
 
 def rank_precision_metric(neg_paths_per_epoch):
     def metric(y_true, y_pred):
         scores = y_pred[:, 0]
-        scores = K.reshape(scores, (-1, neg_paths_per_epoch+1))
-        hits = K.cast(K.shape(K.tf.where(K.tf.equal(K.tf.argmax(scores, axis=1),0)))[0], 'float32')
-        precision = hits/K.cast(K.shape(scores)[0], 'float32')
+        scores = K.reshape(scores, (-1, neg_paths_per_epoc h +1))
+        hits = K.cast(K.shape(K.tf.where(K.tf.equal(K.tf.argmax(scores, axis=1) ,0)))[0], 'float32')
+        precision = hit s /K.cast(K.shape(scores)[0], 'float32')
         # precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
         return precision
     return metric
-
 
 def get_glove_embeddings():
     """
@@ -262,7 +255,6 @@ def get_glove_embeddings():
     from utils.embeddings_interface import glove_embeddings
     return glove_embeddings
 
-
 def cross_correlation(x):
     a, b = x
     tf = K.tf
@@ -270,7 +262,6 @@ def cross_correlation(x):
     b_fft = tf.fft(tf.complex(b, 0.0))
     ifft = tf.ifft(tf.conj(a_fft) * b_fft)
     return tf.cast(tf.real(ifft), 'float32')
-
 
 def rel_id_to_rel(rel, _relations):
     """
@@ -283,7 +274,7 @@ def rel_id_to_rel(rel, _relations):
     occurrences = []
     for key in _relations:
         value = _relations[key]
-        if np.array_equal(value[3],np.asarray(rel)):
+        if np.array_equal(value[3] ,np.asarray(rel)):
             occurrences.append(value)
     # print occurrences
     if len(occurrences) == 1:
@@ -301,13 +292,11 @@ def rel_id_to_rel(rel, _relations):
         else:
             return occurrences[0][0]
 
-
 def return_sign(sign):
     if sign == 2:
         return '+'
     else:
         return '-'
-
 
 def id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True):
     '''
@@ -322,7 +311,7 @@ def id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True):
     # mapping from discrete space to continuous space.
     path_id = np.asarray([reverse_vocab[i] for i in path_id])
 
-    #find all the relations in the given paths
+    # find all the relations in the given paths
     if core_chain:
         '''
             Identify the length. Is it one hop or two.
@@ -333,31 +322,30 @@ def id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True):
             rel_length = 2
 
         if rel_length == 2:
-                sign_1 = path_id[0]
-                try:
-                    index_sign_2 = path_id[1:].tolist().index(2) + 1
-                except ValueError:
-                    index_sign_2 = path_id[1:].tolist().index(3) + 1
-                rel_1,rel_2 = path_id[1:index_sign_2],path_id[index_sign_2+1:]
-                rel_1 = rel_id_to_rel(rel_1,relations)
-                rel_2 = rel_id_to_rel(rel_2,relations)
-                sign_2 = path_id[index_sign_2]
-                path = [return_sign(sign_1),rel_1,return_sign(sign_2),rel_2]
-                return path
+            sign_1 = path_id[0]
+            try:
+                index_sign_2 = path_id[1:].tolist().index(2) + 1
+            except ValueError:
+                index_sign_2 = path_id[1:].tolist().index(3) + 1
+            rel_1 ,rel_2 = path_id[1:index_sign_2] ,path_id[index_sign_ 2 +1:]
+            rel_1 = rel_id_to_rel(rel_1 ,relations)
+            rel_2 = rel_id_to_rel(rel_2 ,relations)
+            sign_2 = path_id[index_sign_2]
+            path = [return_sign(sign_1) ,rel_1 ,return_sign(sign_2) ,rel_2]
+            return path
         else:
             sign_1 = path_id[0]
             rel_1 = path_id[1:]
-            rel_1 = rel_id_to_rel(rel_1,relations)
-            path = [return_sign(sign_1),rel_1]
+            rel_1 = rel_id_to_rel(rel_1 ,relations)
+            path = [return_sign(sign_1) ,rel_1]
             return path
     else:
         variable = path_id[0]
         sign_1 = path_id[1]
-        rel_1 = rel_id_to_rel(path_id[2:],relations)
+        rel_1 = rel_id_to_rel(path_id[2:] ,relations)
         pass
 
-
-def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, core_chain = True):
+def rdf_type_candidates(data ,path_id, vocab, relations, reverse_vocab, only_x, core_chain = True):
     '''
         Takes in path ID (continous IDs, not glove vocab).
         And return type candidates (in continous IDs)
@@ -371,7 +359,7 @@ def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, c
     :return:
     '''
 
-    #@TODO: Only generate specific candidates
+    # @TODO: Only generate specific candidates
     data = data['parsed-data']
     path = id_to_path(path_id, vocab, relations, reverse_vocab, core_chain = True)
     sparql = drt.reconstruct(data['entity'], path, alternative=True)
@@ -413,9 +401,8 @@ def rdf_type_candidates(data,path_id, vocab, relations, reverse_vocab, only_x, c
             except:
                 type_uri_candidates[i][j] = vocab[1]
     # Return based on given input.
-    return type_x_candidates+type_uri_candidates
+    return type_x_candidate s +type_uri_candidates
     # return type_x_candidates if only_x else type_uri_candidates
-
 
 def load_relation():
     relations = pickle.load(open(RELATIONS_LOC))
@@ -428,7 +415,6 @@ def load_relation():
         inverse_relations[new_key] = value
 
     return inverse_relations
-
 
 def create_true_positive_rdf_path(data):
     '''
@@ -445,7 +431,7 @@ def create_true_positive_rdf_path(data):
     else:
         return None
     pos_path = embeddings_interface.vocabularize(nlutils.tokenize(pos_path))
-    for i in range(0,len(pos_path)):
+    for i in range(0 ,len(pos_path)):
         pos_path[i] = vocab[pos_path[i]]
     return pos_path
 
@@ -458,24 +444,23 @@ def test_split(x):
     return x[split_point(x):]
 
 
-def rdf_type_check(question,model_rdf_type_check, max_length = 30):
+def rdf_type_check(question ,model_rdf_type_check, max_length = 30):
     """
 
     :param question: vectorize question
     :param model_rdf_type_check: model
     :return:
     """
-    question_padded = np.zeros((1,max_length))
+    question_padded = np.zeros((1 ,max_length))
     try:
-        question_padded[:,:question.shape[0]] = question
+        question_padded[: ,:question.shape[0]] = question
     except ValueError:
-        question_padded = question[:,:question_padded.shape[0]]
+        question_padded = question[: ,:question_padded.shape[0]]
     prediction = np.argmax(model_rdf_type_check.predict(question_padded))
     if prediction == 0:
         return True
     else:
         return False
-
 
 def remove_positive_path(positive_path, negative_paths):
     new_negative_paths = []
@@ -484,14 +469,12 @@ def remove_positive_path(positive_path, negative_paths):
             new_negative_paths.append(np.asarray(negative_paths[i]))
     return positive_path, np.asarray(new_negative_paths)
 
-
 def load_reverse_rdf_type():
     rdf_type = json.load(open(RDF_TYPE_LOOKUP_LOC))
     rdf = {}
     for classes in rdf_type:
         rdf[classes] = embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(classes)))
     return rdf
-
 
 def convert_rdf_path_to_text(path):
     """
@@ -520,8 +503,7 @@ def convert_rdf_path_to_text(path):
 
     return [var, dbo_class]
 
-
-def construct_paths(data,qald=False):
+def construct_paths(data ,relations ,qald=False):
     """
     :param data: a data node of id_big_data
     :return: unpadded , continous id spaced question, positive path, negative paths
@@ -577,11 +559,10 @@ def construct_paths(data,qald=False):
                 # negative_paths[i] = np.asarray(temp)
                 # negative_paths[i] = np.asarray([vocab[key] for key in negative_paths[i] if key in vocab.keys()])
     if qald:
-        return question, positive_path, negative_paths,false_positive_path
-    return question,positive_path,negative_paths
+        return question, positive_path, negative_paths ,false_positive_path
+    return question ,positive_path ,negative_paths
 
-
-def question_intent(padded_question):
+def question_intent(model_question_intent ,padded_question):
     """
         predicting the intent of the question.
             List, Ask, Count.
@@ -589,13 +570,11 @@ def question_intent(padded_question):
     intent = np.argmax(model_question_intent.predict(padded_question))
     return ['count', 'ask', 'list'][intent]
 
-
-def rdf_constraint_check(padded_question):
+def rdf_constraint_check(padded_question ,model_rdf_type_existence):
     """
         predicting the existence of rdf type constraints.
     """
     return np.argmax(model_rdf_type_existence.predict(padded_question))
-
 
 def pad_question(question):
     """
@@ -608,9 +587,8 @@ def pad_question(question):
     padded_question = padded_question.reshape((1, padded_question.shape[0]))
     return padded_question
 
-
 plus_id, minus_id = None, None # These are vocab IDs
-def reconstruct_corechain(_chain):
+def reconstruct_corechain(_chain ,relations):
     """
         Expects a corechain made of continous IDs, and returns it in its text format (uri form)
         @TODO: TEST!
@@ -632,7 +610,7 @@ def reconstruct_corechain(_chain):
     if length == 1:
 
         # Just one predicate. Find its uri
-        uri = rel_id_to_rel(corechain_vocabbed[1:],relations)
+        uri = rel_id_to_rel(corechain_vocabbed[1:] ,relations)
         sign = '+' if corechain_vocabbed[0] == plus_id else '-'
         signs = [sign]
         uris = [uri]
@@ -648,8 +626,8 @@ def reconstruct_corechain(_chain):
 
         first_sign = '+' if corechain_vocabbed[0] == plus_id else '-'
         second_sign = '+' if corechain_vocabbed[index_second_sign] == plus_id else '-'
-        first_uri = rel_id_to_rel(corechain_vocabbed[1:index_second_sign],relations)
-        second_uri = rel_id_to_rel(corechain_vocabbed[index_second_sign+1:],relations)
+        first_uri = rel_id_to_rel(corechain_vocabbed[1:index_second_sign] ,relations)
+        second_uri = rel_id_to_rel(corechain_vocabbed[index_second_sig n +1:] ,relations)
 
         signs = [first_sign, second_sign]
         uris = [first_uri, second_uri]
@@ -659,7 +637,6 @@ def reconstruct_corechain(_chain):
         return [], []
 
     return signs, uris
-
 
 def query_graph_to_sparql(_graph):
     """
@@ -682,8 +659,10 @@ def query_graph_to_sparql(_graph):
     # Find entities
     entities = _graph['entities']
 
+    print _graph
+
     # Convert the corechain to glove embeddings
-    corechain_signs, corechain_uris = reconstruct_corechain(_graph['best_path'])
+    corechain_signs, corechain_uris = reconstruct_corechain(_graph['best_path'] ,relations)
 
     # Construct the stuff outside the where clause
     sparql_value["ask"] = 'ASK' if _graph['intent'] == 'ask' else 'SELECT DISTINCT'
@@ -726,7 +705,7 @@ def query_graph_to_sparql(_graph):
 
     elif len(signs_key) == 1:
         # Single hop, non boolean.
-        sparql_template = sparql_1hop_template[signs_key+'c' if _graph['intent'] == 'count' else signs_key]
+        sparql_template = sparql_1hop_template[signs_ke y +'c' if _graph['intent'] == 'count' else signs_key]
         sparql_value["te1"] = _graph['entities'][0]
         sparql_value["r1"] = corechain_uris[0] if _graph['intent'] == 'count' else corechain_uris[0].split('/')[-1]
 
@@ -738,10 +717,10 @@ def query_graph_to_sparql(_graph):
 
         # Check if entities are one or two
         if len(_graph['entities']) == 1:
-            sparql_template = sparql_2hop_1ent_template[signs_key+'c' if _graph['intent'] == 'count' else signs_key]
+            sparql_template = sparql_2hop_1ent_template[signs_ke y +'c' if _graph['intent'] == 'count' else signs_key]
             sparql_value["te1"] = _graph['entities'][0]
         else:
-            sparql_template = sparql_2hop_2ent_template[signs_key+'c' if _graph['intent'] == 'count' else signs_key]
+            sparql_template = sparql_2hop_2ent_template[signs_ke y +'c' if _graph['intent'] == 'count' else signs_key]
             sparql_value["te1"] = _graph['entities'][0]
             sparql_value["te2"] = _graph['entities'][1]
 
@@ -749,7 +728,6 @@ def query_graph_to_sparql(_graph):
     sparql = sparql_template % sparql_value
 
     return sparql
-
 
 def ground_truth_intent(data):
     """
@@ -769,15 +747,14 @@ def ground_truth_intent(data):
     return 'list'
 
 
-
 def ground_truth_rdf(data):
     datum = data
     if '?x' in datum['parsed-data']['constraints'].keys():
-        return 'x',dbp.get_label(datum['parsed-data']['constraints']['?x'])
+        return 'x' ,dbp.get_label(datum['parsed-data']['constraints']['?x'])
     elif '?uri' in datum['parsed-data']['constraints'].keys():
-        return 'uri',dbp.get_label(datum['parsed-data']['constraints']['?uri'])
+        return 'uri' ,dbp.get_label(datum['parsed-data']['constraints']['?uri'])
     else:
-        return 'none','none'
+        return 'none' ,'none'
 
 
 def sparql_answer(sparql):
@@ -789,7 +766,7 @@ def sparql_answer(sparql):
 
 
 def evaluate(test_sparql, true_sparql, type, ground_type):
-    #@TODO: If the type of test and true are differnt code would return an error.
+    # @TODO: If the type of test and true are differnt code would return an error.
     """
         Fmeasure for ask and count are 0/1.
         Also assumes the variable to be always uri.
@@ -802,44 +779,44 @@ def evaluate(test_sparql, true_sparql, type, ground_type):
         First evaluate based on type. If the type prediction is wrong. Don't proceded. The f,p,r =0
     '''
     if type != ground_type:
-        return 0.0,0.0,0.0
+        return 0.0 ,0.0 ,0.0
 
     if type == "list":
         test_answer = sparql_answer(test_sparql)
         true_answer = sparql_answer(true_sparql)
         total_retrived_resutls = len(test_answer)
         total_relevant_resutls = len(true_answer)
-        common_results = total_retrived_resutls - len(list(set(test_answer)-set(true_answer)))
+        common_results = total_retrived_resutls - len(list(set(test_answer ) -set(true_answer)))
         if total_retrived_resutls == 0:
             precision = 0
         else:
-            precision = common_results*1.0/total_retrived_resutls
+            precision = common_result s *1. 0 /total_retrived_resutls
         if total_relevant_resutls == 0:
             recall = 0
         else:
-            recall = common_results*1.0/total_relevant_resutls
+            recall = common_result s *1. 0 /total_relevant_resutls
         if precision == 0 and recall == 0:
             f1 = 0
         else:
             f1 = (2.0 * (precision * recall)) / (precision + recall)
-        return f1,precision,recall
+        return f1 ,precision ,recall
 
     if type == "count":
         count_test = sparql_answer(test_sparql)
         count_true = sparql_answer(true_sparql)
         if count_test == count_true:
-            return 1.0,1.0,1.0
+            return 1.0 ,1.0 ,1.0
         else:
-            return 0.0,0.0,1.0
+            return 0.0 ,0.0 ,1.0
 
     if type == "ask":
         if dbp.get_answer(test_sparql) == dbp.get_answer(true_sparql):
-            return 1.0,1.0,1.0
+            return 1.0 ,1.0 ,1.0
         else:
-            return 0.0,0.0,1.0
+            return 0.0 ,0.0 ,1.0
 
 
-def similarity(question,path,mode='mean'):
+def similarity(question ,path ,mode='mean'):
     '''
             Takes question and path mapped in continous space and computes similarity
             mode = avg/sum
@@ -847,8 +824,8 @@ def similarity(question,path,mode='mean'):
     question_v = np.asarray([vectors[x] for x in question])
     path_v = np.asarray([vectors[x] for x in path])
     if mode == 'sum':
-        question_avg = np.sum(question_v,axis=0)
-        path_avg = np.sum(path_v,axis=0)
+        question_avg = np.sum(question_v ,axis=0)
+        path_avg = np.sum(path_v ,axis=0)
     else:
         question_avg = np.mean(question_v, axis=0)
         path_avg = np.mean(path_v, axis=0)
@@ -858,10 +835,10 @@ def similarity(question,path,mode='mean'):
         return np.dot(path_avg, question_avg) / (np.linalg.norm(question_avg) * np.linalg.norm(path_avg))
 
 
-def prune_candidate_space(question,paths,k=None):
+def prune_candidate_space(question ,paths ,k=None):
     sim = []
     for p in paths:
-        sim.append(similarity(question,p))
+        sim.append(similarity(question ,p))
     if not k:
         return np.argsort(sim)
     if len(sim) > k:
@@ -875,7 +852,7 @@ def convert(paths):
     for p in paths_list:
         try:
             negative_index = p[1:].index(3)
-            first_prop = p[:negative_index+1]
+            first_prop = p[:negative_inde x +1]
             first_hop_properties.append(first_prop)
         except ValueError:
             try:
@@ -895,7 +872,7 @@ def convert(paths):
     return unique_fhp
 
 
-def dicta(paths,fhps):
+def dicta(paths ,fhps):
     paths_list = [p.tolist() for p in paths]
     picked_paths = []
     for fhp in fhps:
@@ -908,7 +885,7 @@ def dicta(paths,fhps):
                 continue
     return picked_paths
 
-def search_string_to_rel(relations,search_string):
+def search_string_to_rel(relations ,search_string):
     matches = []
     for r in relations:
         r_small_case = [j.lower() for j in relations[r][2]]
@@ -927,14 +904,14 @@ def search_string_to_rel(relations,search_string):
         return best_match
 
 
-def pred_to_rel(pred,relations):
+def pred_to_rel(pred ,relations):
     if "EMPTY" in pred:
-        pred = pred.replace('EMPTYEMPTYEMPTY','')
+        pred = pred.replace('EMPTYEMPTYEMPTY' ,'')
         pred = pred.strip().split(' ')
         search_string = pred[1:]
-        best_match = search_string_to_rel(relations,search_string)
+        best_match = search_string_to_rel(relations ,search_string)
         matches = []
-        rel_string = [pred[0],best_match]
+        rel_string = [pred[0] ,best_match]
     else:
         pred = pred.strip().split(' ')
         sign_1 = pred[0]
@@ -945,14 +922,15 @@ def pred_to_rel(pred,relations):
             index_sign_2 = pred[1:].index('-')
         except ValueError:
             index_sign_2 = pred[1:].index('+')
-        rel_1, rel_2 = pred[1:index_sign_2+1], pred[index_sign_2 + 2:]
-        rel1 = search_string_to_rel(relations,rel_1)
-        rel2 = search_string_to_rel(relations,rel_2)
-        sign_2 = pred[index_sign_2+1]
-        rel_string = [sign_1,rel1,sign_2,rel2]
+        rel_1, rel_2 = pred[1:index_sign_ 2 +1], pred[index_sign_2 + 2:]
+        rel1 = search_string_to_rel(relations ,rel_1)
+        rel2 = search_string_to_rel(relations ,rel_2)
+        sign_2 = pred[index_sign_ 2 +1]
+        rel_string = [sign_1 ,rel1 ,sign_2 ,rel2]
     return rel_string
 
-def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_counter,model_corechain,printer=True):
+def core_chain_accuracy(question ,paths ,positive_path ,negative_paths ,core_chain_counter ,model_corechain
+                        ,no_positive_path ,printer=True):
     '''
 
 
@@ -964,14 +942,14 @@ def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_c
         print(sum(avg) * 1.0 / len(avg))
         # raw_input()
         if printer: print "in the first if condition"
-        return question,paths,positive_path,negative_paths,core_chain_counter, '',mrr
+        return question ,paths ,positive_path ,negative_paths ,core_chain_counter, '' ,mrr
 
     if len(negative_paths) == 0:
         best_path = positive_path
         core_chain_counter = core_chain_counter + 1
         mrr = 1
         if printer: print "in the second  if condition and mrr should be 1"
-        return question, paths, positive_path, negative_paths, core_chain_counter, best_path,mrr
+        return question, paths, positive_path, negative_paths, core_chain_counter, best_path ,mrr
     else:
         '''
             The output is made by stacking positive path over negative paths.
@@ -1036,7 +1014,72 @@ def core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_c
         if not no_positive_path:
             if np.array_equal(best_path, positive_path):
                 core_chain_counter = core_chain_counter + 1
-        return question, paths, positive_path, negative_paths, core_chain_counter, best_path,mrr
+        return question, paths, positive_path, negative_paths, core_chain_counter, best_path ,mrr
+
+
+
+def construct_query_graph(data):
+    '''
+
+        The function takes in data node from id_big_data file and creates query grah which could then be used for evaluation.
+    :return: query_graph
+    '''
+
+    try:
+        print "in try loop"
+
+    except:
+        pass
+# Some more globals
+relations = load_relation()
+reverse_relations = {}
+for keys in relations:
+    reverse_relations[relations[keys][0]] = [keys] + relations[keys][1:]
+reverse_rdf_dict = load_reverse_rdf_type()
+
+'''
+    Core chain accuracy counter counts the number of time the core chain predicated is same as 
+    positive path. This also includes for ask query.
+    The counter might confuse the property and the ontology. 
+
+    Similar functionality with rdf_type and intent
+'''
+core_chain_accuracy_counter = 0
+intent_accuracy_counter = 0
+rdf_type_existence_accuracy_counter = 0
+query_graph_accuracy_counter = 0
+
+'''
+    c_flag  is true if the core_chain was correctly predicted. same is the case for i_flag and r_flag, rt_flag (correct candidate for rdf type)
+'''
+c_flag, i_flag, r_flag, rt_flag = False, False, False, False
+
+'''
+    Counts the number of times just using  word2vec similarity, the best path came the most similar. This will only work if
+    CANDIDATE_SPACE is not none.
+'''
+word_vector_accuracy_counter = 0
+
+'''
+    Stores tuple of (fmeasure,precision,recall)
+'''
+results = []
+'''
+    keeps avg of fmeasure for each question. A real time fmeasure
+'''
+avg = []
+MRR = []
+counter = 0
+
+Logging = {}
+
+Logging['dataset'] = DATASET
+Logging['CORECHAIN_MODEL_DIR'] = CORECHAIN_MODEL_DIR
+Logging['RDFCHECK_MODEL_DIR'] = RDFCHECK_MODEL_DIR
+Logging['RDFEXISTENCE_MODEL_DIR'] = RDFEXISTENCE_MODEL_DIR
+Logging['INTENT_MODEL_DIR'] = INTENT_MODEL_DIR
+Logging['main_log'] = []
+
 
 if __name__ is "__main__":
 
@@ -1049,7 +1092,8 @@ if __name__ is "__main__":
 
     if DATASET == 'qald':
         # Load qald test data
-        id_data_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, "qald_id_big_data_test.json")))
+        id_data_test = json.load \
+            (open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, "qald_id_big_data_test.json")))
     else:
         # Load the main data
         id_data = json.load(
@@ -1082,52 +1126,23 @@ if __name__ is "__main__":
     # Load all model
     with K.tf.device('/gpu:' + GPU):
         metric = rank_precision_metric(10)
-        model_corechain = load_model(CORECHAIN_MODEL_DIR, {'custom_loss':custom_loss, 'metric':metric})
-        model_rdf_type_check = load_model(RDFCHECK_MODEL_DIR, {'custom_loss':custom_loss, 'metric':metric})
+        model_corechain = load_model(CORECHAIN_MODEL_DIR, {'custom_loss' :custom_loss, 'metric' :metric})
+        model_rdf_type_check = load_model(RDFCHECK_MODEL_DIR, {'custom_loss' :custom_loss, 'metric' :metric})
         model_rdf_type_existence = load_model(RDFEXISTENCE_MODEL_DIR)
         model_question_intent = load_model(INTENT_MODEL_DIR)
 
     if DEBUG: print("the length of test data is ", len(id_data_test))
     if DEBUG: print("the dataset loaded is ", DATASET)
 
-    '''
-        Core chain accuracy counter counts the number of time the core chain predicated is same as 
-        positive path. This also includes for ask query.
-        The counter might confuse the property and the ontology. 
-        
-        Similar functionality with rdf_type and intent
-    '''
-    core_chain_accuracy_counter = 0
-    intent_accuracy_counter = 0
-    rdf_type_existence_accuracy_counter = 0
-    query_graph_accuracy_counter = 0
 
-    '''
-        c_flag  is true if the core_chain was correctly predicted. same is the case for i_flag and r_flag, rt_flag (correct candidate for rdf type)
-    '''
-    c_flag,i_flag,r_flag,rt_flag = False,False,False,False
-
-    '''
-        Counts the number of times just using  word2vec similarity, the best path came the most similar. This will only work if
-        CANDIDATE_SPACE is not none.
-    '''
-    word_vector_accuracy_counter = 0
-
-    '''
-        Stores tuple of (fmeasure,precision,recall)
-    '''
-    results = []
-    '''
-        keeps avg of fmeasure for each question. A real time fmeasure
-    '''
-    avg = []
-    MRR = []
-    counter = 0
-    for cnm in range(0,len(id_data_test)):
+    for cnm in range(0 ,len(id_data_test)):
+        log = {}
         data = id_data_test[cnm]
+        log['id_data_text'] = data
+
         print counter
         counter = counter + 1
-        if counter == 336-1:
+        if counter == 33 6 -1:
             continue
         '''
             Book keeping
@@ -1143,7 +1158,8 @@ if __name__ is "__main__":
                 no_positive_path :- if the path had -1
             '''
 
-            question, positive_path, negative_paths, no_positive_path = construct_paths(data, qald=True)
+            question, positive_path, negative_paths, no_positive_path = construct_paths(data, qald=True
+                                                                                        ,relations=relations)
 
             '''
                 if the dataset is LC-QUAD and data['pop'] is false then the positive path has been forcefully inserted and needs to be removed.
@@ -1159,7 +1175,7 @@ if __name__ is "__main__":
                 '''
                     If the positive path exists in the dataset.
                     This is use to prune candidate space using word2vec.
-                    
+
                     CANDIDATES_SPACE decides the number of candidates to keep 
                         If NONE :-  No pruning
                                 - It is switched off permanently as it does not increase the performance.
@@ -1197,24 +1213,26 @@ if __name__ is "__main__":
             '''
             previous_core_accuracy = core_chain_accuracy_counter
             if no_positive_path and DENIS:
-                question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path, mrr = core_chain_accuracy(question,paths,positive_path,negative_paths,core_chain_accuracy_counter,model_corechain)
+                question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path, mrr = core_chain_accuracy \
+                    (question ,paths ,positive_path ,negative_paths ,core_chain_accuracy_counter ,model_corechain)
                 if mrr != 0:
-                    MRR.append(1.0/mrr)
+                    MRR.append(1. 0 /mrr)
                 else:
                     MRR.append(0.0)
 
             elif DENIS:
                 print "@denis"
                 best_path = denis_pred[cnm]['vocab_path_id']
-                if np.array_equal(positive_path,best_path):
+                if np.array_equal(positive_path ,best_path):
                     core_chain_accuracy_counter = core_chain_accuracy_counter + 1
             else:
                 print "debug"
                 question, paths, positive_path, negative_paths, core_chain_accuracy_counter, best_path, mrr = core_chain_accuracy(
-                    question, paths, positive_path, negative_paths, core_chain_accuracy_counter, model_corechain)
+                    question, paths, positive_path, negative_paths, core_chain_accuracy_counter, model_corechain
+                    ,no_positive_path)
                 print "the mmr is ", str(mrr)
                 if mrr != 0:
-                    MRR.append(1.0/mrr)
+                    MRR.append(1. 0 /mrr)
                 else:
                     MRR.append(0.0)
             print "mrr is ", (sum(MRR) * 1.0 / len(MRR))
@@ -1224,7 +1242,7 @@ if __name__ is "__main__":
             padded_question = pad_question(question)
 
             # Predicting the intent of the question
-            intent = question_intent(padded_question)
+            intent = question_intent(model_question_intent ,padded_question)
             query_graph['intent'] = intent
 
             if intent == ground_truth_intent(data):
@@ -1268,7 +1286,7 @@ if __name__ is "__main__":
                                 if i_flag and c_flag:
                                     query_graph_accuracy_counter = query_graph_accuracy_counter + 1
                     # raw_input()
-                    i_flag, c_flag,r_flag,rt_flag = False,False,False,False
+                    i_flag, c_flag ,r_flag ,rt_flag = False ,False ,False ,False
                     continue
 
 
@@ -1280,10 +1298,13 @@ if __name__ is "__main__":
                 avg.append(0.0)
                 print(sum(avg) * 1.0 / len(avg))
                 i_flag, c_flag, r_flag, rt_flag = False, False, False, False
+                log['result'] = [0.0 ,0.0 ,0.0]
+                log['query_graph'] = query_graph
+                Logging['main_log'].append(log)
                 continue
 
             # Predicting the rdf-constraint
-            rdf_constraint = rdf_constraint_check(padded_question)
+            rdf_constraint = rdf_constraint_check(padded_question ,model_rdf_type_existence)
             query_graph['rdf_constraint'] = False if rdf_constraint == 2 else True
 
 
@@ -1303,7 +1324,7 @@ if __name__ is "__main__":
                 '''
                 if rdf_candidates:
                     output = rank_precision_runtime(model_rdf_type_check, question, rdf_candidates[0],
-                                                    rdf_candidates, 180, MAX_SEQ_LENGTH,rdf=True)
+                                                    rdf_candidates, 180, MAX_SEQ_LENGTH ,rdf=True)
                     # rdf_best_path = convert_path_to_text(rdf_candidates[np.argmax(output[1:])])
                     query_graph['rdf_best_path'] = rdf_candidates[np.argmax(output[1:])]
                 else:
@@ -1311,9 +1332,10 @@ if __name__ is "__main__":
 
             type_pred = query_graph['intent']
             if query_graph['intent'] != ground_truth_intent(data):
-                f,p,r = 0,0,0
+                f ,p ,r = 0 ,0 ,0
             else:
                 sparql = query_graph_to_sparql(query_graph)
+                query_graph['sparql'] = sparql
                 f, p, r = evaluate(sparql, data['parsed-data']['sparql_query'], type_pred, ground_truth_intent(data))
             results.append([f, p, r])
             avg.append(f)
@@ -1323,14 +1345,20 @@ if __name__ is "__main__":
             # print data['parsed-data']['sparql_query']
             if i_flag and c_flag and r_flag and rt_flag :
                 query_graph_accuracy_counter = query_graph_accuracy_counter + 1
-            i_flag,c_flag,r_flag,rt_flag = False,False,False,False
+            i_flag ,c_flag ,r_flag ,rt_flag = False ,False ,False ,False
+            log['result'] = [f ,p ,r]
+            log['query_graph'] = query_graph
+            Logging['main_log'].append(log)
         except UnboundLocalError:
             print traceback.print_exc()
             results.append([0.0, 0.0, 0.0])
             avg.append(0)
             print(sum(avg) * 1.0 / len(avg))
+            log['result'] = results
+            log['query_graph'] = query_graph
+            Logging['main_log'].append(log)
             continue
-    print"f1 is ",str((sum(avg) * 1.0 / len(avg)))
+    print"f1 is " ,str((sum(avg) * 1.0 / len(avg)))
     print "corechaibn accuracy is ", core_chain_accuracy_counter
     print "the final MRR is ", (sum(MRR) * 1.0 / len(MRR))
     print "the length of MRR is ", str(len(MRR))

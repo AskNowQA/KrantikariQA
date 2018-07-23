@@ -357,7 +357,7 @@ class TrainingDataGenerator(Dataset):
         # self.questions = np.reshape(np.repeat(np.reshape(questions,
         #                                     (questions.shape[0], 1, questions.shape[1])),
         #                          neg_paths_per_epoch, axis=1), (-1, max_length))
-        print questions.shape
+        # print questions.shape
         self.temp = np.reshape(questions,
                           (questions.shape[0], 1, questions.shape[1]))
         self.temp = np.repeat((self.temp), neg_paths_per_epoch, axis=1)

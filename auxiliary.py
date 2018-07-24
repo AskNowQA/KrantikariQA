@@ -83,7 +83,7 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, model
 
             question = torch.tensor(question, dtype=torch.long, device=device)
             paths = torch.tensor(paths, dtype=torch.long, device=device)
-            score = modeler.predict(question, paths, model, device)
+            score = modeler.predict(question, paths, device)
             arg_max = torch.argmax(score)
             if arg_max.item() == 0:  # 0 is the positive path index
                 precision.append(1)

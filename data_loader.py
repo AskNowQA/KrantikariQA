@@ -347,22 +347,24 @@ def create_dataset_pointwise(file, max_sequence_length, relations, _dataset, _da
 
 
 class TrainingDataGenerator(Dataset):
-    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size,total_negative_samples):
+    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size,total_negative_samples,pointwise=False):
         self.dummy_y = np.zeros(batch_size)
         self.firstDone = False
         self.max_length = max_length
         self.neg_paths_per_epoch = neg_paths_per_epoch
         self.total_negative_samples = total_negative_samples
+        self.pointwise = pointwise
 
         # self.questions = np.reshape(np.repeat(np.reshape(questions,
         #                                     (questions.shape[0], 1, questions.shape[1])),
         #                          neg_paths_per_epoch, axis=1), (-1, max_length))
         # print questions.shape
-        self.temp = np.reshape(questions,
-                          (questions.shape[0], 1, questions.shape[1]))
-        self.temp = np.repeat((self.temp), neg_paths_per_epoch, axis=1)
+        # self.temp = np.reshape(questions,
+        #                   (questions.shape[0], 1, questions.shape[1]))
+        # self.temp = np.repeat((self.temp), neg_paths_per_epoch, axis=1)
 
-        self.questions = np.reshape(self.temp, (-1, max_length))
+        self.questions = np.reshape(np.repeat((np.reshape(questions,
+                          (questions.shape[0], 1, questions.shape[1]))), neg_paths_per_epoch, axis=1), (-1, max_length))
 
         self.pos_paths = np.reshape(np.repeat(np.reshape(pos_paths,
                                             (pos_paths.shape[0], 1, pos_paths.shape[1])),
@@ -376,19 +378,56 @@ class TrainingDataGenerator(Dataset):
         self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
             shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
 
-
-
         self.batch_size = batch_size
 
     def __len__(self):
         return math.ceil(len(self.questions) / self.batch_size)
 
     def __getitem__(self, idx):
+        """
+            Called at every iter.
+
+            If code not pointwise, simple sample (not randomly) next batch items.
+            If pointwise:
+                you use the same sampled things, only that you then concat neg and pos paths,
+                and subsample half from there.
+
+        :param idx:
+        :return:
+        """
         index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_questions = index(self.questions_shuffled)
-        batch_pos_paths = index(self.pos_paths_shuffled)
-        batch_neg_paths = index(self.neg_paths_shuffled)
-        return ([batch_questions, batch_pos_paths, batch_neg_paths], self.dummy_y)
+        batch_questions = index(self.questions_shuffled)    # Shape (batch, seqlen)
+        batch_pos_paths = index(self.pos_paths_shuffled)    # Shape (batch, seqlen)
+        batch_neg_paths = index(self.neg_paths_shuffled)    # Shape (batch, seqlen)
+
+        if self.pointwise:
+            questions = np.vstack((batch_questions, batch_questions))
+            paths = np.vstack((batch_pos_paths, batch_neg_paths))
+
+            # Now sample half of thesequestions = np.repeat(batch_questions)
+            sample_index = np.choice(np.arange(0, 2*self.batch_size), self.batch_size)
+
+            # Y labels are basically decided on whether i \in sample_index > self.batchsize or not.
+            y = np.asarray([0 if index < self.batch_size else 1 for index in sample_index])
+            return ([questions[sample_index], paths[sample_index]], y)
+
+        else:
+            return ([batch_questions, batch_pos_paths, batch_neg_paths], self.dummy_y)
+
+    def shuffle(self):
+        """
+            To be called at the end of every epoch. We sample new negative paths,
+            \and then we shuffle the questions, pos and neg paths in tandem.
+        :return: None
+        """
+        self.neg_paths_sampled = np.reshape(
+            self.neg_paths[:, np.random.randint(0, self.total_negative_samples, self.neg_paths_per_epoch), :],
+            (-1, self.max_length))
+
+        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+
+
 
 class ValidationDataset(Dataset):
     def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size,total_negative_samples):

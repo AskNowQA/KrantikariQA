@@ -12,7 +12,7 @@ import torch.nn as nn
 # LSTM encoder.
 class Encoder(nn.Module):
 
-    def __init__(self, max_length, hidden_dim, number_of_layer, embedding_dim, vocab_size, bidirectional, vectors=None,debug=False):
+    def __init__(self, max_length, hidden_dim, number_of_layer, embedding_dim, vocab_size, bidirectional, dropout = 0.0,vectors=None,debug=False):
         '''
             :param max_length: Max length of the sequence.
             :param hidden_dim: dimension of the output of the LSTM.
@@ -28,6 +28,7 @@ class Encoder(nn.Module):
         self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = max_length, hidden_dim, embedding_dim, vocab_size
         self.number_of_layer = number_of_layer
         self.bidirectional = bidirectional
+        self.dropout = dropout
         self.debug = debug
 
         if vectors is not None:
@@ -38,7 +39,7 @@ class Encoder(nn.Module):
             self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
 
         # LSTM layer
-        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim, self.number_of_layer, bidirectional=self.bidirectional)
+        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim, self.number_of_layer, bidirectional=self.bidirectional,dropout=self.dropout)
 
     def init_hidden(self, batch_size, device):
         # Return a new hidden layer variable for LSTM

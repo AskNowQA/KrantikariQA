@@ -1,0 +1,5 @@
+atire_puurula.txt
+glove_parsed.npy
+glove_vocab.pickle
+labels.pickle
+relations_multiple_forms.pickle

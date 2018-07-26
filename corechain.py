@@ -8,15 +8,20 @@ import torch.nn as nn
 from torch import optim
 from torch.utils.data import  DataLoader
 
-
 import data_loader as dl
 import auxiliary as aux
 import network as net
+import ConfigParser
 import numpy as np
 import time
 
 
 device = torch.device("cuda")
+config = ConfigParser.ConfigParser()
+config.readfp(open('configs/macros.cfg'))
+
+training_model = 'bilstm_dot'
+
 
 def load_data(data,parameter_dict,pointwise,shuffle = False):
     # Loading training data
@@ -128,20 +133,21 @@ def training_loop(training_model, parameter_dict,modeler,model,train_loader,
     return train_loss, model, valid_accuracy, test_accuracy
 
 
-#Model specific paramters
+# #Model specific paramters
 parameter_dict = {}
-parameter_dict['max_length'] = 25
-parameter_dict['hidden_size'] = 256
-parameter_dict['number_of_layer'] = 1
-parameter_dict['embedding_dim'] = 300
-parameter_dict['vocab_size'] = 15000
-parameter_dict['batch_size'] = 4000
-parameter_dict['bidirectional'] = True
-parameter_dict['_neg_paths_per_epoch_train'] = 100
-parameter_dict['_neg_paths_per_epoch_validation'] = 1000
-parameter_dict['total_negative_samples'] = 1000
-parameter_dict['epochs'] = 300
-parameter_dict['dropout'] = 0.0
+parameter_dict['max_length'] =  int(config.get(training_model,'max_length'))
+parameter_dict['hidden_size'] = int(config.get(training_model,'hidden_size'))
+parameter_dict['number_of_layer'] = int(config.get(training_model,'number_of_layer'))
+parameter_dict['embedding_dim'] = int(config.get(training_model,'embedding_dim'))
+parameter_dict['vocab_size'] = int(config.get(training_model,'vocab_size'))
+parameter_dict['batch_size'] = int(config.get(training_model,'batch_size'))
+parameter_dict['bidirectional'] = bool(config.get(training_model,'bidirectional'))
+parameter_dict['_neg_paths_per_epoch_train'] = int(config.get(training_model,'_neg_paths_per_epoch_train'))
+parameter_dict['_neg_paths_per_epoch_validation'] = int(config.get(training_model,'_neg_paths_per_epoch_validation'))
+parameter_dict['total_negative_samples'] = int(config.get(training_model,'total_negative_samples'))
+parameter_dict['epochs'] = int(config.get(training_model,'epochs'))
+parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
+
 
 
 #Data loading specific parameters
@@ -195,7 +201,6 @@ data['dummy_y'] = torch.ones(parameter_dict['batch_size'],device=device)
 pointwise = False
 train_loader = load_data(data,parameter_dict,pointwise)
 parameter_dict['vectors'] = data['vectors']
-training_model = 'bilstm_dot'
 
 
 if training_model == 'bilstm_dot':

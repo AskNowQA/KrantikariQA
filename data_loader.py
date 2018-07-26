@@ -37,7 +37,7 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
     :param _index:_data
     :param _training_split: .70
     :param _validation_split: .80
-    :param _pairwise:
+    :param _pairwise: not needed anymore.
     :param _file: id_big_data.json
     :return:
 
@@ -45,17 +45,17 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
 
         if _index is passed it breaks the data into two sets --> [input,validation]
     '''
-
+    _pairwise = True
     if _pairwise:
         vectors, questions, pos_paths, neg_paths = create_dataset_pairwise(_file, _max_sequence_length, _relations,
                                                                            _dataset, _dataset_specific_data_dir,
                                                                            _model_specific_data_dir
                                                                            , _model='core_chain_pairwise')
-    else:
-        vectors, questions, pos_paths, neg_paths = create_dataset_pointwise(_file, _max_sequence_length, _relations,
-                                                                            _dataset, _dataset_specific_data_dir,
-                                                                            _model_specific_data_dir
-                                                                            , _model='core_chain_pairwise')
+    # else:
+    #     vectors, questions, pos_paths, neg_paths = create_dataset_pointwise(_file, _max_sequence_length, _relations,
+    #                                                                         _dataset, _dataset_specific_data_dir,
+    #                                                                         _model_specific_data_dir
+    #                                                                         , _model='core_chain_pairwise')
     '''
         Making sure that positive path is not the part of negative paths.
     '''
@@ -121,12 +121,13 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
         print(valid_pos_paths.shape)
         print(valid_neg_paths.shape)
 
-        if _index:
+        if not _index:
             print(test_questions.shape)
             print(test_pos_paths.shape)
             print(test_neg_paths.shape)
 
     if _index:
+        print "at _index locations"
         return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, \
                valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors
     else:
@@ -405,10 +406,10 @@ class TrainingDataGenerator(Dataset):
             paths = np.vstack((batch_pos_paths, batch_neg_paths))
 
             # Now sample half of thesequestions = np.repeat(batch_questions)
-            sample_index = np.choice(np.arange(0, 2*self.batch_size), self.batch_size)
+            sample_index = np.random.choice(np.arange(0, 2*self.batch_size), self.batch_size)
 
             # Y labels are basically decided on whether i \in sample_index > self.batchsize or not.
-            y = np.asarray([0 if index < self.batch_size else 1 for index in sample_index])
+            y = np.asarray([-1 if index < self.batch_size else 1 for index in sample_index])
             return ([questions[sample_index], paths[sample_index]], y)
 
         else:

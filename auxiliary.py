@@ -56,7 +56,7 @@ def save_location(problem, model_name, dataset):
 
 
 # Function to save the model
-def save_model(loc, model, model_name='model.torch', epochs=0, optimizer=None, accuracy=0):
+def save_model(loc, model, model_name='model.torch', epochs=0, optimizer=None, accuracy=0,aux_save_information={}):
     """
         Input:
             loc: str of the folder where the models are to be saved - data/models/core_chain/cnn_dense_dense/lcquad/5'
@@ -71,8 +71,10 @@ def save_model(loc, model, model_name='model.torch', epochs=0, optimizer=None, a
         'accuracy': accuracy
     }
     loc = loc + '/' + model_name
+    aux_save = loc+'/model_info.pickle'
     print("model with accuracy ", accuracy, "stored at", loc)
     torch.save(state, loc)
+    pickle.dump(aux_save_information,open(aux_save,'w+'))
 
 
 def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, modeler, model,device):

@@ -16,11 +16,22 @@ import numpy as np
 import time
 
 
-device = torch.device("cuda")
+
+#Reading and setting up config parser
 config = ConfigParser.ConfigParser()
 config.readfp(open('configs/macros.cfg'))
 
+#setting up device,model name and loss types.
+device = torch.device("cuda")
 training_model = 'bilstm_dot'
+_dataset = 'lcquad'
+pointwise = False
+
+
+#Loading relations file.
+COMMON_DATA_DIR = 'data/data/common'
+_dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
+_relations = aux.load_relation(COMMON_DATA_DIR)
 
 
 def load_data(data,parameter_dict,pointwise,shuffle = False):
@@ -35,11 +46,17 @@ def training_loop(training_model, parameter_dict,modeler,model,train_loader,
                   optimizer,loss_func, data, dataset, device, test_every, validate_every , pointwise = False, problem='core_chain'):
 
     model_save_location = aux.save_location(problem, training_model, dataset)
-
+    aux_save_information = {
+        'epoch' : 0,
+        'test_accuracy':0.0,
+        'validation_accuracy':0.0,
+        'parameter_dict':parameter_dict
+    }
     train_loss = []
     valid_accuracy = []
     test_accuracy = []
-    best_accuracy = 0
+    best_validation_accuracy = 0
+    best_test_accuracy = 0
 
     # The Loop
     for epoch in range(parameter_dict['epochs']):
@@ -104,21 +121,28 @@ def training_loop(training_model, parameter_dict,modeler,model,train_loader,
         # Track training loss
         train_loss.append(sum(epoch_loss))
 
-        # Run on validation set
-        if validate_every:
-            if epoch%validate_every == 0:
-                valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
-                                                          data['valid_neg_paths'],  modeler, model,device))
-                if valid_accuracy[-1] >= best_accuracy:
-                    best_accuracy = valid_accuracy[-1]
-                    aux.save_model(model_save_location, model, model_name='encoder.torch'
-                               , epochs=epoch, optimizer=optimizer, accuracy=best_accuracy)
+
 
         if test_every:
             # Run on test set
             if epoch%test_every == 0:
                 test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
                                                          data['test_neg_paths'] , modeler, model,device))
+                if test_accuracy[-1] >= best_test_accuracy:
+                    aux_save_information['test_accuracy'] = best_test_accuracy
+
+        # Run on validation set
+        if validate_every:
+            if epoch%validate_every == 0:
+                valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
+                                                          data['valid_neg_paths'],  modeler, model,device))
+                if valid_accuracy[-1] >= best_validation_accuracy:
+                    best_validation_accuracy = valid_accuracy[-1]
+                    aux_save_information['epoch'] = epoch
+                    aux_save_information['validation_accuracy'] = best_validation_accuracy
+                    aux.save_model(model_save_location, model, model_name='encoder.torch'
+                               , epochs=epoch, optimizer=optimizer, accuracy=best_validation_accuracy,aux_save_information=aux_save_information)
+
 
 
         # Resample new negative paths per epoch and shuffle all data
@@ -150,15 +174,7 @@ parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
 
 
 
-#Data loading specific parameters
-COMMON_DATA_DIR = 'data/data/common'
-_relations = aux.load_relation(COMMON_DATA_DIR)
-_dataset = 'lcquad'
-
-
-_dataset_specific_data_dir = 'data/data/lcquad/'
-
-TEMP = aux.data_loading_parameters('lcquad',parameter_dict)
+TEMP = aux.data_loading_parameters(_dataset,parameter_dict)
 
 _dataset_specific_data_dir,_model_specific_data_dir,_file,\
            _max_sequence_length,_neg_paths_per_epoch_train,_neg_paths_per_epoch_validation,_training_split,_validation_split,_index= TEMP
@@ -166,10 +182,15 @@ _dataset_specific_data_dir,_model_specific_data_dir,_file,\
 _a = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
               _neg_paths_per_epoch_train,
               _neg_paths_per_epoch_validation, _relations,
-              _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=True, _debug=True)
+              _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=not pointwise, _debug=True)
+
 
 if _dataset == 'lcquad':
     train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
+else:
+    print("warning: Test accuracy would not be calculated as the data has not been prepared.")
+    train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid = _a
+    test_questions,test_neg_paths,test_pos_paths = None,None,None
 
 
 data = {}
@@ -186,8 +207,6 @@ data['vectors'] = vectors
 data['dummy_y'] = torch.ones(parameter_dict['batch_size'],device=device)
 
 
-
-pointwise = False
 train_loader = load_data(data,parameter_dict,pointwise)
 parameter_dict['vectors'] = data['vectors']
 
@@ -221,7 +240,7 @@ if training_model == 'bilstm_dot':
     print(max(valid_accuracy))
     print(max(test_accuracy))
 
-#
+
 # rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress auxilary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress network.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/

@@ -163,23 +163,12 @@ TEMP = aux.data_loading_parameters('lcquad',parameter_dict)
 _dataset_specific_data_dir,_model_specific_data_dir,_file,\
            _max_sequence_length,_neg_paths_per_epoch_train,_neg_paths_per_epoch_validation,_training_split,_validation_split,_index= TEMP
 
-# _model_specific_data_dir = 'data/data/core_chain_pairwise/lcquad/'
-# _file = 'id_big_data.json'
-# _max_sequence_length = parameter_dict['max_length']
-# _neg_paths_per_epoch_train = parameter_dict['_neg_paths_per_epoch_train']
-# _neg_paths_per_epoch_validation = parameter_dict['_neg_paths_per_epoch_validation']
-# _training_split = .7
-# _validation_split = .8
-# _index = None
-
-
 _a = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
               _neg_paths_per_epoch_train,
               _neg_paths_per_epoch_validation, _relations,
               _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=True, _debug=True)
 
 if _dataset == 'lcquad':
-    print (len(_a))
     train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
 
 

@@ -24,7 +24,7 @@ config.readfp(open('configs/macros.cfg'))
 #setting up device,model name and loss types.
 device = torch.device("cuda")
 training_model = 'bilstm_dot'
-_dataset = 'lcquad'
+_dataset = 'qald'
 pointwise = False
 
 
@@ -242,7 +242,7 @@ if training_model == 'bilstm_dot':
 
 
 # rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
-# rsync -avz --progress auxilary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
+# rsync -avz --progress auxiliary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress network.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress components.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress data_loader.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/

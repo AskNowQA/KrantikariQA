@@ -196,6 +196,22 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
                     continue
                 pos_paths.append(positive_path)
 
+
+            '''     
+                        $$$$$$$$$$$$$$$$$$$$$$$$$$$
+                        $$$$$$$$$$$$$$$$$$$$$$$$$$$
+            
+                 The question id is not correct. It sis fucking out of sync 
+            
+                        $$$$$$$$$$$$$$$$$$$$$$$$$$$$
+                        $$$$$$$$$$$$$$$$$$$$$$$$$$$$
+                
+                
+                To solve this issue in qald file. Execute scripts/update_questionid_qald file from ipython
+                This remaps the question['uri'] to glove(question['uri']). This is a hack, but something clear needs to be worked out.
+                
+                
+            '''
             questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
             questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
 
@@ -220,8 +236,12 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
                     negative_paths = np.random.choice(negative_paths, 1000)
                 except ValueError:
                     if len(negative_paths) == 0:
-                        negative_paths = neg_paths[-1]
-                        print("Using previous question's paths for this since no neg paths for this question.")
+                        try:
+                            negative_paths = neg_paths[-1]
+                            print("Using previous question's paths for this since no neg paths for this question.")
+                        except IndexError:
+                            print("at index error. Moving forward due to a hack")
+                            negative_paths = np.asarray([1])
                     else:
                         index = np.random.randint(0, len(negative_paths), 1000)
                         negative_paths = np.array(negative_paths)
@@ -236,13 +256,22 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             vocab, vectors = vocab_master.load()
 
             # Map everything
+            unks_counter = 0
+            # number of unks
             for i in range(len(questions)):
-                questions[i] = np.asarray([vocab[key] for key in questions[i]])
+                for index in range(len(questions[i])):
+                    try:
+                        questions[i][index] = vocab[questions[i][index]]
+                    except KeyError:
+                        unks_counter = unks_counter + 1
+                        questions[i][index] = 1
+                # questions[i] = np.asarray([vocab[key] for key in questions[i]])
                 pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
 
                 for j in range(len(neg_paths[i])):
                     neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
+            print("places where glove id exists and not in vecotrs ", unks_counter)
             with open(os.path.join(_model_specific_data_dir % {'dataset': _dataset, 'model': _model},
                                    file + ".mapped.npz"), "w+") as data:
                 np.savez(data, questions, pos_paths, neg_paths)

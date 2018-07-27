@@ -6,6 +6,8 @@
 #Torch related functionalities
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 
 
 
@@ -65,3 +67,37 @@ class Encoder(nn.Module):
         if self.debug: print ("h[0] shape is ", h[0].shape, "h[1] shape is ", h[1].shape)
 
         return output, h
+
+
+class DenseClf(nn.Module):
+
+    def __init__(self, inputdim, hiddendim, outputdim):
+        """
+            This class has a two layer dense network of changable dims.
+            Intended use case is that of
+
+                - *bidir dense*:
+                    give it [v_q, v_p] and it gives a score.
+                    in this case, have outputdim as 1
+                - * bidir dense dot*
+                    give it v_q and it gives a condensed vector
+                    in this case, have any outputdim, preferably outputdim < inputdim
+
+        :param inputdim: int: #neurons
+        :param hiddendim: int: #neurons
+        :param outputdim: int: #neurons
+        """
+        self.outputdim = outputdim
+        self.hidden = nn.Linear(inputdim, hiddendim)
+        self.output = nn.Linear(hiddendim, outputdim)
+
+    def forward(self, x):
+        _x = F.relu(self.hidden(x))
+
+        if self.outputdim == 1:
+            return F.sigmoid(_x)
+
+        else:
+            return F.softmax(_x)
+
+

@@ -8,12 +8,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-
-
-# LSTM encoder.
 class Encoder(nn.Module):
 
+    """LSTM encoder."""
     def __init__(self, max_length, hidden_dim, number_of_layer, embedding_dim, vocab_size, bidirectional, dropout = 0.0,vectors=None,debug=False):
         '''
             :param max_length: Max length of the sequence.
@@ -87,17 +84,23 @@ class DenseClf(nn.Module):
         :param hiddendim: int: #neurons
         :param outputdim: int: #neurons
         """
+
+        super(DenseClf, self).__init__()
+
+        self.inputdim = inputdim
+        self.hiddendim = hiddendim
         self.outputdim = outputdim
         self.hidden = nn.Linear(inputdim, hiddendim)
         self.output = nn.Linear(hiddendim, outputdim)
 
     def forward(self, x):
+
         _x = F.relu(self.hidden(x))
 
         if self.outputdim == 1:
-            return F.sigmoid(_x)
+            return F.sigmoid(self.output(_x))
 
         else:
-            return F.softmax(_x)
+            return F.softmax(self.output(_x))
 
 

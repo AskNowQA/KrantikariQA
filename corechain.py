@@ -58,7 +58,9 @@ def training_loop(training_model, parameter_dict,modeler,model,train_loader,
     best_validation_accuracy = 0
     best_test_accuracy = 0
 
-    # The Loop
+    ###############
+    # Training Loop
+    ###############
     for epoch in range(parameter_dict['epochs']):
 
         # Epoch start print
@@ -101,7 +103,7 @@ def training_loop(training_model, parameter_dict,modeler,model,train_loader,
                     'y_label': y
                 }
 
-            # Finally, train
+            # Train
             loss = modeler.train(data=data_batch,
                               optimizer=optimizer,
                               loss_fn=loss_func,
@@ -116,18 +118,16 @@ def training_loop(training_model, parameter_dict,modeler,model,train_loader,
                   "\t%s" % (str(loss.item())),
                   end=None if i_batch + 1 == int(int(i_batch) / parameter_dict['batch_size']) else "\n")
 
-
+        # EPOCH LEVEL
 
         # Track training loss
         train_loss.append(sum(epoch_loss))
-
-
 
         if test_every:
             # Run on test set
             if epoch%test_every == 0:
                 test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
-                                                         data['test_neg_paths'] , modeler, model,device))
+                                                         data['test_neg_paths'], modeler, device))
                 if test_accuracy[-1] >= best_test_accuracy:
                     aux_save_information['test_accuracy'] = best_test_accuracy
 
@@ -135,15 +135,13 @@ def training_loop(training_model, parameter_dict,modeler,model,train_loader,
         if validate_every:
             if epoch%validate_every == 0:
                 valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
-                                                          data['valid_neg_paths'],  modeler, model,device))
+                                                          data['valid_neg_paths'],  modeler, device))
                 if valid_accuracy[-1] >= best_validation_accuracy:
                     best_validation_accuracy = valid_accuracy[-1]
                     aux_save_information['epoch'] = epoch
                     aux_save_information['validation_accuracy'] = best_validation_accuracy
-                    aux.save_model(model_save_location, model, model_name='encoder.torch'
-                               , epochs=epoch, optimizer=optimizer, accuracy=best_validation_accuracy,aux_save_information=aux_save_information)
-
-
+                    aux.save_model(model_save_location, modeler, model_name='model.torch'
+                               , epochs=epoch, optimizer=optimizer, accuracy=best_validation_accuracy, aux_save_information=aux_save_information)
 
         # Resample new negative paths per epoch and shuffle all data
         train_loader.dataset.shuffle()
@@ -154,7 +152,7 @@ def training_loop(training_model, parameter_dict,modeler,model,train_loader,
               "Valdacc: %s\t" % (valid_accuracy[-1]),
                "Testacc: %s\n" % (test_accuracy[-1]))
 
-    return train_loss, model, valid_accuracy, test_accuracy
+    return train_loss, modeler, valid_accuracy, test_accuracy
 
 
 # #Model specific paramters
@@ -221,7 +219,7 @@ if training_model == 'bilstm_dot':
     else:
         loss_func = nn.MSELoss()
         training_model = 'bilstm_dot_pointwise'
-    train_loss, model, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
+    train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
                                                                                parameter_dict = parameter_dict,
                                                                                modeler = modeler,
                                                                                model = model,
@@ -246,3 +244,8 @@ if training_model == 'bilstm_dot':
 # rsync -avz --progress network.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress components.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress data_loader.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
+
+# rsync -avz --progress corechain.py priyansh@sda-srv04:/data/priyansh/new_kranti
+# rsync -avz --progress auxiliary.py priyansh@sda-srv04:/data/priyansh/new_kranti
+# rsync -avz --progress components.py priyansh@sda-srv04:/data/priyansh/new_kranti
+# rsync -avz --progress network.py priyansh@sda-srv04:/data/priyansh/new_kranti

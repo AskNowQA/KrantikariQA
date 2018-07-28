@@ -103,6 +103,16 @@ class BiLstmDot:
             score = torch.sum(question[-1] * paths[-1], -1)
             return score
 
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder)]
+
 
 class BiLstmDense:
     """
@@ -116,7 +126,6 @@ class BiLstmDense:
         self.parameter_dict = _parameter_dict
         self.device = _device
         self.pointwise = _pointwise
-
         self.hiddendim = self.parameter_dict['hidden_size'] * (2 * int(self.parameter_dict['bidirectional']))
 
         if self.debug:
@@ -126,9 +135,9 @@ class BiLstmDense:
                                    self.parameter_dict['vocab_size'],
                                    bidirectional=self.parameter_dict['bidirectional'],
                                    vectors=self.parameter_dict['vectors']).cuda(self.device)
-        self.dense = com.DenseClf(inputdim=self.hiddendim,
+        self.dense = com.DenseClf(inputdim=self.hiddendim*2,        # *2 because we have two things concatinated here
                                   hiddendim=self.hiddendim/2,
-                                  outputdim=1)
+                                  outputdim=1).cuda(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
 
@@ -217,6 +226,16 @@ class BiLstmDense:
             score = self.dense(torch.cat((question[-1], paths[-1]), dim=1))
             return score
 
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder), ('dense', self.dense)]
+
 
 class BiLstmDenseDot:
     """
@@ -243,7 +262,7 @@ class BiLstmDenseDot:
                                    vectors=self.parameter_dict['vectors']).cuda(self.device)
         self.dense = com.DenseClf(inputdim=self.hiddendim,
                                   hiddendim=self.hiddendim/2,
-                                  outputdim=self.hiddendim/4)
+                                  outputdim=self.hiddendim/4).cuda(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
 
@@ -345,3 +364,13 @@ class BiLstmDenseDot:
             score = torch.sum(question * paths, -1)
 
             return score
+
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder), ('dense', self.dense)]

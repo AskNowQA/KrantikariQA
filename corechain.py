@@ -239,6 +239,67 @@ if training_model == 'bilstm_dot':
     print(max(test_accuracy))
 
 
+if training_model == 'bilstm_dense':
+    modeler = net.BiLstmDense( parameter_dict,device,_pointwise=pointwise, _debug=False)
+    model = modeler.encoder
+    optimizer = optim.Adam(list(model.parameters()))
+    if not pointwise:
+        loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
+        training_model = 'bilstm_dense'
+    else:
+        loss_func = nn.MSELoss()
+        training_model = 'bilstm_dense_pointwise'
+    train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
+                                                                               parameter_dict = parameter_dict,
+                                                                               modeler = modeler,
+                                                                               model = model,
+                                                                               train_loader = train_loader,
+                                                                               optimizer=optimizer,
+                                                                               loss_func=loss_func,
+                                                                               data=data,
+                                                                               dataset='lcquad',
+                                                                               device=device,
+                                                                               test_every=5,
+                                                                               validate_every=5,
+                                                                                pointwise=pointwise,
+                                                                               problem='core_chain')
+    print(valid_accuracy)
+    print(test_accuracy)
+    print(max(valid_accuracy))
+    print(max(test_accuracy))
+
+
+if training_model == 'bilstm_densedot':
+    modeler = net.BiLstmDenseDot( parameter_dict,device,_pointwise=pointwise, _debug=False)
+    model = modeler.encoder
+    optimizer = optim.Adam(list(model.parameters()))
+    if not pointwise:
+        loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
+        training_model = 'bilstm_densedot'
+    else:
+        loss_func = nn.MSELoss()
+        training_model = 'bilstm_densedot_pointwise'
+    train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
+                                                                               parameter_dict = parameter_dict,
+                                                                               modeler = modeler,
+                                                                               model = model,
+                                                                               train_loader = train_loader,
+                                                                               optimizer=optimizer,
+                                                                               loss_func=loss_func,
+                                                                               data=data,
+                                                                               dataset='lcquad',
+                                                                               device=device,
+                                                                               test_every=5,
+                                                                               validate_every=5,
+                                                                                pointwise=pointwise,
+                                                                               problem='core_chain')
+    print(valid_accuracy)
+    print(test_accuracy)
+    print(max(valid_accuracy))
+    print(max(test_accuracy))
+
+
+
 # rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress auxiliary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress network.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/

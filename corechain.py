@@ -298,7 +298,7 @@ if training_model == 'bilstm_densedot':
                                                                                dataset='lcquad',
                                                                                device=device,
                                                                                test_every=5,
-                                                                               validate_every=5,c
+                                                                               validate_every=5,
                                                                                 pointwise=pointwise,
                                                                                problem='core_chain')
     print(valid_accuracy)

@@ -24,6 +24,14 @@ def load_relation(COMMON_DATA_DIR):
     return inverse_relations
 
 
+#Loads word list from given COMMON_DATA_DIR. To be used by FlatEncoder.
+def load_word_list(COMMON_DATA_DIR):
+    word_list = pickle.load(open(COMMON_DATA_DIR + '/glove.300d.words'))
+    word_to_id = {}
+    for index, word in enumerate(word_list):
+        word_to_id[word] = index
+    return word_to_id
+
 def save_location(problem, model_name, dataset):
     '''
             Location - data/models/problem/model_name/dataset/0X
@@ -76,8 +84,10 @@ def save_model(loc, modeler, model_name='model.torch', epochs=0, optimizer=None,
     loc = loc + '/' + model_name
     print("model with accuracy ", accuracy, "stored at", loc)
     torch.save(state, loc)
-    aux_save_information['parameter_dict'].pop('vectors')
-    pickle.dump(aux_save_information,open(aux_save, 'w+'))
+
+    _aux_save_information = aux_save_information.copy()
+    _aux_save_information['parameter_dict'].pop('vectors')
+    pickle.dump(_aux_save_information,open(aux_save, 'w+'))
 
 
 def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, modeler, device):

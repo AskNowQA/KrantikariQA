@@ -24,7 +24,7 @@ config.readfp(open('configs/macros.cfg'))
 #setting up device,model name and loss types.
 device = torch.device("cuda")
 training_model = 'bilstm_dot'
-_dataset = 'qald'
+_dataset = 'lcquad'
 pointwise = False
 
 
@@ -32,6 +32,7 @@ pointwise = False
 COMMON_DATA_DIR = 'data/data/common'
 _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 _relations = aux.load_relation(COMMON_DATA_DIR)
+_word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
 
 def load_data(data,parameter_dict,pointwise,shuffle = False):
@@ -42,7 +43,7 @@ def load_data(data,parameter_dict,pointwise,shuffle = False):
                                   , parameter_dict['total_negative_samples'], pointwise=pointwise)
     return DataLoader(td, shuffle=shuffle)
 
-def training_loop(training_model, parameter_dict,modeler,model,train_loader,
+def training_loop(training_model, parameter_dict,modeler,train_loader,
                   optimizer,loss_func, data, dataset, device, test_every, validate_every , pointwise = False, problem='core_chain'):
 
     model_save_location = aux.save_location(problem, training_model, dataset)
@@ -187,7 +188,7 @@ if _dataset == 'lcquad':
     train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
 else:
     print("warning: Test accuracy would not be calculated as the data has not been prepared.")
-    train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid = _a
+    train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors = _a
     test_questions,test_neg_paths,test_pos_paths = None,None,None
 
 
@@ -210,9 +211,13 @@ parameter_dict['vectors'] = data['vectors']
 
 
 if training_model == 'bilstm_dot':
-    modeler = net.BiLstmDot( parameter_dict,device,_pointwise=pointwise, _debug=False)
-    model = modeler.encoder
-    optimizer = optim.Adam(list(model.parameters()))
+    modeler = net.BiLstmDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                         _device=device,_pointwise=pointwise, _debug=False)
+    # optimizer = optim.Adam(list(model.parameters()))
+
+    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+
+
     if not pointwise:
         loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
         training_model = 'bilstm_dot'
@@ -222,7 +227,6 @@ if training_model == 'bilstm_dot':
     train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
                                                                                parameter_dict = parameter_dict,
                                                                                modeler = modeler,
-                                                                               model = model,
                                                                                train_loader = train_loader,
                                                                                optimizer=optimizer,
                                                                                loss_func=loss_func,
@@ -240,9 +244,12 @@ if training_model == 'bilstm_dot':
 
 
 if training_model == 'bilstm_dense':
-    modeler = net.BiLstmDense( parameter_dict,device,_pointwise=pointwise, _debug=False)
-    model = modeler.encoder
-    optimizer = optim.Adam(list(model.parameters()))
+    modeler = net.BiLstmDense( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                         _device=device,_pointwise=pointwise, _debug=False)
+
+    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters()))+
+                           list(filter(lambda p: p.requires_grad, modeler.dense.parameters())))
+
     if not pointwise:
         loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
         training_model = 'bilstm_dense'
@@ -252,7 +259,6 @@ if training_model == 'bilstm_dense':
     train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
                                                                                parameter_dict = parameter_dict,
                                                                                modeler = modeler,
-                                                                               model = model,
                                                                                train_loader = train_loader,
                                                                                optimizer=optimizer,
                                                                                loss_func=loss_func,
@@ -270,9 +276,12 @@ if training_model == 'bilstm_dense':
 
 
 if training_model == 'bilstm_densedot':
-    modeler = net.BiLstmDenseDot( parameter_dict,device,_pointwise=pointwise, _debug=False)
-    model = modeler.encoder
-    optimizer = optim.Adam(list(model.parameters()))
+    modeler = net.BiLstmDenseDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                         _device=device,_pointwise=pointwise, _debug=False)
+
+    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
+                           list(filter(lambda p: p.requires_grad, modeler.dense.parameters())))
+
     if not pointwise:
         loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
         training_model = 'bilstm_densedot'
@@ -282,7 +291,6 @@ if training_model == 'bilstm_densedot':
     train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
                                                                                parameter_dict = parameter_dict,
                                                                                modeler = modeler,
-                                                                               model = model,
                                                                                train_loader = train_loader,
                                                                                optimizer=optimizer,
                                                                                loss_func=loss_func,
@@ -290,7 +298,7 @@ if training_model == 'bilstm_densedot':
                                                                                dataset='lcquad',
                                                                                device=device,
                                                                                test_every=5,
-                                                                               validate_every=5,
+                                                                               validate_every=5,c
                                                                                 pointwise=pointwise,
                                                                                problem='core_chain')
     print(valid_accuracy)

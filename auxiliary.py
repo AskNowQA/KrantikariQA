@@ -86,7 +86,11 @@ def save_model(loc, modeler, model_name='model.torch', epochs=0, optimizer=None,
     torch.save(state, loc)
 
     _aux_save_information = aux_save_information.copy()
-    _aux_save_information['parameter_dict'].pop('vectors')
+    try:
+        _aux_save_information['parameter_dict'].pop('vectors')
+    except KeyError:
+        print("in model save, no vectors were found.")
+        pass
     pickle.dump(_aux_save_information,open(aux_save, 'w+'))
 
 

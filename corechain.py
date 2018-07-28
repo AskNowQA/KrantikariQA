@@ -23,7 +23,7 @@ config.readfp(open('configs/macros.cfg'))
 
 #setting up device,model name and loss types.
 device = torch.device("cuda")
-training_model = 'bilstm_dot'
+training_model = 'cnn_dot'
 _dataset = 'lcquad'
 pointwise = False
 
@@ -158,6 +158,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
 # #Model specific paramters
 parameter_dict = {}
+parameter_dict['dataset'] = _dataset
 parameter_dict['max_length'] =  int(config.get(training_model,'max_length'))
 parameter_dict['hidden_size'] = int(config.get(training_model,'hidden_size'))
 parameter_dict['number_of_layer'] = int(config.get(training_model,'number_of_layer'))
@@ -170,6 +171,8 @@ parameter_dict['_neg_paths_per_epoch_validation'] = int(config.get(training_mode
 parameter_dict['total_negative_samples'] = int(config.get(training_model,'total_negative_samples'))
 parameter_dict['epochs'] = int(config.get(training_model,'epochs'))
 parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
+if training_model == 'cnn_dot':
+    parameter_dict['output_dim'] = int(config.get(training_model, 'output_dim'))
 
 
 
@@ -213,35 +216,8 @@ parameter_dict['vectors'] = data['vectors']
 if training_model == 'bilstm_dot':
     modeler = net.BiLstmDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
                                          _device=device,_pointwise=pointwise, _debug=False)
-    # optimizer = optim.Adam(list(model.parameters()))
 
     optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
-
-
-    if not pointwise:
-        loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
-        training_model = 'bilstm_dot'
-    else:
-        loss_func = nn.MSELoss()
-        training_model = 'bilstm_dot_pointwise'
-    train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
-                                                                               parameter_dict = parameter_dict,
-                                                                               modeler = modeler,
-                                                                               train_loader = train_loader,
-                                                                               optimizer=optimizer,
-                                                                               loss_func=loss_func,
-                                                                               data=data,
-                                                                               dataset='lcquad',
-                                                                               device=device,
-                                                                               test_every=5,
-                                                                               validate_every=5,
-                                                                                pointwise=pointwise,
-                                                                               problem='core_chain')
-    print(valid_accuracy)
-    print(test_accuracy)
-    print(max(valid_accuracy))
-    print(max(test_accuracy))
-
 
 if training_model == 'bilstm_dense':
     modeler = net.BiLstmDense( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
@@ -250,31 +226,6 @@ if training_model == 'bilstm_dense':
     optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters()))+
                            list(filter(lambda p: p.requires_grad, modeler.dense.parameters())))
 
-    if not pointwise:
-        loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
-        training_model = 'bilstm_dense'
-    else:
-        loss_func = nn.MSELoss()
-        training_model = 'bilstm_dense_pointwise'
-    train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
-                                                                               parameter_dict = parameter_dict,
-                                                                               modeler = modeler,
-                                                                               train_loader = train_loader,
-                                                                               optimizer=optimizer,
-                                                                               loss_func=loss_func,
-                                                                               data=data,
-                                                                               dataset='lcquad',
-                                                                               device=device,
-                                                                               test_every=5,
-                                                                               validate_every=5,
-                                                                                pointwise=pointwise,
-                                                                               problem='core_chain')
-    print(valid_accuracy)
-    print(test_accuracy)
-    print(max(valid_accuracy))
-    print(max(test_accuracy))
-
-
 if training_model == 'bilstm_densedot':
     modeler = net.BiLstmDenseDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
                                          _device=device,_pointwise=pointwise, _debug=False)
@@ -282,31 +233,38 @@ if training_model == 'bilstm_densedot':
     optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
                            list(filter(lambda p: p.requires_grad, modeler.dense.parameters())))
 
-    if not pointwise:
-        loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
-        training_model = 'bilstm_densedot'
-    else:
-        loss_func = nn.MSELoss()
-        training_model = 'bilstm_densedot_pointwise'
-    train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
-                                                                               parameter_dict = parameter_dict,
-                                                                               modeler = modeler,
-                                                                               train_loader = train_loader,
-                                                                               optimizer=optimizer,
-                                                                               loss_func=loss_func,
-                                                                               data=data,
-                                                                               dataset='lcquad',
-                                                                               device=device,
-                                                                               test_every=5,
-                                                                               validate_every=5,
-                                                                                pointwise=pointwise,
-                                                                               problem='core_chain')
-    print(valid_accuracy)
-    print(test_accuracy)
-    print(max(valid_accuracy))
-    print(max(test_accuracy))
+if training_model == 'cnn_dot':
+    modeler = net.CNNDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                         _device=device,_pointwise=pointwise, _debug=False)
+
+    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
 
 
+if not pointwise:
+    loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
+else:
+    loss_func = nn.MSELoss()
+    training_model += '_pointwise'
+
+
+train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
+                                                                           parameter_dict = parameter_dict,
+                                                                           modeler = modeler,
+                                                                           train_loader = train_loader,
+                                                                           optimizer=optimizer,
+                                                                           loss_func=loss_func,
+                                                                           data=data,
+                                                                           dataset=parameter_dict['dataset'],
+                                                                           device=device,
+                                                                           test_every=5,
+                                                                           validate_every=5,
+                                                                            pointwise=pointwise,
+                                                                           problem='core_chain')
+
+print(valid_accuracy)
+print(test_accuracy)
+print(max(valid_accuracy))
+print(max(test_accuracy))
 
 # rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress auxiliary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/

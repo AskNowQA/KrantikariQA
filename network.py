@@ -8,7 +8,7 @@ from qelos_core.scripts.lcquad.corerank import FlatEncoder
 
 
 
-class BiLstmDot:
+class BiLstmDot(object):
 
     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
         self.debug = _debug
@@ -381,3 +381,23 @@ class BiLstmDenseDot:
         :return: [(key, model)]
         """
         return [('encoder', self.encoder), ('dense', self.dense)]
+
+
+class CNNDot(BiLstmDot):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        super(CNNDot, self).__init__( _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False)
+
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder = com.CNN(_vectors=self.parameter_dict['vectors'], _vocab_size=self.parameter_dict['vocab_size'] ,
+                           _embedding_dim = self.parameter_dict['embedding_dim'] , _output_dim = self.parameter_dict['output_dim'],_debug=self.debug).to(self.device)

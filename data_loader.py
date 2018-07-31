@@ -54,18 +54,14 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
     _pairwise = True
     if _pairwise:
         if not _rdf:
-            vectors, questions, pos_paths, neg_paths = create_dataset_pairwise(_file, _max_sequence_length, _relations,
-                                                                           _dataset, _dataset_specific_data_dir,
-                                                                           _model_specific_data_dir
-                                                                           , _model='core_chain_pairwise')
+            vectors, questions, pos_paths, neg_paths = create_dataset_pairwise(file=_file, max_sequence_length=_max_sequence_length, relations=_relations, _dataset=_dataset, _dataset_specific_data_dir=_dataset_specific_data_dir,
+            _model_specific_data_dir = _model_specific_data_dir, _model = 'core_chain_pairwise')
+
+
         else:
             vectors, questions, pos_paths, neg_paths = create_dataset_rdf(file=_file, max_sequence_length=_max_sequence_length, _dataset=_dataset, _dataset_specific_data_dir=_dataset_specific_data_dir,
             _model_specific_data_dir=_model_specific_data_dir)
-    # else:
-    #     vectors, questions, pos_paths, neg_paths = create_dataset_pointwise(_file, _max_sequence_length, _relations,
-    #                                                                         _dataset, _dataset_specific_data_dir,
-    #                                                                         _model_specific_data_dir
-    #                                                                         , _model='core_chain_pairwise')
+
     '''
         Making sure that positive path is not the part of negative paths.
     '''
@@ -299,7 +295,7 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
         # Empty arrays
         questions = []
         pos_paths = []
-        neg_paths = []cd 
+        neg_paths = []
 
         for i in range(len(dataset[:int(.80 * len(dataset))])):
 

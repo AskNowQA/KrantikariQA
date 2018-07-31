@@ -23,7 +23,7 @@ config.readfp(open('configs/macros.cfg'))
 
 #setting up device,model name and loss types.
 device = torch.device("cuda")
-training_model = 'cnn_dot'
+training_model = 'bilstm_dot'
 _dataset = 'lcquad'
 pointwise = False
 
@@ -184,7 +184,7 @@ _dataset_specific_data_dir,_model_specific_data_dir,_file,\
 _a = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
               _neg_paths_per_epoch_train,
               _neg_paths_per_epoch_validation, _relations,
-              _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=not pointwise, _debug=True)
+              _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=not pointwise, _debug=True, _rdf=True)
 
 
 if _dataset == 'lcquad':

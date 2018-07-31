@@ -12,19 +12,25 @@ from torch.utils.data import Dataset, DataLoader
 from keras.preprocessing.sequence import pad_sequences
 
 
+
 # Custom imports
 from utils import embeddings_interface
 from utils import prepare_vocab_continous as vocab_master
+from utils import dbpedia_interface as db_interface
+from utils import natural_language_utilities as nlutils
+
 
 config = ConfigParser.RawConfigParser()
 config.read('configs/macros.cfg')
 
 SEED = config.getint('Commons', 'seed')
+dbp = db_interface.DBPedia(_verbose=True, caching=False)
+
 
 def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
               _neg_paths_per_epoch_train,
               _neg_paths_per_epoch_validation, _relations,
-              _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=True, _debug=True):
+              _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=True, _debug=True,_rdf=False):
     '''
 
 
@@ -47,10 +53,14 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
     '''
     _pairwise = True
     if _pairwise:
-        vectors, questions, pos_paths, neg_paths = create_dataset_pairwise(_file, _max_sequence_length, _relations,
+        if not _rdf:
+            vectors, questions, pos_paths, neg_paths = create_dataset_pairwise(_file, _max_sequence_length, _relations,
                                                                            _dataset, _dataset_specific_data_dir,
                                                                            _model_specific_data_dir
                                                                            , _model='core_chain_pairwise')
+        else:
+            vectors, questions, pos_paths, neg_paths = create_dataset_rdf(file=_file, max_sequence_length=_max_sequence_length, _dataset=_dataset, _dataset_specific_data_dir=_dataset_specific_data_dir,
+            _model_specific_data_dir=_model_specific_data_dir)
     # else:
     #     vectors, questions, pos_paths, neg_paths = create_dataset_pointwise(_file, _max_sequence_length, _relations,
     #                                                                         _dataset, _dataset_specific_data_dir,
@@ -279,100 +289,81 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             return vectors, questions, pos_paths, neg_paths
 
 
-def create_dataset_pointwise(file, max_sequence_length, relations, _dataset, _dataset_specific_data_dir,
-                             _model_specific_data_dir
-                             , _model='core_chain_pairwise'):
-    """
-        This file is meant to create data for core-chain ranking ONLY.
 
-    :param file: id_big_data file
-    :param max_sequence_length: for padding/cropping
-    :param relations: the relations file to backtrack and look up shit.
-    :return:
-    """
+def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_data_dir,
+                            _model_specific_data_dir
+                            , _model='core_chain_pairwise'):
+    with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset, 'model': _model},
+                           file)) as data:
+        dataset = json.load(data)
+        # Empty arrays
+        questions = []
+        pos_paths = []
+        neg_paths = []cd 
 
-    try:
-        with open(os.path.join(_model_specific_data_dir % {'dataset': _dataset, 'model': _model},
-                               file + ".mapped.npz")) as data:
-            dataset = np.load(data)
-            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab, vectors = vocab_master.load()
-            # vectors = glove_embeddings[vocab.keys()]
-            return vectors, questions, pos_paths, neg_paths
-    except (EOFError, IOError) as e:
-        with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset}, file)) as fp:
-            dataset = json.load(fp)
-            # dataset = dataset[:10]
+        for i in range(len(dataset[:int(.80 * len(dataset))])):
 
-            ignored = []
+            datum = dataset[i]
 
-            pos_paths = []
-            for i in dataset:
-                path_id = i['parsed-data']['path_id']
-                positive_path = []
-                try:
-                    for p in path_id:
-                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                        positive_path += relations[int(p[1:])][3].tolist()
-                except (TypeError, ValueError) as e:
-                    ignored.append(i)
-                    continue
-                pos_paths.append(positive_path)
+            '''
+                Extracting and padding the positive paths.
+            '''
+            if '?x' in datum['parsed-data']['constraints'].keys():
+                pos_path = "x + " + dbp.get_label(datum['parsed-data']['constraints']['?x'])
+            elif '?uri' in datum['parsed-data']['constraints'].keys():
+                pos_path = "uri + " + dbp.get_label(datum['parsed-data']['constraints']['?uri'])
+            else:
+                continue
+            pos_path = embeddings_interface.vocabularize(nlutils.tokenize(pos_path))
+            pos_paths.append(pos_path)
 
-            questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+            # Question
+            question = np.zeros((max_sequence_length), dtype=np.int64)
+            unpadded_question = np.asarray(datum['uri']['question-id'])
+            question[:min(len(unpadded_question), max_sequence_length)] = unpadded_question
+            questions.append(question)
 
-            neg_paths = []
-            for i in range(0, len(dataset)):
-                datum = dataset[i]
-                negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
-                np.random.shuffle(negative_paths_id)
-                negative_paths = []
-                for neg_path in negative_paths_id:
-                    negative_path = []
-                    for p in neg_path:
-                        try:
-                            negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
-                        except ValueError:
-                            negative_path += relations[int(p)][3].tolist()
-                    negative_paths.append(negative_path)
-                negative_paths = remove_positive_path(pos_paths[i], negative_paths)
-                try:
-                    negative_paths = np.random.choice(negative_paths, 1000)
-                except ValueError:
-                    if len(negative_paths) == 0:
-                        negative_paths = neg_paths[-1]
-                        print("Using previous question's paths for this since no neg paths for this question.")
-                    else:
-                        index = np.random.randint(0, len(negative_paths), 1000)
-                        negative_paths = np.array(negative_paths)
-                        negative_paths = negative_paths[index]
-                neg_paths.append(negative_paths)
+            # Negative Path
+            unpadded_neg_path = datum["rdf-type-constraints"]
+            unpadded_neg_path = remove_positive_path(pos_path, unpadded_neg_path)
+            np.random.shuffle(unpadded_neg_path)
+            unpadded_neg_path = pad_sequences(unpadded_neg_path, maxlen=max_sequence_length, padding='post')
 
-            for i in range(0, len(neg_paths)):
-                neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
-            neg_paths = np.asarray(neg_paths)
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+            '''
+                Remove positive path from negative paths.
+            '''
 
-            vocab, vectors = vocab_master.load()
+            try:
+                neg_path = np.random.choice(unpadded_neg_path, 200)
+            except ValueError:
+                if len(unpadded_neg_path) == 0:
+                    neg_path = neg_paths[-1]
+                    print("Using previous question's paths for this since no neg paths for this question.")
+                else:
+                    index = np.random.randint(0, len(unpadded_neg_path), 200)
+                    unpadded_neg_path = np.array(unpadded_neg_path)
+                    neg_path = unpadded_neg_path[index]
 
-            # Map everything
-            for i in range(len(questions)):
-                questions[i] = np.asarray([vocab[key] for key in questions[i]])
-                pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+            neg_paths.append(neg_path)
 
-                for j in range(len(neg_paths[i])):
-                    neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
+        # Convert things to nparrays
+        questions = np.asarray(questions, dtype=np.int64)
 
-            # Create slimmer, better, faster, vectors file.
-            # vectors = glove_embeddings[uniques]
+        # questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+        pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+        neg_paths = np.asarray(neg_paths)
 
-            with open(os.path.join(_model_specific_data_dir % {'dataset': _dataset, 'model': _model},
-                                   file + ".mapped.npz"), "w+") as data:
-                    np.savez(data, questions, pos_paths, neg_paths)
-                # pickle.dump(vocab,idx)
+        vocab, vectors = vocab_master.load()
 
-            return vectors, questions, pos_paths, neg_paths
+        # Map everything
+        for i in range(len(questions)):
+            questions[i] = np.asarray([vocab[key] for key in questions[i]])
+            pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+
+            for j in range(len(neg_paths[i])):
+                neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
+
+        return vectors, questions, pos_paths, neg_paths
 
 
 

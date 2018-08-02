@@ -233,12 +233,11 @@ class IntentClassifier:
 
         return out, loss
 
-    def predict(self, data, loss_fn, device):
+    def predict(self, data, device):
         with torch.no_grad():
-            ques_batch, y_label = data['ques_batch'], data['y_label']
+            ques_batch, = data['ques_batch']
 
             ques_batch = torch.tensor(ques_batch, dtype=torch.long, device=device)
-            y_label = torch.tensor(y_label, dtype=torch.float, device=device)
 
             # Encoding all the data
             ques_batch = self.encoder(ques_batch)
@@ -246,13 +245,7 @@ class IntentClassifier:
             # Calculating dot score
             out = self.dense(ques_batch)
 
-            '''
-                If `y == 1` then it assumed the first input should be ranked higher
-                (have a larger value) than the second input, and vice-versa for `y == -1`
-            '''
-            loss = loss_fn(out, y_label)
-
-            return out, loss
+            return out
 
     def eval(self, y_true, y_pred):
         return np.mean(np.argmax(y_true, axis=1) == np.argmax(y_pred.detach().cpu().numpy(), axis=1))
@@ -306,7 +299,7 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
         data = {}
         data['ques_batch'] = dataset['valid_X']
         data['y_label'] = dataset['valid_Y']
-        y_pred, _ = classifier.predict(data, loss_fn, device)
+        y_pred = classifier.predict(data, loss_fn, device)
         valid_acc.append(classifier.eval(y_true=data['y_label'], y_pred=y_pred))
 
         # IF it outperformed, save model.

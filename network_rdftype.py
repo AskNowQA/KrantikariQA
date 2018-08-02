@@ -33,7 +33,7 @@ torch.manual_seed(42)
 
 # Reading and setting up config parser
 config = ConfigParser.ConfigParser()
-config.readfp(open('configs/intent.cfg'))
+config.readfp(open('configs/rdftype.cfg'))
 
 # Setting up device,model name and loss types.
 training_model = 'bilstm_dense'
@@ -83,17 +83,16 @@ def get_x(_datum):
 
 def get_y(_datum):
     """
-        Legend: 010: ask
-                100: count
-                001: list
+        Legend: 001: no
+                010: uri
+                100: x
     """
 
-    data = _datum['parsed-data']['sparql_query'][:_datum['parsed-data']['sparql_query'].lower().find('{')]
     # Check for ask
-    if u'ask' in data.lower():
+    if u'?uri' in _datum['parsed-data']['constraints'].keys():
         return np.asarray([0, 1, 0])
 
-    if u'count' in data.lower():
+    if u'?x' in _datum['parsed-data']['constraints'].keys():
         return np.asarray([1, 0, 0])
 
     return np.asarray([0, 0, 1])
@@ -177,7 +176,7 @@ def preprocess_data(dataset, vocab, parameter_dict):
                 'test_X': None, 'test_Y': None}
 
 
-class IntentClassifier:
+class RdfTypeClassifier:
 
     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
         self.debug = _debug
@@ -259,7 +258,7 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
     valid_acc = []
     training_loss = []
     best_valid_acc = 0.0
-    loc = aux.save_location('intent', 'bilstm_dense', 'lcquad')
+    loc = aux.save_location('rdftype', 'bilstm_dense', 'lcquad')
 
     for epoch in range(parameter_dict['epochs']):
 
@@ -367,7 +366,7 @@ if __name__ == "__main__":
 
     _dataset = preprocess_data(dataset, vocab, parameter_dict)
     _dataset['len'] = len(_dataset['train_X'])
-    classifier = IntentClassifier(_parameter_dict=parameter_dict, _word_to_id=_word_to_id, _device=device)
+    classifier = RdfTypeClassifier(_parameter_dict=parameter_dict, _word_to_id=_word_to_id, _device=device)
 
     optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, classifier.encoder.parameters())) +
                            list(filter(lambda p: p.requires_grad, classifier.dense.parameters())))

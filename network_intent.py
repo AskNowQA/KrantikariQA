@@ -13,12 +13,14 @@ import network as net
 import torch
 import torch.nn as nn
 from torch import optim
-from torch.utils.data import DataLoader
+from torch.utils.data import  DataLoader
 
 # Other libs
 from qelos_core.scripts.lcquad.corerank import FlatEncoder
+import matplotlib.pyplot as plt
 import ConfigParser
 import numpy as np
+import pylab
 import time
 import json
 import os
@@ -34,11 +36,11 @@ config = ConfigParser.ConfigParser()
 config.readfp(open('configs/intent.cfg'))
 
 # Setting up device,model name and loss types.
-training_model = 'bilstm_dot'
+training_model = 'bilstm_dense'
 _dataset = 'lcquad'
 pointwise = False
 
-# Loading relations file.
+#Loading relations file.
 COMMON_DATA_DIR = 'data/data/common'
 _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
@@ -46,36 +48,33 @@ _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 # Fixing parameters
 
 parameter_dict = {}
-parameter_dict['max_length'] = int(config.get(training_model, 'max_length'))
-parameter_dict['hidden_size'] = int(config.get(training_model, 'hidden_size'))
-parameter_dict['number_of_layer'] = int(config.get(training_model, 'number_of_layer'))
-parameter_dict['embedding_dim'] = int(config.get(training_model, 'embedding_dim'))
-parameter_dict['vocab_size'] = int(config.get(training_model, 'vocab_size'))
-parameter_dict['batch_size'] = int(config.get(training_model, 'batch_size'))
-parameter_dict['bidirectional'] = bool(config.get(training_model, 'bidirectional'))
-parameter_dict['_neg_paths_per_epoch_train'] = int(config.get(training_model, '_neg_paths_per_epoch_train'))
-parameter_dict['_neg_paths_per_epoch_validation'] = int(config.get(training_model, '_neg_paths_per_epoch_validation'))
-parameter_dict['total_negative_samples'] = int(config.get(training_model, 'total_negative_samples'))
-parameter_dict['epochs'] = int(config.get(training_model, 'epochs'))
-parameter_dict['dropout'] = float(config.get(training_model, 'dropout'))
+parameter_dict['max_length'] =  int(config.get(training_model,'max_length'))
+parameter_dict['hidden_size'] = int(config.get(training_model,'hidden_size'))
+parameter_dict['number_of_layer'] = int(config.get(training_model,'number_of_layer'))
+parameter_dict['embedding_dim'] = int(config.get(training_model,'embedding_dim'))
+parameter_dict['vocab_size'] = int(config.get(training_model,'vocab_size'))
+parameter_dict['batch_size'] = int(config.get(training_model,'batch_size'))
+parameter_dict['bidirectional'] = bool(config.get(training_model,'bidirectional'))
+parameter_dict['_neg_paths_per_epoch_train'] = int(config.get(training_model,'_neg_paths_per_epoch_train'))
+parameter_dict['_neg_paths_per_epoch_validation'] = int(config.get(training_model,'_neg_paths_per_epoch_validation'))
+parameter_dict['total_negative_samples'] = int(config.get(training_model,'total_negative_samples'))
+parameter_dict['epochs'] = int(config.get(training_model,'epochs'))
+parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
 
-_dataset_specific_data_dir, \
-_model_specific_data_dir, \
-_file, \
-_max_sequence_length, \
-_neg_paths_per_epoch_train, \
-_neg_paths_per_epoch_validation, \
-_training_split, \
-_validation_split, \
-_index = aux.data_loading_parameters(_dataset, parameter_dict)
+_dataset_specific_data_dir,\
+    _model_specific_data_dir,\
+    _file,\
+    _max_sequence_length,\
+    _neg_paths_per_epoch_train,\
+    _neg_paths_per_epoch_validation,\
+    _training_split,\
+    _validation_split,\
+    _index = aux.data_loading_parameters(_dataset,parameter_dict)
 
 parameter_dict['index'] = _index
 parameter_dict['training_split'] = _training_split
 parameter_dict['validation_split'] = _validation_split
 parameter_dict['dataset'] = _dataset
-
-dataset = json.load(open(os.path.join(_dataset_specific_data_dir, _file)))
-vocab, _ = vocab_master.load()
 
 
 def get_x(_datum):
@@ -102,7 +101,7 @@ def get_y(_datum):
 
 def convert_to_continous_ids(X, vocab):
     """
-        Maps the IDs in X to their values in vocab. 
+        Maps the IDs in X to their values in vocab.
         The vectors and vocab are expected to come via vocab_master file
     """
     for i in range(X.shape[0]):
@@ -117,7 +116,7 @@ def preprocess_data(dataset, vocab, parameter_dict):
         Process the raw data to make X, Y
         Convert them to the new (continous) ID space
         Pad BUT DO NOT SHUFFLE!
-        
+
         Challenge: how do we keep this synced with released splits?
     """
 
@@ -138,7 +137,7 @@ def preprocess_data(dataset, vocab, parameter_dict):
     X = convert_to_continous_ids(X, vocab)
 
     # Split
-    if parameter_dict['index'] is None:
+    if parameter_dict['index'] == None:
         # We don't have a specific index, so we split based on split points.
 
         train_X = X[:int(X.shape[0] * parameter_dict['training_split'])]
@@ -152,10 +151,20 @@ def preprocess_data(dataset, vocab, parameter_dict):
         test_X = X[int(X.shape[0] * parameter_dict['validation_split']):]
         test_Y = Y[int(Y.shape[0] * parameter_dict['validation_split']):]
 
-        return {'train_X': train_X, 'train_Y': train_Y, 'valid_X': valid_X, 'valid_Y': valid_Y, 'test_X': test_X,
-                'test_Y': test_Y}
+        return {'train_X': train_X, 'train_Y': train_Y,
+                'valid_X': valid_X, 'valid_Y': valid_Y,
+                'test_X': test_X, 'test_Y': test_Y}
 
     else:
+
+        # We have an index to split with. We first get the test split out by index,
+        # and then we split the rest based on training_split
+
+        #         test_X = X[int(X.shape[0]*parameter_dict['index']): ]
+        #         test_Y = Y[int(Y.shape[0]*parameter_dict['index']): ]
+
+        #         rest_X = X[ :int(X.shape[0]*parameter_dict['index'])]
+        #         rest_Y = Y[ :int(Y.shape[0]*parameter_dict['index']): ]
 
         train_X = X[:parameter_dict['index']]
         train_Y = Y[:parameter_dict['index']]
@@ -163,8 +172,9 @@ def preprocess_data(dataset, vocab, parameter_dict):
         valid_X = X[parameter_dict['index']:]
         valid_Y = Y[parameter_dict['index']:]
 
-        return {'train_X': train_X, 'train_Y': train_Y, 'valid_X': valid_X, 'valid_Y': valid_Y, 'test_X': None,
-                'test_Y': None}
+        return {'train_X': train_X, 'train_Y': train_Y,
+                'valid_X': valid_X, 'valid_Y': valid_Y,
+                'test_X': None, 'test_Y': None}
 
 
 class IntentClassifier:
@@ -244,8 +254,7 @@ class IntentClassifier:
 
             return out, loss
 
-    @staticmethod
-    def eval(y_true, y_pred):
+    def eval(self, y_true, y_pred):
         return np.mean(np.argmax(y_true, axis=1) == np.argmax(y_pred.detach().cpu().numpy(), axis=1))
 
     def prepare_save(self):
@@ -257,7 +266,7 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
     valid_acc = []
     training_loss = []
     best_valid_acc = 0.0
-    loc = aux.save_location('intent', 'bilstmdense', 'lcquad')
+    loc = aux.save_location('intent', 'bilstm_dense', 'lcquad')
 
     for epoch in range(parameter_dict['epochs']):
 
@@ -284,12 +293,19 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
             epoch_loss.append(loss.item())
             epoch_train_acc.append(acc)
 
+        #             print("Batch:\t%d" % b, "/%d\t: " % (dataset['len']/int(parameter_dict['batch_size'])),
+        #                   "%s" % (time.time() - batch_time),
+        #                   "\t%s" % (time.time() - epoch_time),
+        #                   "\tloss: %s" % loss.item(),
+        #                   end=None if b + 1 == dataset['len']/int(parameter_dict['batch_size']) else "\r")
         # Epoch level
         training_acc.append(epoch_train_acc)
         training_loss.append(epoch_loss)
 
         # Evaluate on validation data
-        data = {'ques_batch': dataset['valid_X'], 'y_label': dataset['valid_Y']}
+        data = {}
+        data['ques_batch'] = dataset['valid_X']
+        data['y_label'] = dataset['valid_Y']
         y_pred, _ = classifier.predict(data, loss_fn, device)
         valid_acc.append(classifier.eval(y_true=data['y_label'], y_pred=y_pred))
 
@@ -301,7 +317,7 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
                 'parameter_dict': parameter_dict}
 
             aux.save_model(loc, classifier, model_name='model.torch', epochs=epoch, optimizer=optimizer,
-                           accuracy=valid_acc[-1], aux_save_information=aux_save_information)
+                           accuracy=valid_acc[-1], aux_save_information={})
             best_valid_acc = valid_acc[-1]
 
         print("Epoch: ", epoch, "/", parameter_dict['epochs'],
@@ -312,15 +328,59 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
     return classifier, training_loss, training_acc, valid_acc
 
 
-# if __name__ == "__main__":
+def visualize_loss(loss, loss2=None, _label="Some label", _label2="Some other label", _name="Generic Name",
+                   _only_epoch=True):
+    """
+        Fn to visualize loss.
+        Expects either
+            - [int, int] for epoch level stuff
+            - [ [int, int], [int, int] ] for batch level data.
+    """
 
-_dataset = preprocess_data(dataset, vocab, parameter_dict)
-_dataset['len'] = len(_dataset['train_X'])
-classifier = IntentClassifier(_parameter_dict=parameter_dict, _word_to_id=_word_to_id, _device=device)
+    plt.rcParams['figure.figsize'] = [15, 8]
 
-optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, classifier.encoder.parameters())) +
-                       list(filter(lambda p: p.requires_grad, classifier.dense.parameters())))
+    # Detect input format
+    if type(loss[0]) is not list:  # in [int, float, long]:
 
-loss_fn = nn.MSELoss()
+        #         print("here")
+        plt.plot(loss, '-b', label=_label)
+        if loss2: plt.plot(loss2, '-r', label=_label2)
+        plt.ylabel(_name)
+        pylab.legend(loc='upper left')
+        plt.show()
 
-op = training_loop(classifier, optimizer, loss_fn, _dataset, parameter_dict, device)
+    elif type(loss[0]) == list:
+
+        if _only_epoch:
+            loss = [np.mean(x) for x in loss]
+            if loss2 is not None:
+                loss2 = [np.mean(x) for x in loss2]
+
+        else:
+            loss = [y for x in loss for y in x]
+            if loss2 is not None: loss2 = [y for x in loss2 for y in x]
+
+        plt.plot(loss, '-b', label=_label)
+        if loss2 is not None: plt.plot(loss2, '-r', label=_label2)
+        plt.ylabel(_name)
+        pylab.legend(loc='upper left')
+        plt.show()
+
+if __name__ == "__main__":
+    # Pull raw data from disk
+
+    dataset = json.load(open(os.path.join(_dataset_specific_data_dir, _file)))
+    vocab, _ = vocab_master.load()
+
+    _dataset = preprocess_data(dataset, vocab, parameter_dict)
+    _dataset['len'] = len(_dataset['train_X'])
+    classifier = IntentClassifier(_parameter_dict=parameter_dict, _word_to_id=_word_to_id, _device=device)
+
+    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, classifier.encoder.parameters())) +
+                           list(filter(lambda p: p.requires_grad, classifier.dense.parameters())))
+
+    loss_fn = nn.MSELoss()
+
+    op = training_loop(classifier, optimizer, loss_fn, _dataset, parameter_dict, device)
+
+

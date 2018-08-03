@@ -114,7 +114,45 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, model
     return sum(precision) * 1.0 / len(precision)
 
 
-def data_loading_parameters(dataset,parameter_dict):
+def id_to_word(path, gloveid_to_word, embeddingid_to_gloveid, remove_pad = True):
+    '''
+
+
+    :param path: embedding id arrray list
+    :param gloveid_to_word:
+    :param embeddingid_to_gloveid:
+    :param remove_pad:
+    :return:
+    '''
+    sent = []
+    for q in path:
+        try:
+            w = gloveid_to_word[embeddingid_to_gloveid[q]]
+            if w != 'PAD' and remove_pad:
+                sent.append(w)
+        except:
+            sent.append('<unk>')
+    return " ".join(sent)
+
+
+
+def load_embeddingid_gloveid():
+    '''
+        Loads required dictionary files for id_to_word functionality
+    '''
+    gloveid_to_embeddingid = pickle.load(open('data/data/common/vocab.pickle'))
+    # reverse vocab it
+    embeddingid_to_gloveid = {}
+    for keys in gloveid_to_embeddingid:
+        embeddingid_to_gloveid[gloveid_to_embeddingid[keys]] = keys
+
+    word_to_gloveid = pickle.load(open('./resources/glove_vocab.pickle'))
+    gloveid_to_word = {}
+    for keys in word_to_gloveid:
+        gloveid_to_word[word_to_gloveid[keys]] = keys
+    return gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word
+
+def data_loading_parameters(dataset,parameter_dict,runtime=False):
 
     if dataset == 'lcquad':
         _dataset_specific_data_dir = 'data/data/lcquad/'
@@ -130,10 +168,14 @@ def data_loading_parameters(dataset,parameter_dict):
     elif dataset == 'qald':
         _dataset_specific_data_dir = 'data/data/qald/'
         _model_specific_data_dir = 'data/data/core_chain_pairwise/qald/'
-        _file = 'combined_qald.json'
-        id_train = json.load(
-            open(os.path.join(_dataset_specific_data_dir % {'dataset': dataset}, "qald_id_big_data_train.json")))
-        json.dump(id_train, open(os.path.join(_dataset_specific_data_dir % {'dataset': dataset}, _file), 'w+'))
+        if not runtime:
+            _file = 'combined_qald.json'
+            id_train = json.load(
+                open(os.path.join(_dataset_specific_data_dir % {'dataset': dataset}, "qald_id_big_data_train.json")))
+            json.dump(id_train, open(os.path.join(_dataset_specific_data_dir % {'dataset': dataset}, _file), 'w+'))
+        else:
+            _file = 'qald_id_big_data_test.json'
+
 
 
         _max_sequence_length = parameter_dict['max_length']
@@ -141,7 +183,10 @@ def data_loading_parameters(dataset,parameter_dict):
         _neg_paths_per_epoch_validation = parameter_dict['_neg_paths_per_epoch_validation']
         _training_split = .7
         _validation_split = .8
-        _index = int(7.0 * (len(id_train)) / 8.0) - 1
+        if not runtime:
+            _index = int(7.0 * (len(id_train)) / 8.0) - 1
+        else:
+            _index = -1
 
 
     elif dataset == 'transfer-a':

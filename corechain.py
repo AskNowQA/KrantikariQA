@@ -1,5 +1,10 @@
 '''
     create loss function and training data and other necessary utilities
+
+    TODO:
+        > Add train over validation with given epochs
+        > Add best accuracy whem validation is highest
+        > Add visaulization so as to understand the interplay of train vs Validation vs test accuracy
 '''
 from __future__ import print_function
 
@@ -171,6 +176,8 @@ parameter_dict['_neg_paths_per_epoch_validation'] = int(config.get(training_mode
 parameter_dict['total_negative_samples'] = int(config.get(training_model,'total_negative_samples'))
 parameter_dict['epochs'] = int(config.get(training_model,'epochs'))
 parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
+parameter_dict['dropout_rec'] = float(config.get(training_model,'dropout_rec'))
+parameter_dict['dropout_in'] = float(config.get(training_model,'dropout_in'))
 if training_model == 'cnn_dot':
     parameter_dict['output_dim'] = int(config.get(training_model, 'output_dim'))
 
@@ -184,7 +191,7 @@ _dataset_specific_data_dir,_model_specific_data_dir,_file,\
 _a = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
               _neg_paths_per_epoch_train,
               _neg_paths_per_epoch_validation, _relations,
-              _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=not pointwise, _debug=True, _rdf=True)
+              _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=not pointwise, _debug=True, _rdf=False)
 
 
 if _dataset == 'lcquad':
@@ -265,7 +272,7 @@ print(valid_accuracy)
 print(test_accuracy)
 print(max(valid_accuracy))
 print(max(test_accuracy))
-
+#
 # rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress auxiliary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress network.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/

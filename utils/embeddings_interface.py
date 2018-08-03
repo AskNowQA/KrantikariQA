@@ -358,18 +358,39 @@ def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
 
-def save_out_of_vocab():
-    global oov_counter
-    print "out of vocab words are ", str(oov_counter)
-    try:
-        ov = pickle.load(open(OUT_OF_VOCAB))
-        for token in  out_of_vocab:
-            if token not in ov:
-                ov[token] = np.random.rand(1,300)
-        pickle.dump(ov,open(OUT_OF_VOCAB,'w+'))
-    except:
-        ov = {}
-        for token in out_of_vocab:
-            ov[token] = np.random.rand(1,300)
-        pickle.dump(ov, open(OUT_OF_VOCAB, 'w+'))
 
+def update_vocabulary(word_list,_embedding='glove'):
+    '''
+
+
+    :param word_list: Check if the word exists and if not add it to the glove file
+    :return:
+    '''
+    global glove_vocab, glove_embeddings
+    __check_prepared__(_embedding, _only_vocab=False)
+
+    appendages = []
+
+    for token in word_list:
+
+        token = token.lower()
+
+        try:
+            token_id = glove_vocab[token]
+        except KeyError:
+            glove_vocab[token] = len(glove_vocab.keys())
+            appendages.append((token, glove_vocab[token]))
+
+    # Now we need to update shit
+    new_embeddings = np.random.randn(len(glove_vocab.keys()), 300)
+    new_embeddings[:glove_embeddings.shape[0]] = glove_embeddings
+
+    glove_embeddings = new_embeddings
+
+    return appendages
+
+def save():
+
+    # How to save it?
+    np.save(os.path.join(glove_location['dir'], glove_location['parsed']), glove_embeddings)
+    pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))

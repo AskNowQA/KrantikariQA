@@ -105,6 +105,8 @@ def _prepare_():
     try:
         vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, "vocab.pickle")))
         vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npy")))
+        print("length of vocab file is before calling prepare i.e current vocab file is ", len(vocab))
+        print("length of vector file is before calling prepare i.e current vector file is ", len(vocab))
     except (IOError, EOFError) as e:
         if DEBUG:
             warnings.warn("Did not find the vocabulary.")
@@ -410,6 +412,8 @@ def _prepare_():
 
     # Save these sons of bitches.
     if DEBUG: print("Vectors and Vocab prepared. Now, we gotsta save 'em")
+    print("new length of vocab file is before calling prepare i.e new current vocab file is ", len(vocab))
+    print("new length of vector file is before calling prepare i.e new current vector file is ", len(vocab))
     pickle.dump(vocab, open(os.path.join(COMMON_DATA_DIR, "vocab.pickle"), 'w+'))
     np.save(os.path.join(COMMON_DATA_DIR, "vectors"), vectors)
 

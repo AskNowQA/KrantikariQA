@@ -181,7 +181,8 @@ parameter_dict['dropout_in'] = float(config.get(training_model,'dropout_in'))
 if training_model == 'cnn_dot':
     parameter_dict['output_dim'] = int(config.get(training_model, 'output_dim'))
 
-
+validate_every = int(config.get('Commons', 'validate_every'))
+test_every = int(config.get('Commons', 'test_every'))
 
 TEMP = aux.data_loading_parameters(_dataset,parameter_dict)
 
@@ -263,8 +264,8 @@ train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_mode
                                                                            data=data,
                                                                            dataset=parameter_dict['dataset'],
                                                                            device=device,
-                                                                           test_every=5,
-                                                                           validate_every=5,
+                                                                           test_every=test_every,
+                                                                           validate_every=validate_every,
                                                                             pointwise=pointwise,
                                                                            problem='core_chain')
 

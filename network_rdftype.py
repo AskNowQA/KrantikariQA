@@ -17,10 +17,10 @@ from torch.utils.data import  DataLoader
 
 # Other libs
 from qelos_core.scripts.lcquad.corerank import FlatEncoder
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import ConfigParser
 import numpy as np
-import pylab
+# import pylab
 import time
 import json
 import os
@@ -33,7 +33,7 @@ torch.manual_seed(42)
 
 # Reading and setting up config parser
 config = ConfigParser.ConfigParser()
-config.readfp(open('configs/rdftype.cfg'))
+config.readfp(open('configs/rdf_type.cfg'))
 
 # Setting up device,model name and loss types.
 training_model = 'bilstm_dense'
@@ -258,7 +258,7 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
     valid_acc = []
     training_loss = []
     best_valid_acc = 0.0
-    loc = aux.save_location('rdftype', 'bilstm_dense', 'lcquad')
+    loc = aux.save_location('rdf_type', 'bilstm_dense', 'lcquad')
 
     for epoch in range(parameter_dict['epochs']):
 
@@ -298,7 +298,7 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
         data = {}
         data['ques_batch'] = dataset['valid_X']
         data['y_label'] = dataset['valid_Y']
-        y_pred = classifier.predict(data, loss_fn, device)
+        y_pred = classifier.predict(data, device)
         valid_acc.append(classifier.eval(y_true=data['y_label'], y_pred=y_pred))
 
         # IF it outperformed, save model.
@@ -319,44 +319,6 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
 
     return classifier, training_loss, training_acc, valid_acc
 
-
-def visualize_loss(loss, loss2=None, _label="Some label", _label2="Some other label", _name="Generic Name",
-                   _only_epoch=True):
-    """
-        Fn to visualize loss.
-        Expects either
-            - [int, int] for epoch level stuff
-            - [ [int, int], [int, int] ] for batch level data.
-    """
-
-    plt.rcParams['figure.figsize'] = [15, 8]
-
-    # Detect input format
-    if type(loss[0]) is not list:  # in [int, float, long]:
-
-        #         print("here")
-        plt.plot(loss, '-b', label=_label)
-        if loss2: plt.plot(loss2, '-r', label=_label2)
-        plt.ylabel(_name)
-        pylab.legend(loc='upper left')
-        plt.show()
-
-    elif type(loss[0]) == list:
-
-        if _only_epoch:
-            loss = [np.mean(x) for x in loss]
-            if loss2 is not None:
-                loss2 = [np.mean(x) for x in loss2]
-
-        else:
-            loss = [y for x in loss for y in x]
-            if loss2 is not None: loss2 = [y for x in loss2 for y in x]
-
-        plt.plot(loss, '-b', label=_label)
-        if loss2 is not None: plt.plot(loss2, '-r', label=_label2)
-        plt.ylabel(_name)
-        pylab.legend(loc='upper left')
-        plt.show()
 
 if __name__ == "__main__":
     # Pull raw data from disk

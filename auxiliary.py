@@ -45,7 +45,7 @@ def save_location(problem, model_name, dataset):
             return a dir data/models/problem/model_name/dataset/0X
     '''
     # Check if the path exists or not. If not create one.
-    assert (problem in ['core_chain', 'intent', 'rdf', 'type_existence'])
+    assert (problem in ['core_chain', 'intent', 'rdf_class', 'rdf_type'])
     assert (dataset in ['qald', 'lcquad', 'transfer-a', 'transfer-b', 'transfer-c'])
 
     path = 'data/models/' + str(problem) + '/' + str(model_name) + '/' + str(dataset)

@@ -2,9 +2,9 @@
     create loss function and training data and other necessary utilities
 
     TODO:
-        > Add train over validation with given epochs
-        > Add best accuracy whem validation is highest
-        > Add visaulization so as to understand the interplay of train vs Validation vs test accuracy
+        > Add visaulization so as to understand the interplay of train vs Validation vs test accuracy (not really going to do it)
+        > Add logs
+            - Need to discuss it before implementing.
 '''
 from __future__ import print_function
 
@@ -31,6 +31,7 @@ device = torch.device("cuda")
 training_model = 'bilstm_dot'
 _dataset = 'lcquad'
 pointwise = False
+_train_over_validation = False
 
 
 #Loading relations file.
@@ -156,7 +157,9 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
         print("Time: %s\t" % (time.time() - epoch_time),
               "Loss: %s\t" % (sum(epoch_loss)),
               "Valdacc: %s\t" % (valid_accuracy[-1]),
-               "Testacc: %s\n" % (test_accuracy[-1]))
+                "Testacc: %s\n" % (test_accuracy[-1]),
+              "BestValidAcc: %s\n" % (best_validation_accuracy),
+              "BestTestAcc: %s\n" % (best_test_accuracy))
 
     return train_loss, modeler, valid_accuracy, test_accuracy
 
@@ -204,9 +207,15 @@ else:
 
 
 data = {}
-data['train_questions'] = train_questions
-data['train_pos_paths'] = train_pos_paths
-data['train_neg_paths'] = train_neg_paths
+if _train_over_validation:
+    data['train_questions'] = np.vstack((train_questions, valid_questions))
+    data['train_pos_paths'] = np.vstack((train_pos_paths, valid_pos_paths))
+    data['train_neg_paths'] = np.vstack((train_neg_paths,valid_neg_paths))
+else:
+    data['train_questions'] = train_questions
+    data['train_pos_paths'] = train_pos_paths
+    data['train_neg_paths'] = train_neg_paths
+
 data['valid_questions'] = valid_questions
 data['valid_pos_paths'] = valid_pos_paths
 data['valid_neg_paths'] = valid_neg_paths
@@ -271,8 +280,9 @@ train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_mode
 
 print(valid_accuracy)
 print(test_accuracy)
-print(max(valid_accuracy))
-print(max(test_accuracy))
+print("validation accuracy is , ", max(valid_accuracy))
+print("maximum test accuracy is , ", max(test_accuracy))
+print("correct test accuracy i.e test accuracy where validation is highest is ", test_accuracy[valid_accuracy.index(max(valid_accuracy))])
 #
 # rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 # rsync -avz --progress auxiliary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/

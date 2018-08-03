@@ -381,7 +381,9 @@ def create_dataset_runtime(file,_dataset,_dataset_specific_data_dir,split_point=
         print("warning: Functionality for transfer-a,transfer-b,transfer-c and proper-tranfer-qald is not implemented.")
         id_data_test = []
 
-    return id_data_test
+    vocab, vectors = vocab_master.load()
+
+    return id_data_test, vocab, vectors
 
 
 def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
@@ -425,7 +427,7 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
     # padded_negative_paths = pad_sequences(negative_paths, maxlen=max_length, padding='post')
 
     # explicitly remove any positive path from negative path
-    negative_paths = dl.remove_positive_path(positive_path, negative_paths)
+    negative_paths = remove_positive_path(positive_path, negative_paths)
 
     # remap all the id's to the continous id space.
 

@@ -23,7 +23,7 @@ class BiLstmDot(object):
         self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
                              dims=[self.parameter_dict['hidden_size']],
                              word_dic=self.word_to_id,
-                             bidir=True).to(self.device)
+                             bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],dropout_in=self.parameter_dict['dropout_in']).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
 

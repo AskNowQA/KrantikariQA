@@ -39,4 +39,6 @@ assert ('<MASK>' in word_list and 'PAD' not in word_list)
 
 pickle.dump(word_list,open('data/data/common/glove.300d.words','w+'))
 
+
+
 #rsync -avz --progress scripts/vectors_to_word.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/scripts/

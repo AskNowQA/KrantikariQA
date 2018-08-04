@@ -57,6 +57,8 @@ if __name__ == "__main__":
     parameter_dict['total_negative_samples'] = int(config.get(training_model,'total_negative_samples'))
     parameter_dict['epochs'] = int(config.get(training_model,'epochs'))
     parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
+    parameter_dict['dropout_rec'] = float(config.get(training_model,'dropout_rec'))
+    parameter_dict['dropout_in'] = float(config.get(training_model,'dropout_in'))
 
     _dataset_specific_data_dir,\
         _model_specific_data_dir,\

@@ -137,11 +137,8 @@ def rdf_type_candidates(data, path_id, vocab, relations, reverse_vocab):
     sparql = drt.reconstruct(data['entity'], path, alternative=True)
     sparqls = drt.create_sparql_constraints(sparql)
 
-    print(sparqls)
 
-    if len(data['entity']) == 2:
-        sparqls = [sparqls[1]]
-    if len(path) == 2:
+    if len(data['entity']) == 2 or len(path) == 2:
         sparqls = [sparqls[1]]
     type_x, type_uri = drt.retrive_answers(sparqls)
 
@@ -354,7 +351,7 @@ def convert(_graph, relations, embeddings_interface, embeddingid_to_gloveid):
     # Find entities
     entities = _graph['entities']
 
-    print _graph
+    # print _graph
 
     # Convert the corechain to glove embeddings
     corechain_signs, corechain_uris = reconstruct_corechain(_graph['best_path'],

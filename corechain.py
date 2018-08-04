@@ -163,134 +163,135 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
     return train_loss, modeler, valid_accuracy, test_accuracy
 
+if __name__ == "__main__":
 
-# #Model specific paramters
-parameter_dict = {}
-parameter_dict['dataset'] = _dataset
-parameter_dict['max_length'] =  int(config.get(training_model,'max_length'))
-parameter_dict['hidden_size'] = int(config.get(training_model,'hidden_size'))
-parameter_dict['number_of_layer'] = int(config.get(training_model,'number_of_layer'))
-parameter_dict['embedding_dim'] = int(config.get(training_model,'embedding_dim'))
-parameter_dict['vocab_size'] = int(config.get(training_model,'vocab_size'))
-parameter_dict['batch_size'] = int(config.get(training_model,'batch_size'))
-parameter_dict['bidirectional'] = bool(config.get(training_model,'bidirectional'))
-parameter_dict['_neg_paths_per_epoch_train'] = int(config.get(training_model,'_neg_paths_per_epoch_train'))
-parameter_dict['_neg_paths_per_epoch_validation'] = int(config.get(training_model,'_neg_paths_per_epoch_validation'))
-parameter_dict['total_negative_samples'] = int(config.get(training_model,'total_negative_samples'))
-parameter_dict['epochs'] = int(config.get(training_model,'epochs'))
-parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
-parameter_dict['dropout_rec'] = float(config.get(training_model,'dropout_rec'))
-parameter_dict['dropout_in'] = float(config.get(training_model,'dropout_in'))
-if training_model == 'cnn_dot':
-    parameter_dict['output_dim'] = int(config.get(training_model, 'output_dim'))
+    # #Model specific paramters
+    parameter_dict = {}
+    parameter_dict['dataset'] = _dataset
+    parameter_dict['max_length'] =  int(config.get(training_model,'max_length'))
+    parameter_dict['hidden_size'] = int(config.get(training_model,'hidden_size'))
+    parameter_dict['number_of_layer'] = int(config.get(training_model,'number_of_layer'))
+    parameter_dict['embedding_dim'] = int(config.get(training_model,'embedding_dim'))
+    parameter_dict['vocab_size'] = int(config.get(training_model,'vocab_size'))
+    parameter_dict['batch_size'] = int(config.get(training_model,'batch_size'))
+    parameter_dict['bidirectional'] = bool(config.get(training_model,'bidirectional'))
+    parameter_dict['_neg_paths_per_epoch_train'] = int(config.get(training_model,'_neg_paths_per_epoch_train'))
+    parameter_dict['_neg_paths_per_epoch_validation'] = int(config.get(training_model,'_neg_paths_per_epoch_validation'))
+    parameter_dict['total_negative_samples'] = int(config.get(training_model,'total_negative_samples'))
+    parameter_dict['epochs'] = int(config.get(training_model,'epochs'))
+    parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
+    parameter_dict['dropout_rec'] = float(config.get(training_model,'dropout_rec'))
+    parameter_dict['dropout_in'] = float(config.get(training_model,'dropout_in'))
+    if training_model == 'cnn_dot':
+        parameter_dict['output_dim'] = int(config.get(training_model, 'output_dim'))
 
-validate_every = int(config.get('Commons', 'validate_every'))
-test_every = int(config.get('Commons', 'test_every'))
+    validate_every = int(config.get('Commons', 'validate_every'))
+    test_every = int(config.get('Commons', 'test_every'))
 
-TEMP = aux.data_loading_parameters(_dataset,parameter_dict)
+    TEMP = aux.data_loading_parameters(_dataset,parameter_dict)
 
-_dataset_specific_data_dir,_model_specific_data_dir,_file,\
-           _max_sequence_length,_neg_paths_per_epoch_train,_neg_paths_per_epoch_validation,_training_split,_validation_split,_index= TEMP
+    _dataset_specific_data_dir,_model_specific_data_dir,_file,\
+               _max_sequence_length,_neg_paths_per_epoch_train,_neg_paths_per_epoch_validation,_training_split,_validation_split,_index= TEMP
 
-_a = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
-              _neg_paths_per_epoch_train,
-              _neg_paths_per_epoch_validation, _relations,
-              _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=not pointwise, _debug=True, _rdf=False)
-
-
-if _dataset == 'lcquad':
-    train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
-else:
-    print("warning: Test accuracy would not be calculated as the data has not been prepared.")
-    train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors = _a
-    test_questions,test_neg_paths,test_pos_paths = None,None,None
+    _a = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
+                  _neg_paths_per_epoch_train,
+                  _neg_paths_per_epoch_validation, _relations,
+                  _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=not pointwise, _debug=True, _rdf=False)
 
 
-data = {}
-if _train_over_validation:
-    data['train_questions'] = np.vstack((train_questions, valid_questions))
-    data['train_pos_paths'] = np.vstack((train_pos_paths, valid_pos_paths))
-    data['train_neg_paths'] = np.vstack((train_neg_paths,valid_neg_paths))
-else:
-    data['train_questions'] = train_questions
-    data['train_pos_paths'] = train_pos_paths
-    data['train_neg_paths'] = train_neg_paths
-
-data['valid_questions'] = valid_questions
-data['valid_pos_paths'] = valid_pos_paths
-data['valid_neg_paths'] = valid_neg_paths
-data['test_pos_paths'] = test_pos_paths
-data['test_neg_paths'] = test_neg_paths
-data['test_questions'] = test_questions
-data['vectors'] = vectors
-data['dummy_y'] = torch.ones(parameter_dict['batch_size'],device=device)
+    if _dataset == 'lcquad':
+        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
+    else:
+        print("warning: Test accuracy would not be calculated as the data has not been prepared.")
+        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors = _a
+        test_questions,test_neg_paths,test_pos_paths = None,None,None
 
 
-train_loader = load_data(data,parameter_dict,pointwise)
-parameter_dict['vectors'] = data['vectors']
+    data = {}
+    if _train_over_validation:
+        data['train_questions'] = np.vstack((train_questions, valid_questions))
+        data['train_pos_paths'] = np.vstack((train_pos_paths, valid_pos_paths))
+        data['train_neg_paths'] = np.vstack((train_neg_paths,valid_neg_paths))
+    else:
+        data['train_questions'] = train_questions
+        data['train_pos_paths'] = train_pos_paths
+        data['train_neg_paths'] = train_neg_paths
+
+    data['valid_questions'] = valid_questions
+    data['valid_pos_paths'] = valid_pos_paths
+    data['valid_neg_paths'] = valid_neg_paths
+    data['test_pos_paths'] = test_pos_paths
+    data['test_neg_paths'] = test_neg_paths
+    data['test_questions'] = test_questions
+    data['vectors'] = vectors
+    data['dummy_y'] = torch.ones(parameter_dict['batch_size'],device=device)
 
 
-if training_model == 'bilstm_dot':
-    modeler = net.BiLstmDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
-                                         _device=device,_pointwise=pointwise, _debug=False)
-
-    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
-
-if training_model == 'bilstm_dense':
-    modeler = net.BiLstmDense( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
-                                         _device=device,_pointwise=pointwise, _debug=False)
-
-    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters()))+
-                           list(filter(lambda p: p.requires_grad, modeler.dense.parameters())))
-
-if training_model == 'bilstm_densedot':
-    modeler = net.BiLstmDenseDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
-                                         _device=device,_pointwise=pointwise, _debug=False)
-
-    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
-                           list(filter(lambda p: p.requires_grad, modeler.dense.parameters())))
-
-if training_model == 'cnn_dot':
-    modeler = net.CNNDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
-                                         _device=device,_pointwise=pointwise, _debug=False)
-
-    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+    train_loader = load_data(data,parameter_dict,pointwise)
+    parameter_dict['vectors'] = data['vectors']
 
 
-if not pointwise:
-    loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
-else:
-    loss_func = nn.MSELoss()
-    training_model += '_pointwise'
+    if training_model == 'bilstm_dot':
+        modeler = net.BiLstmDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                             _device=device,_pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+
+    if training_model == 'bilstm_dense':
+        modeler = net.BiLstmDense( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                             _device=device,_pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters()))+
+                               list(filter(lambda p: p.requires_grad, modeler.dense.parameters())))
+
+    if training_model == 'bilstm_densedot':
+        modeler = net.BiLstmDenseDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                             _device=device,_pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
+                               list(filter(lambda p: p.requires_grad, modeler.dense.parameters())))
+
+    if training_model == 'cnn_dot':
+        modeler = net.CNNDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                             _device=device,_pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
 
 
-train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
-                                                                           parameter_dict = parameter_dict,
-                                                                           modeler = modeler,
-                                                                           train_loader = train_loader,
-                                                                           optimizer=optimizer,
-                                                                           loss_func=loss_func,
-                                                                           data=data,
-                                                                           dataset=parameter_dict['dataset'],
-                                                                           device=device,
-                                                                           test_every=test_every,
-                                                                           validate_every=validate_every,
-                                                                            pointwise=pointwise,
-                                                                           problem='core_chain')
+    if not pointwise:
+        loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
+    else:
+        loss_func = nn.MSELoss()
+        training_model += '_pointwise'
 
-print(valid_accuracy)
-print(test_accuracy)
-print("validation accuracy is , ", max(valid_accuracy))
-print("maximum test accuracy is , ", max(test_accuracy))
-print("correct test accuracy i.e test accuracy where validation is highest is ", test_accuracy[valid_accuracy.index(max(valid_accuracy))])
-#
-# rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
-# rsync -avz --progress auxiliary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
-# rsync -avz --progress network.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
-# rsync -avz --progress components.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
-# rsync -avz --progress data_loader.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 
-# rsync -avz --progress corechain.py priyansh@sda-srv04:/data/priyansh/new_kranti
-# rsync -avz --progress auxiliary.py priyansh@sda-srv04:/data/priyansh/new_kranti
-# rsync -avz --progress components.py priyansh@sda-srv04:/data/priyansh/new_kranti
-# rsync -avz --progress network.py priyansh@sda-srv04:/data/priyansh/new_kranti
+    train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
+                                                                               parameter_dict = parameter_dict,
+                                                                               modeler = modeler,
+                                                                               train_loader = train_loader,
+                                                                               optimizer=optimizer,
+                                                                               loss_func=loss_func,
+                                                                               data=data,
+                                                                               dataset=parameter_dict['dataset'],
+                                                                               device=device,
+                                                                               test_every=test_every,
+                                                                               validate_every=validate_every,
+                                                                                pointwise=pointwise,
+                                                                               problem='core_chain')
+
+    print(valid_accuracy)
+    print(test_accuracy)
+    print("validation accuracy is , ", max(valid_accuracy))
+    print("maximum test accuracy is , ", max(test_accuracy))
+    print("correct test accuracy i.e test accuracy where validation is highest is ", test_accuracy[valid_accuracy.index(max(valid_accuracy))])
+    #
+    # rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
+    # rsync -avz --progress auxiliary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
+    # rsync -avz --progress network.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
+    # rsync -avz --progress components.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
+    # rsync -avz --progress data_loader.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
+
+    # rsync -avz --progress corechain.py priyansh@sda-srv04:/data/priyansh/new_kranti
+    # rsync -avz --progress auxiliary.py priyansh@sda-srv04:/data/priyansh/new_kranti
+    # rsync -avz --progress components.py priyansh@sda-srv04:/data/priyansh/new_kranti
+    # rsync -avz --progress network.py priyansh@sda-srv04:/data/priyansh/new_kranti

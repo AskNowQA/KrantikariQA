@@ -2,6 +2,7 @@ import pickle,os,torch
 import numpy as np
 import json
 import prepare_transfer_learning as ptl
+import data_loader as dl
 
 
 #Should be shifted to some other locations
@@ -152,6 +153,55 @@ def load_embeddingid_gloveid():
         gloveid_to_word[word_to_gloveid[keys]] = keys
     return gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word
 
+def to_bool(value):
+    if str(value) == 'true' or str(value) == 'True':
+        return True
+    else:
+        return False
+
+def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _pointwise,_device):
+
+
+    TEMP = data_loading_parameters(_dataset, _parameter_dict)
+
+    _dataset_specific_data_dir,_model_specific_data_dir,_file,\
+               _max_sequence_length,_neg_paths_per_epoch_train,_neg_paths_per_epoch_validation,_training_split,_validation_split,_index= TEMP
+
+    _a = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
+                      _neg_paths_per_epoch_train,
+                      _neg_paths_per_epoch_validation, _relations,
+                      _index, _training_split, _validation_split, _model='core_chain_pairwise', _pairwise=not _pointwise, _debug=True, _rdf=False)
+
+
+
+    if _dataset == 'lcquad':
+        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
+    else:
+        print("warning: Test accuracy would not be calculated as the data has not been prepared.")
+        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors = _a
+        test_questions,test_neg_paths,test_pos_paths = None,None,None
+
+
+    data = {}
+    if _train_over_validation:
+        data['train_questions'] = np.vstack((train_questions, valid_questions))
+        data['train_pos_paths'] = np.vstack((train_pos_paths, valid_pos_paths))
+        data['train_neg_paths'] = np.vstack((train_neg_paths,valid_neg_paths))
+    else:
+        data['train_questions'] = train_questions
+        data['train_pos_paths'] = train_pos_paths
+        data['train_neg_paths'] = train_neg_paths
+
+    data['valid_questions'] = valid_questions
+    data['valid_pos_paths'] = valid_pos_paths
+    data['valid_neg_paths'] = valid_neg_paths
+    data['test_pos_paths'] = test_pos_paths
+    data['test_neg_paths'] = test_neg_paths
+    data['test_questions'] = test_questions
+    data['vectors'] = vectors
+    data['dummy_y'] = torch.ones(_parameter_dict['batch_size'], device=_device)
+
+    return data
 def data_loading_parameters(dataset,parameter_dict,runtime=False):
 
     if dataset == 'lcquad':

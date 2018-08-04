@@ -100,7 +100,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                           dtype=torch.long, device=device)
                 path_batch = torch.tensor(np.reshape(sample_batched[0][1], (-1, parameter_dict['max_length'])),
                                          dtype=torch.long, device=device)
-                y = torch._tensor(sample_batched[1],dtype = torch.long,device=device)
+                y = torch.tensor(sample_batched[1],dtype = torch.float,device=device).view(-1)
 
                 data_batch = {
                     'ques_batch': ques_batch,

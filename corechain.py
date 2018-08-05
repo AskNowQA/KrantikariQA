@@ -145,6 +145,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                 valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
                                                           data['valid_neg_paths'],  modeler, device))
                 if valid_accuracy[-1] >= best_validation_accuracy:
+                    print("MODEL WEIGHTS RIGHT NOW: ", modeler.get_parameter_sum())
                     best_validation_accuracy = valid_accuracy[-1]
                     aux_save_information['epoch'] = epoch
                     aux_save_information['validation_accuracy'] = best_validation_accuracy

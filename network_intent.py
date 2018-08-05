@@ -177,7 +177,7 @@ def preprocess_data(dataset, vocab, parameter_dict):
                 'test_X': None, 'test_Y': None}
 
 
-class IntentClassifier:
+class IntentClassifier(net.Model):
 
     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
         self.debug = _debug

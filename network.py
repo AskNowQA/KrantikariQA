@@ -25,8 +25,10 @@ class BiLstmDot(object):
                              word_dic=self.word_to_id,
                              bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],dropout_in=self.parameter_dict['dropout_in']).to(self.device)
 
+        # self.load_from()
+    #
     def train(self, data, optimizer, loss_fn, device):
-
+    #
         if self.pointwise:
             return self._train_pointwise_(data, optimizer, loss_fn, device)
         else:
@@ -113,6 +115,15 @@ class BiLstmDot(object):
         :return: [(key, model)]
         """
         return [('encoder', self.encoder)]
+
+
+    def load_from(self, location="./data/models/core_chain/bilstm_dot/lcquad/4/model.torch"):
+        # Pull the data from disk
+        model_dump = torch.load(location)
+
+        # Load parameters
+        for key in self.prepare_save():
+            key[1].load_state_dict(model_dump[key[0]])
 
 
 class BiLstmDense:

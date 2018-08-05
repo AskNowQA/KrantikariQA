@@ -115,6 +115,29 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, model
     return sum(precision) * 1.0 / len(precision)
 
 
+def validation_accuracy_alter(valid_questions, valid_pos_paths, valid_neg_paths, modeler, device, qa):
+    precision = []
+
+    print(valid_pos_paths.shape)
+    print(valid_neg_paths.shape)
+    print(valid_questions.shape)
+
+
+    for i in range(len(valid_questions)):
+
+        question = valid_questions[i]
+        paths = np.vstack((valid_pos_paths[i].reshape(1, -1), valid_neg_paths[i]))
+
+        score = qa._predict_corechain(question, paths)
+        arg_max = np.argmax(score)
+        if arg_max.item() == 0:  # 0 is the positive path index
+            precision.append(1)
+        else:
+            precision.append(0)
+
+    return sum(precision) * 1.0 / len(precision)
+
+
 def id_to_word(path, gloveid_to_word, embeddingid_to_gloveid, remove_pad = True):
     '''
 

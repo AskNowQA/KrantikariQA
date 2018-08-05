@@ -261,6 +261,16 @@ class BiLstmDot(Model):
         """
         return [('encoder', self.encoder)]
 
+    def load_from(self, location):
+        # Pull the data from disk
+        if self.debug: print("loading Bilstmdot model from", location)
+        self.encoder.load_state_dict(torch.load(location)['encoder'])
+        if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
+
+        # # Load parameters
+        # for key in self.prepare_save():
+        #     key[1].load_state_dict(model_dump[key[0]])
+
 class BiLstmDense(Model):
     """
         This model replaces the dot product of BiLstmDot with a two layered dense classifier.

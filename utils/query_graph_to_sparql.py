@@ -304,7 +304,7 @@ def reconstruct_corechain(_chain ,relations, embeddings_interface, embeddingid_t
 
 def convert_rdf_path_to_text(path, embeddings_interface, embeddingid_to_gloveid):
     """
-        Function used to convert a path (of continous IDs) to a text path.
+        Function used to convert a path relations(of continous IDs) to a text path.
         Eg. [ 5, 3, 420] : [uri, dbo:Poop]
 
     :param path: list of strings

@@ -198,3 +198,118 @@ class CNN(nn.Module):
 
         return output
 
+
+class AttendCompareAggregate(nn.Module):
+    """
+        Corresponds to the equations above. Init needs inputoutput dims.
+        Suggestion:
+            inputdim = hiddendim of encoder (*2) if bidir
+
+        Forward:
+            p, q are output of encoder.
+                **shape** = (len, batch, hidden* (2 if bidir)).
+
+        ## Link: https://arxiv.org/pdf/1606.01933.pdf
+
+        ## Attend, Compare, Aggregate
+
+            A class which performs all of the things of decomposible attention.
+            The way this works is in following steps:
+
+            ### Attend:
+            - Encode all q hidden states with $F$ as follows:
+            - $att_{qi} = F(q_i)$
+            - Similarly
+            - $att_{pj} = F(p_j)$
+            - Then we combine them as follows
+            - $e_{ij} = att_{qi}^{T} \cdot att_{pj}$
+            - Finally we take softamx along two axis as follows:
+            - $\beta_i=\sum_j^{l_b} softmax_j(e_{ij})\cdot p_j$
+            - $\alpha_j=\sum_i^{l_a} softmax_i(e_{ij}) \cdot q_i$
+
+            ### Compare:
+            - Concatenate and feedforward the outputs in this manner:
+            - $v_{1,i}=G([q_i, \beta_i])$ for $i \in (1,..l_q)$
+            - $v_{2,j}=G([p_j, \alpha_j])$ for $j \in (1,..l_p)$
+
+            ### Aggregate
+            - Sum over all the $v_{1/2}$ and pass it through a dense to compute final score
+            - $v_1 = \sum^{l_q} v_{1,i}$
+            - $v_2 = \sum^{l_p} v_{2,j}$
+            - res = $H([v_1, v_2])$
+    """
+
+    def __init__(self, inputdim, debug=False):
+        super(AttendCompareAggregate, self).__init__()
+
+        self.inputdim = inputdim
+        self.debug = debug
+
+        self.F = nn.Linear(self.inputdim, self.inputdim)
+        self.G = nn.Linear(self.inputdim * 2, self.inputdim)
+        self.H = nn.Linear(self.inputdim * 2, 1)
+
+    def forward(self, q, p):
+
+        # Collect some temp macros
+        batch_size = q.shape[1]
+        seq_length_q, seq_length_p = q.shape[0], p.shape[0]
+        if self.debug:
+            print("Input:")
+            print("\tq:\t", q.shape)
+            print("\tp:\t", p.shape)
+
+        # Create att_p, q matrices. We use view to change the input and the output. VIEW IS TESTED DONT PANIC.
+        att_q = self.F(q.view(-1, q.shape[2])).view(seq_length_q, batch_size, -1).transpose(1, 0)
+        att_p = self.F(p.view(-1, p.shape[2])).view(seq_length_p, batch_size, -1).transpose(1, 0)
+        if self.debug:
+            print ("\tatt_p:\t", att_p.shape)
+            print ("\tatt_q:\t", att_q.shape)
+
+        # Now we calculate e. To do so, we transpose att_q, and BMM it with att_p
+        # Note: correspondence held between q->i & p->j in the matrix e.
+        e = torch.bmm(att_q, att_p.transpose(2, 1))
+        if self.debug:
+            print ("\te:\t", e.shape)
+
+        # We now prepare softmax_j and softmax_i (as defined in eq above)
+        softmax_j = F.softmax(e.view(-1, e.shape[2]), dim=1).view(-1, e.shape[1], e.shape[2])
+        softmax_i = F.softmax(e.transpose(2, 1).contiguous().view(-1, e.shape[1]), dim=1).transpose(1, 0). \
+            view(e.shape[1], -1, e.shape[2]).transpose(1, 0)
+        if self.debug:
+            print ("       softmaxj:\t\b", softmax_j.shape)
+            print ("       softmaxi:\t\b", softmax_i.shape)
+
+        beta = torch.bmm(softmax_j, p.transpose(1, 0))
+        alpha = torch.bmm(softmax_i.transpose(2, 1), q.transpose(1, 0))
+        if self.debug:
+            print ("\tbeta:\t", beta.shape)
+            print ("\talpha:\t", alpha.shape)
+
+        """
+            Compare
+        """
+        # Concatenate beta,q && alpha,p and feed it to G to get v1 and v2
+        v1 = self.G(torch.cat((q.transpose(1, 0), beta), dim=-1).view(-1, self.inputdim * 2)) \
+            .view(batch_size, seq_length_q, -1)
+        v2 = self.G(torch.cat((p.transpose(1, 0), alpha), dim=-1).view(-1, self.inputdim * 2)) \
+            .view(batch_size, seq_length_p, -1)
+        if self.debug:
+            print("\tv1:\t", v1.shape)
+            print("\tv2:\t", v2.shape)
+
+        """
+            Aggregate
+        """
+        sum_v1 = torch.sum(v1, dim=1)
+        sum_v2 = torch.sum(v2, dim=1)
+        if self.debug:
+            print("\tsum_v1:\t", sum_v1.shape)
+            print("\tsum_v2:\t", sum_v2.shape)
+
+        # Finally calculate the sum
+        result = self.H(torch.cat((sum_v1, sum_v2), dim=-1))
+        if self.debug:
+            print("\tresult:\t", result.shape)
+
+        return result

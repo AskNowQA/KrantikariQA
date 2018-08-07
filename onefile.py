@@ -9,6 +9,7 @@ from torch.utils.data import  DataLoader
 from utils import prepare_vocab_continous as vocab_master
 from utils import query_graph_to_sparql as sparql_constructor
 from utils import embeddings_interface
+from configs import config_loader as cl
 import network_rdftype as net_rdftype
 import network_intent as net_intent
 import data_loader as dl
@@ -47,23 +48,15 @@ _relations = aux.load_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
 # Model specific paramters
-parameter_dict = {}
-parameter_dict['dataset'] = _dataset
-parameter_dict['max_length'] = int(config.get(training_model, 'max_length'))
-parameter_dict['hidden_size'] = int(config.get(training_model, 'hidden_size'))
-parameter_dict['number_of_layer'] = int(config.get(training_model, 'number_of_layer'))
-parameter_dict['embedding_dim'] = int(config.get(training_model, 'embedding_dim'))
-parameter_dict['vocab_size'] = int(config.get(training_model, 'vocab_size'))
-parameter_dict['batch_size'] = int(config.get(training_model, 'batch_size'))
-parameter_dict['bidirectional'] = bool(config.get(training_model, 'bidirectional'))
-parameter_dict['prune_corechain_candidates'] = bool(config.get('runtime', 'prune_corechain_candidates'))
-parameter_dict['_neg_paths_per_epoch_train'] = int(config.get(training_model, '_neg_paths_per_epoch_train'))
-parameter_dict['_neg_paths_per_epoch_validation'] = int(config.get(training_model, '_neg_paths_per_epoch_validation'))
-parameter_dict['total_negative_samples'] = int(config.get(training_model, 'total_negative_samples'))
-parameter_dict['epochs'] = int(config.get(training_model, 'epochs'))
-parameter_dict['dropout'] = float(config.get(training_model, 'dropout'))
-parameter_dict['dropout_rec'] = float(config.get(training_model, 'dropout_rec'))
-parameter_dict['dropout_in'] = float(config.get(training_model, 'dropout_in'))
+    # #Model specific paramters
+if pointwise:
+    training_config = 'pointwise'
+else:
+    training_config = 'pairwise'
+
+parameter_dict = cl.runtime_parameters(dataset=_dataset,training_model=training_model,
+                                         training_config=training_config,config_file='configs/macros.cfg')
+
 if training_model == 'cnn_dot':
     parameter_dict['output_dim'] = int(config.get(training_model, 'output_dim'))
 
@@ -72,13 +65,13 @@ parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
 parameter_dict['_model_dir'] = './data/models/'
 
 parameter_dict['corechainmodel'] = 'bilstm_dot'
-parameter_dict['corechainmodelnumber'] = '59'
+parameter_dict['corechainmodelnumber'] = '11'
 
 parameter_dict['intentmodel'] = 'bilstm_dense'
-parameter_dict['intentmodelnumber'] = '4'
+parameter_dict['intentmodelnumber'] = '0'
 
 parameter_dict['rdftypemodel'] = 'bilstm_dense'
-parameter_dict['rdftypemodelnumber'] = '2'
+parameter_dict['rdftypemodelnumber'] = '0'
 
 parameter_dict['rdfclassmodel'] = 'bilstm_dot'
 parameter_dict['rdfclassmodelnumber'] = '0'
@@ -98,6 +91,7 @@ parameter_dict['vectors'] = _vectors
 # For interpretability's sake
 gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, \
     gloveid_to_word = aux.load_embeddingid_gloveid()
+
 
 class QuestionAnswering:
     """
@@ -140,19 +134,14 @@ class QuestionAnswering:
         model_path = os.path.join(model_path, self.parameters['corechainmodelnumber'])
         model_path = os.path.join(model_path, 'model.torch')
 
-        # Pull the data from disk
-        model_dump = torch.load(model_path)
-
-        # Load parameters
-        for key in self.corechain_model.prepare_save():
-            key[1].load_state_dict(model_dump[key[0]])
+        self.corechain_model.load_from(model_path)
 
     def _load_rdfclass_model(self):
 
         # Initialize the model
         if self.parameters['rdfclassmodel'] == 'bilstm_dot':
-            self.corechain_model = net.BiLstmDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
-                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+            self.rdfclass_model = net.BiLstmDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
 
         # Make the model path
         model_path = os.path.join(self.parameters['_model_dir'], 'rdf_class')
@@ -161,12 +150,7 @@ class QuestionAnswering:
         model_path = os.path.join(model_path, self.parameters['rdfclassmodelnumber'])
         model_path = os.path.join(model_path, 'model.torch')
 
-        # Pull the data from disk
-        model_dump = torch.load(model_path)
-
-        # Load parameters
-        for key in self.corechain_model.prepare_save():
-            key[1].load_state_dict(model_dump[key[0]])
+        self.rdfclass_model.load_from(model_path)
 
     def _load_rdftype_model(self):
         # Initialize the model
@@ -182,12 +166,7 @@ class QuestionAnswering:
         model_path = os.path.join(model_path, self.parameters['rdftypemodelnumber'])
         model_path = os.path.join(model_path, 'model.torch')
 
-        # Pull data from disk
-        model_dump = torch.load(model_path)
-
-        # Load parameters
-        for key in self.rdftype_model.prepare_save():
-            key[1].load_state_dict(model_dump[key[0]])
+        self.rdftype_model.load_from(model_path)
 
     def _load_intentmodel(self):
 
@@ -204,12 +183,7 @@ class QuestionAnswering:
         model_path = os.path.join(model_path, self.parameters['intentmodelnumber'])
         model_path = os.path.join(model_path, 'model.torch')
 
-        # Pull data from disk
-        model_dump = torch.load(model_path)
-
-        # Load parameters
-        for key in self.intent_model.prepare_save():
-            key[1].load_state_dict(model_dump[key[0]])
+        self.intent_model.load_from(model_path)
 
     def _predict_corechain(self, _q, _p):
         """
@@ -272,6 +246,7 @@ class QuestionAnswering:
         P = torch.tensor(P, dtype=torch.long, device=self.device)
 
         # We then pass them through a predict function and get a score array.
+
         score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
 
         return score.detach().cpu().numpy()
@@ -424,6 +399,7 @@ def create_sparql(log, data, embeddings_interface, embeddingid_to_gloveid, relat
                                         embeddings_interface=embeddings_interface,
                                         embeddingid_to_gloveid=embeddingid_to_gloveid)
 
+
 def corechain_prediction(question, paths, positive_path, negative_paths, no_positive_path):
     '''
         Why is path needed ?
@@ -442,9 +418,10 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
                 Why does this quest exists ? 
                     > Probably in qald
         '''
-        pass
+        print("The code should not have been herr. There is no warning. RUN!!!!!!!!")
+        raise ValueError
 
-    if not no_positive_path and len(negative_paths) == 0:
+    elif not no_positive_path and len(negative_paths) == 0:
         '''
             There exists a positive path and there exists no negative path
         '''
@@ -452,7 +429,15 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         mrr = 1
         path_predicted_correct = True
 
-    if (not no_positive_path or no_positive_path) and len(negative_paths) != 0:
+    elif no_positive_path and len(negative_paths) != 0:
+        '''
+            There exists no correct/true path and there are few negative paths.
+        '''
+        output = qa._predict_corechain(question, paths)
+        best_path_index = np.argmax(output)
+        best_path = paths[best_path_index]
+
+    elif not no_positive_path and len(negative_paths) != 0:
         '''
             There exists positive path and also negative paths
             path = positive_path + negative_paths    
@@ -472,6 +457,10 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
 
         if mrr != 0:
             mrr = 1.0 / mrr
+
+    else:
+        print("The code should not have been herr. There is no warning. RUN!!!!!!!!")
+        raise ValueError
 
     return mrr, best_path, path_predicted_correct
 
@@ -544,7 +533,6 @@ def answer_question(qa, index, data, gloveid_to_embeddingid, embeddingid_to_glov
 
     # Put the pruning index over the paths
     paths = [paths[i] for i in index_selected_paths]
-
     '''
         Converting paths to numpy array
     '''
@@ -555,6 +543,7 @@ def answer_question(qa, index, data, gloveid_to_embeddingid, embeddingid_to_glov
     cc_mrr, best_path, cc_acc = corechain_prediction(question,
                                                      paths, positive_path,
                                                      negative_paths, no_positive_path)
+
     log['pred_path'] = best_path
     metrics['core_chain_accuracy_counter'] = cc_acc
     metrics['core_chain_mrr_counter'] = cc_mrr
@@ -636,6 +625,7 @@ def answer_question(qa, index, data, gloveid_to_embeddingid, embeddingid_to_glov
 
     return log, metrics
 
+
 """
     Different counters and metrics to store accuracy of diff modules
 
@@ -651,14 +641,6 @@ def answer_question(qa, index, data, gloveid_to_embeddingid, embeddingid_to_glov
             This will only work if CANDIDATE_SPACE is not none.
 
 """
-core_chain_accuracy_counter = 0
-core_chain_mrr_counter = 0
-intent_accuracy_counter = 0
-rdftype_accuracy_counter = 0
-query_graph_accuracy_counter = 0
-word_vector_accuracy_counter = 0  # @TODO: note this down on every occassion!
-core_chain_acc_log = []
-core_chain_mrr_log = []
 
 '''
     c_flag  is true if the core_chain was correctly predicted. 
@@ -674,9 +656,18 @@ results = []
 Logging = parameter_dict.copy()
 Logging['runtime'] = []
 
-qa = QuestionAnswering(parameter_dict, pointwise, _word_to_id, device, _debug)
+qa = QuestionAnswering(parameter_dict, pointwise, _word_to_id, device, True)
 
-startindex = 813
+core_chain_accuracy_counter = 0
+core_chain_mrr_counter = 0
+intent_accuracy_counter = 0
+rdftype_accuracy_counter = 0
+query_graph_accuracy_counter = 0
+word_vector_accuracy_counter = 0  # @TODO: note this down on every occassion!
+core_chain_acc_log = []
+core_chain_mrr_log = []
+
+startindex = 158
 for index, data in enumerate(_data[startindex:]):
     index += startindex
 
@@ -720,18 +711,21 @@ for index, data in enumerate(_data[startindex:]):
     true_path = aux.id_to_word(log['true_path'], gloveid_to_word, embeddingid_to_gloveid, remove_pad=True)
     pred_path = aux.id_to_word(log['pred_path'], gloveid_to_word, embeddingid_to_gloveid, remove_pad=True)
 
-    print("#%s" % index, "\n\t\bQues: ", question)
-    print("\t\bTPath: ", true_path, "\n\t\bPPath: ", pred_path)
-    print("\t\bTIntent: ", log['true_intent'])
-    print("\t\bPIntent: ", log['pred_intent'])
-    print("\t\bPRdftype: ", log['true_rdf_type'])
-    print("\t\bTRdftype: ", log['pred_rdf_type'])
-    print("\t\bPRdfclass: ", log['true_rdf_class'])
-    print("\t\bTRdfclass: ", log['pred_rdf_class'])
+    print("#%s" % index, "\t\bAcc: ", np.mean(core_chain_acc_log))
 
-    print("")
-    pprint(log)
-    print("")
-    pprint(metrics)
-    print("\n", sparql)
+    print("\t\bQues: ", question)
+    print("\t\bTPath: ", true_path, "\n\t\bPPath: ", pred_path)
+
+    #     print("\t\bTIntent: ", log['true_intent'])
+    #     print("\t\bPIntent: ", log['pred_intent'])
+    #     print("\t\bPRdftype: ", log['true_rdf_type'])
+    #     print("\t\bTRdftype: ", log['pred_rdf_type'])
+    #     print("\t\bPRdfclass: ", log['true_rdf_class'])
+    #     print("\t\bTRdfclass: ", log['pred_rdf_class'])
+
+    #     print("")
+    #     pprint(log)
+    #     print("")
+    #     pprint(metrics)
+    #     print("\n",sparql)
     print("\n################################\n")

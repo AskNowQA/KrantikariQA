@@ -61,7 +61,6 @@ class BiLstmDotOld(Model):
                                    vectors=self.parameter_dict['vectors']).cuda(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
-    #
         if self.pointwise:
             return self._train_pointwise_(data, optimizer, loss_fn, device)
         else:
@@ -218,7 +217,6 @@ class BiLstmDot(Model):
             :params optimizer: torch.optim object
             :params loss fn: torch.nn loss object
             :params device: torch.device object
-
             returrns loss
         '''
         # Unpacking the data and model from args
@@ -231,7 +229,7 @@ class BiLstmDot(Model):
         pos_batch = self.encoder(path_batch)
 
         # Calculating dot score
-        score = torch.sum(ques_batch* pos_batch, -1)
+        score = torch.sum(ques_batch * pos_batch, -1)
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
@@ -239,6 +237,7 @@ class BiLstmDot(Model):
         loss = loss_fn(score, y_label)
         loss.backward()
         optimizer.step()
+
         return loss
 
     def predict(self, ques, paths, device):
@@ -270,6 +269,7 @@ class BiLstmDot(Model):
         # # Load parameters
         # for key in self.prepare_save():
         #     key[1].load_state_dict(model_dump[key[0]])
+
 
 class BiLstmDense(Model):
     """
@@ -533,7 +533,7 @@ class BiLstmDenseDot:
 
             This function is called when someone wants to save the underlying models.
             Returns a tuple of key:model pairs which is to be interpreted within save model.
-
+https://arxiv.org/pdf/1606.01933.pdf
         :return: [(key, model)]
         """
         return [('encoder', self.encoder), ('dense', self.dense)]
@@ -557,3 +557,95 @@ class CNNDot(BiLstmDot):
 
         self.encoder = com.CNN(_vectors=self.parameter_dict['vectors'], _vocab_size=self.parameter_dict['vocab_size'] ,
                            _embedding_dim = self.parameter_dict['embedding_dim'] , _output_dim = self.parameter_dict['output_dim'],_debug=self.debug).to(self.device)
+
+
+
+class DecomposibleAttention(Model):
+    """
+        Implementation of https://arxiv.org/pdf/1606.01933.pdf.
+        Uses an encoder and AttendCompareAggregate class in components
+    """
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+        self.hiddendim = self.parameter_dict['hidden_size'] * (1+ int(self.parameter_dict['bidirectional']))
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
+                                   dims=[self.parameter_dict['hidden_size']],
+                                   word_dic=self.word_to_id,
+                                   bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
+                                   dropout_in=self.parameter_dict['dropout_in']).to(self.device)
+
+        self.scorer = com.AttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug)
+
+    def train(self, data, optimizer, loss_fn, device):
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data[
+            'y_label']
+
+        optimizer.zero_grad()
+        # Encoding all the data
+        ques_batch = self.encoder(ques_batch)
+        pos_batch = self.encoder(pos_batch)
+        neg_batch = self.encoder(neg_batch)
+
+        # Now, we get a pos and a neg score.
+        pos_scores = self.scorer(ques_batch, pos_batch)
+        neg_scores = self.scorer(ques_batch, neg_batch)
+
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        ques_batch = self.encoder(ques_batch)
+        pos_batch = self.encoder(path_batch)
+
+        # Calculating dot score
+        score = self.scorer(ques_batch, pos_batch)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+            question = self.encoder(ques.long())
+            paths = self.encoder(paths.long())
+            score = self.scorer(question, paths)
+            return score
+
+    def prepare_save(self):
+        return [('encoder', self.encoder), ('scorer', self.scorer)]

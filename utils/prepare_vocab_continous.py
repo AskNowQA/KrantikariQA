@@ -378,6 +378,11 @@ def _prepare_():
     all_qald_rdf_neg = np.unique(all_qald_rdf_neg)
     uniques_qald_rdf = np.unique(np.concatenate((all_qald_rdf_neg, all_qald_rdf_nonneg)))
 
+    # Explicitly pass it every path in relations file, whether or not it comes in id big data files.
+    all_relations = []
+    for key in relations:
+        all_relations += list(relations[key][3])
+
     # # Now to build the vocab
     # uniques_lcquad = np.unique(all_lcquad)
     # uniques_lcquad_rdf = np.unique(all_lcquad_rdf)
@@ -407,6 +412,12 @@ def _prepare_():
             temp = vocab[uniques_qald_rdf[i]]
         except KeyError:
             vocab[uniques_qald_rdf[i]] = len(vocab.keys())
+
+    for i in range(len(all_relations)):
+        try:
+            _ = vocab[all_relations[i]]
+        except:
+            vocab[all_relations[i]] = len(vocab.keys())
 
     vectors = glove_embeddings[sorted(vocab.keys())]
 

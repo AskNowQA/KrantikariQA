@@ -382,6 +382,7 @@ def _prepare_():
     all_relations = []
     for key in relations:
         all_relations += list(relations[key][3])
+        all_relations += list(relations[key][4])
 
     # # Now to build the vocab
     # uniques_lcquad = np.unique(all_lcquad)

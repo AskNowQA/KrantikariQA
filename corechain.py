@@ -25,7 +25,7 @@ from configs import config_loader as cl
 
 
 #setting up device,model name and loss types.
-device = torch.device("cuda")
+device = torch.device("cpu")
 training_model = 'bilstm_dot'
 _dataset = 'lcquad'
 pointwise = False
@@ -170,10 +170,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-dataset', action='store', dest='dataset',
-                        help='dataset includes lcquad,qald')
+                        help='dataset includes lcquad,qald',default = 'lcquad')
 
     parser.add_argument('-model', action='store', dest='model',
-                        help='name of the model to use')
+                        help='name of the model to use',default='bilstm_dot')
 
     parser.add_argument('-pointwise', action='store', dest='pointwise',
                         help='to use pointwise training procedure make it true',default=False)

@@ -287,7 +287,7 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
     data['valid_neg_paths_rel2_rd'] = _a['valid_neg_paths_rel2_rd']
 
     data['vectors'] = _a['vectors']
-    data['dummy_y'] = torch.ones(_parameter_dict['batch_size'], device=torch.device("cpu"))
+    data['dummy_y'] = torch.ones(_parameter_dict['batch_size'], device=_device)
 
     return data
 

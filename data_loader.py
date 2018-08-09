@@ -321,7 +321,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
 
     except (EOFError, IOError) as e:
         with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset}, file)) as fp:
-            dataset = json.load(fp)[:1000]
+            dataset = json.load(fp)
             glove_id_sf_to_glove_id_rel = create_relation_lookup_table(COMMON_DATA_DIR)
 
             ignored = []
@@ -529,7 +529,7 @@ def create_dataset_slotpointer(file, max_sequence_length, relations, _dataset, _
     except (EOFError,IOError) as e:
         with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset}, file)) as fp:
             dataset = json.load(fp)
-            dataset = dataset[:10]
+            dataset = dataset[]
 
             dummy_path = [0]
             ignored = []

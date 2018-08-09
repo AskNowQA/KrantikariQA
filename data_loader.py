@@ -77,6 +77,7 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
     '''
         Making sure that positive path is not the part of negative paths.
     '''
+    data = {}
     counter = 0
     for i in range(0, len(pos_paths)):
         temp = -1
@@ -122,107 +123,111 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
     def testing_split(x):
         return x[int(_validation_split * len(x)):]
 
-    train_pos_paths = training_split(pos_paths)
-    train_pos_paths_rel1_sp = training_split(pos_paths_rel1_sp)
-    train_pos_paths_rel2_sp = training_split(pos_paths_rel2_sp)
-    train_pos_paths_rel1_rd = training_split(pos_paths_rel1_rd)
-    train_pos_paths_rel2_rd = training_split(pos_paths_rel2_rd)
+    data['train_pos_paths'] = training_split(pos_paths)
+    data['train_pos_paths_rel1_sp'] = training_split(pos_paths_rel1_sp)
+    data['train_pos_paths_rel2_sp'] = training_split(pos_paths_rel2_sp)
+    data['train_pos_paths_rel1_rd'] = training_split(pos_paths_rel1_rd)
+    data['train_pos_paths_rel2_rd'] = training_split(pos_paths_rel2_rd)
 
-    train_neg_paths = training_split(neg_paths)
-    train_neg_paths_rel1_sp = training_split(neg_paths_rel1_sp)
-    train_neg_paths_rel2_sp = training_split(neg_paths_rel2_sp)
-    train_neg_paths_rel1_rd = training_split(neg_paths_rel1_rd)
-    train_neg_paths_rel2_rd = training_split(neg_paths_rel2_rd)
+    data['train_neg_paths'] = training_split(neg_paths)
+    data['train_neg_paths_rel1_sp'] = training_split(neg_paths_rel1_sp)
+    data['train_neg_paths_rel2_sp']= training_split(neg_paths_rel2_sp)
+    data['train_neg_paths_rel1_rd'] = training_split(neg_paths_rel1_rd)
+    data['train_neg_paths_rel2_rd'] = training_split(neg_paths_rel2_rd)
 
-    train_questions = training_split(questions)
+    data['train_questions'] = training_split(questions)
 
-    valid_pos_paths = validation_split(pos_paths)
-    valid_pos_paths_rel1_sp = validation_split(pos_paths_rel1_sp)
-    valid_pos_paths_rel2_sp = validation_split(pos_paths_rel2_sp)
-    valid_pos_paths_rel1_rd = validation_split(pos_paths_rel1_rd)
-    valid_pos_paths_rel2_rd = validation_split(pos_paths_rel2_rd)
+    data['valid_pos_paths'] = validation_split(pos_paths)
+    data['valid_pos_paths_rel1_sp'] = validation_split(pos_paths_rel1_sp)
+    data['valid_pos_paths_rel2_sp'] = validation_split(pos_paths_rel2_sp)
+    data['valid_pos_paths_rel1_rd'] = validation_split(pos_paths_rel1_rd)
+    data['valid_pos_paths_rel2_rd'] = validation_split(pos_paths_rel2_rd)
 
-
-
-    valid_neg_paths = validation_split(neg_paths)
-    valid_neg_paths_rel1_sp = validation_split(neg_paths_rel1_sp)
-    valid_neg_paths_rel2_sp = validation_split(neg_paths_rel2_sp)
-    valid_neg_paths_rel1_rd = validation_split(neg_paths_rel1_rd)
-    valid_neg_paths_rel2_rd = validation_split(neg_paths_rel2_rd)
+    data['valid_neg_paths'] = validation_split(neg_paths)
+    data['valid_neg_paths_rel1_sp'] = validation_split(neg_paths_rel1_sp)
+    data['valid_neg_paths_rel2_sp'] = validation_split(neg_paths_rel2_sp)
+    data['valid_neg_paths_rel1_rd'] = validation_split(neg_paths_rel1_rd)
+    data['valid_neg_paths_rel2_rd'] = validation_split(neg_paths_rel2_rd)
 
 
-    valid_questions = validation_split(questions)
+    data['valid_questions'] = validation_split(questions)
 
     if not _index:
-        test_pos_paths = testing_split(pos_paths)
-        test_pos_paths_rel1_sp = testing_split(pos_paths_rel1_sp)
-        test_pos_paths_rel2_sp = testing_split(pos_paths_rel2_sp)
-        test_pos_paths_rel1_rd = testing_split(pos_paths_rel1_rd)
-        test_pos_paths_rel2_rd = testing_split(pos_paths_rel2_rd)
+        data['test_pos_paths'] = testing_split(pos_paths)
+        data['test_pos_paths_rel1_sp'] = testing_split(pos_paths_rel1_sp)
+        data['test_pos_paths_rel2_sp'] = testing_split(pos_paths_rel2_sp)
+        data['test_pos_paths_rel1_rd'] = testing_split(pos_paths_rel1_rd)
+        data['test_pos_paths_rel2_rd'] = testing_split(pos_paths_rel2_rd)
 
 
-        test_neg_paths = testing_split(neg_paths)
-        test_neg_paths_rel1_sp = testing_split(neg_paths_rel1_sp)
-        test_neg_paths_rel2_sp = testing_split(neg_paths_rel2_sp)
-        test_neg_paths_rel1_rd = testing_split(neg_paths_rel1_rd)
-        test_neg_paths_rel2_rd = testing_split(neg_paths_rel2_rd)
+        data['test_neg_paths'] = testing_split(neg_paths)
+        data['test_neg_paths_rel1_sp'] = testing_split(neg_paths_rel1_sp)
+        data['test_neg_paths_rel2_sp'] = testing_split(neg_paths_rel2_sp)
+        data['test_neg_paths_rel1_rd'] = testing_split(neg_paths_rel1_rd)
+        data['test_neg_paths_rel2_rd'] = testing_split(neg_paths_rel2_rd)
 
-        test_questions = testing_split(questions)
+        data['test_questions'] = testing_split(questions)
 
 
-    dummy_y_train = np.zeros(len(train_questions) * _neg_paths_per_epoch_train)
-    dummy_y_valid = np.zeros(len(valid_questions) * (_neg_paths_per_epoch_validation + 1))
+    data['dummy_y_train'] = np.zeros(len(data['train_questions']) * _neg_paths_per_epoch_train)
+    data['dummy_y_valid'] = np.zeros(len(data['valid_questions']) * (_neg_paths_per_epoch_validation + 1))
+    data['vectors'] = vectors
 
     if _debug:
-        print(train_questions.shape)
-        print(train_pos_paths.shape)
-        print(train_neg_paths.shape)
+        print(data['train_questions'].shape)
+        print(data['train_pos_paths'].shape)
+        print(data['train_neg_paths'].shape)
 
-        print(valid_questions.shape)
-        print(valid_pos_paths.shape)
-        print(valid_neg_paths.shape)
+        print(data['valid_questions'].shape)
+        print(data['valid_pos_paths'].shape)
+        print(data['valid_neg_paths'].shape)
 
         if not _index:
-            print(test_questions.shape)
-            print(test_pos_paths.shape)
-            print(test_neg_paths.shape)
-
-    if _index:
-        print "at _index locations"
-        if _schema == 'default':
-            return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, \
-               valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors
-        elif _schema == 'slotptr':
-            return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, \
-               valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors, \
-                train_pos_paths_rel1_sp, train_pos_paths_rel2_sp, train_neg_paths_rel1_sp, train_neg_paths_rel2_sp, \
-                   valid_pos_paths_rel1_sp, valid_pos_paths_rel2_sp, valid_neg_paths_rel1_sp, valid_neg_paths_rel2_sp
-        elif _schema == 'reldet':
-            return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, \
-               valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors, \
-                train_pos_paths_rel1_rd, train_pos_paths_rel2_rd, train_neg_paths_rel1_rd, train_neg_paths_rel2_rd, \
-                   valid_pos_paths_rel1_rd, valid_pos_paths_rel2_rd, valid_neg_paths_rel1_rd, valid_neg_paths_rel2_rd
+            print(data['test_questions'].shape)
+            print(data['test_pos_paths'].shape)
+            print(data['test_neg_paths'].shape)
 
 
-    else:
-        if _schema == 'slotptr':
-            return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, \
-               valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths, vectors, \
-                   train_pos_paths_rel1_sp, train_pos_paths_rel2_sp, train_neg_paths_rel1_sp, train_neg_paths_rel2_sp, \
-                       valid_pos_paths_rel1_sp, valid_pos_paths_rel2_sp, valid_neg_paths_rel1_sp, valid_neg_paths_rel2_sp, \
-                           test_pos_paths_rel1_sp, test_pos_paths_rel2_sp, test_neg_paths_rel1_sp, test_neg_paths_rel2_sp
 
 
-        elif _schema == 'default':
-            return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, \
-               valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths, vectors
+    return data
 
-        elif _schema == 'reldet':
-            return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, \
-                   valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths, vectors, \
-                        train_pos_paths_rel1_rd, train_pos_paths_rel2_rd, train_neg_paths_rel1_rd, train_neg_paths_rel2_rd, \
-                            valid_pos_paths_rel1_rd, valid_pos_paths_rel2_rd, valid_neg_paths_rel1_rd, valid_neg_paths_rel2_rd, \
-                                test_pos_paths_rel1_rd, test_pos_paths_rel2_rd, test_neg_paths_rel1_rd, test_neg_paths_rel2_rd
+    # if _index:
+    #     print "at _index locations"
+    #     if _schema == 'default':
+    #         return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, \
+    #            valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors
+    #     elif _schema == 'slotptr':
+    #         return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, \
+    #            valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors, \
+    #             train_pos_paths_rel1_sp, train_pos_paths_rel2_sp, train_neg_paths_rel1_sp, train_neg_paths_rel2_sp, \
+    #                valid_pos_paths_rel1_sp, valid_pos_paths_rel2_sp, valid_neg_paths_rel1_sp, valid_neg_paths_rel2_sp
+    #     elif _schema == 'reldet':
+    #         return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, \
+    #            valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors, \
+    #             train_pos_paths_rel1_rd, train_pos_paths_rel2_rd, train_neg_paths_rel1_rd, train_neg_paths_rel2_rd, \
+    #                valid_pos_paths_rel1_rd, valid_pos_paths_rel2_rd, valid_neg_paths_rel1_rd, valid_neg_paths_rel2_rd
+    #
+    #
+    # else:
+    #     if _schema == 'slotptr':
+    #         return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, \
+    #            valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths, vectors, \
+    #                train_pos_paths_rel1_sp, train_pos_paths_rel2_sp, train_neg_paths_rel1_sp, train_neg_paths_rel2_sp, \
+    #                    valid_pos_paths_rel1_sp, valid_pos_paths_rel2_sp, valid_neg_paths_rel1_sp, valid_neg_paths_rel2_sp, \
+    #                        test_pos_paths_rel1_sp, test_pos_paths_rel2_sp, test_neg_paths_rel1_sp, test_neg_paths_rel2_sp
+    #
+    #
+    #     elif _schema == 'default':
+    #         return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, \
+    #            valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths, vectors
+    #
+    #     elif _schema == 'reldet':
+    #         return train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, \
+    #                valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths, vectors, \
+    #                     train_pos_paths_rel1_rd, train_pos_paths_rel2_rd, train_neg_paths_rel1_rd, train_neg_paths_rel2_rd, \
+    #                         valid_pos_paths_rel1_rd, valid_pos_paths_rel2_rd, valid_neg_paths_rel1_rd, valid_neg_paths_rel2_rd, \
+    #                             test_pos_paths_rel1_rd, test_pos_paths_rel2_rd, test_neg_paths_rel1_rd, test_neg_paths_rel2_rd
 
 
 
@@ -302,15 +307,21 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             dataset = np.load(data)
             questions, pos_paths, neg_paths, \
             pos_paths_rel1_sp, pos_paths_rel2_sp,neg_paths_rel1_sp, neg_paths_rel2_sp, \
-            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
+            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd = dataset['arr_0'], dataset['arr_1'], dataset['arr_2'], \
+                                                                                         dataset['arr_3'], dataset['arr_4'], dataset['arr_5'], dataset['arr_6'], \
+                                                                                         dataset['arr_7'], dataset['arr_8'],dataset['arr_9'], dataset['arr_10']
+
 
 
             vocab, vectors = vocab_master.load()
             #TODO: return everything.
-            return vectors, questions, pos_paths, neg_paths
+            return vectors,questions, pos_paths, neg_paths, \
+            pos_paths_rel1_sp, pos_paths_rel2_sp,neg_paths_rel1_sp, neg_paths_rel2_sp, \
+            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd
+
     except (EOFError, IOError) as e:
         with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset}, file)) as fp:
-            dataset = json.load(fp)[:10]
+            dataset = json.load(fp)[:1000]
             glove_id_sf_to_glove_id_rel = create_relation_lookup_table(COMMON_DATA_DIR)
 
             ignored = []
@@ -831,13 +842,30 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
 
 
 class TrainingDataGenerator(Dataset):
-    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size,total_negative_samples,pointwise=False):
+    def __init__(self, data, max_length, neg_paths_per_epoch, batch_size,total_negative_samples,pointwise=False,schema='default'):
         self.dummy_y = np.zeros(batch_size)
         self.firstDone = False
         self.max_length = max_length
         self.neg_paths_per_epoch = neg_paths_per_epoch
         self.total_negative_samples = total_negative_samples
         self.pointwise = pointwise
+        self.schema = schema
+
+        questions =  data['train_questions']
+        pos_paths = data['train_pos_paths']
+        neg_paths = data['train_neg_paths']
+
+        if schema == 'slotptr':
+            self.pos_paths_rel1 = data['train_pos_paths_rel1_sp']
+            self.pos_paths_rel2 = data['train_pos_paths_rel2_sp']
+            self.neg_paths_rel1 = data['train_neg_paths_rel1_sp']
+            self.neg_paths_rel2 = data['train_neg_paths_rel2_sp']
+
+        elif schema == 'reldet':
+            self.pos_paths_rel1 = data['train_pos_paths_rel1_rd']
+            self.pos_paths_rel2 = data['train_pos_paths_rel2_rd']
+            self.neg_paths_rel1 = data['train_neg_paths_rel1_rd']
+            self.neg_paths_rel2 = data['train_neg_paths_rel2_rd']
 
         # self.questions = np.reshape(np.repeat(np.reshape(questions,
         #                                     (questions.shape[0], 1, questions.shape[1])),
@@ -854,13 +882,41 @@ class TrainingDataGenerator(Dataset):
                                             (pos_paths.shape[0], 1, pos_paths.shape[1])),
                                  neg_paths_per_epoch, axis=1), (-1, max_length))
 
+
         self.neg_paths = neg_paths
 
-        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, self.total_negative_samples, self.neg_paths_per_epoch), :],
+        sampling_index = np.random.randint(0, self.total_negative_samples, self.neg_paths_per_epoch)
+
+        self.neg_paths_sampled = np.reshape(self.neg_paths[:,sampling_index, :],
                                             (-1, self.max_length))
 
-        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+        if self.schema != 'default':
+
+            self.neg_paths_rel1_sampled = np.reshape(self.neg_paths_rel1[:,sampling_index, :],
+                                            (-1, self.max_length))
+
+            self.neg_paths_rel2_sampled = np.reshape(self.neg_paths_rel2[:, sampling_index, :],
+                                                     (-1, self.max_length))
+
+            self.pos_paths_rel1 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel1,
+                                                                  (
+                                                                  self.pos_paths_rel1.shape[0], 1, self.pos_paths_rel1.shape[1])),
+                                                       self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+
+            self.pos_paths_rel2 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel2,
+                                                                  (
+                                                                  self.pos_paths_rel2.shape[0], 1, self.pos_paths_rel2.shape[1])),
+                                                       self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+
+        if schema == 'default':
+
+            self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
             shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+
+        else:
+
+            self.questions_shuffled, self.pos_paths_shuffled, self.pos_paths_rel1_shuffled, self.pos_paths_rel2_shuffled, self.neg_paths_shuffled, self.neg_paths__rel1_shuffled, self.neg_paths__rel2_shuffled= \
+                shuffle(self.questions, self.pos_paths, self.pos_paths_rel1, self.pos_paths_rel2 ,self.neg_paths_sampled, self.neg_paths_rel1_sampled, self.neg_paths_rel2_sampled)
 
         self.batch_size = batch_size
 
@@ -883,20 +939,35 @@ class TrainingDataGenerator(Dataset):
         batch_questions = index(self.questions_shuffled)    # Shape (batch, seqlen)
         batch_pos_paths = index(self.pos_paths_shuffled)    # Shape (batch, seqlen)
         batch_neg_paths = index(self.neg_paths_shuffled)    # Shape (batch, seqlen)
+        if self.schema != 'default':
+            batch_neg_paths_rel1 = index(self.neg_paths__rel1_shuffled)    # Shape (batch, seqlen)
+            batch_neg_paths_rel2 = index(self.neg_paths__rel2_shuffled)    # Shape (batch, seqlen)
+            batch_pos_paths_rel1 = index(self.pos_paths_rel1_shuffled)    # Shape (batch, seqlen)
+            batch_pos_paths_rel2 = index(self.pos_paths_rel2_shuffled)    # Shape (batch, seqlen)
 
         if self.pointwise:
             questions = np.vstack((batch_questions, batch_questions))
             paths = np.vstack((batch_pos_paths, batch_neg_paths))
+            if self.schema != 'default':
+                paths_rel1 = np.vstack((batch_pos_paths_rel1, batch_neg_paths_rel1))
+                paths_rel2 = np.vstack((batch_pos_paths_rel2, batch_neg_paths_rel2))
 
             # Now sample half of thesequestions = np.repeat(batch_questions)
             sample_index = np.random.choice(np.arange(0, 2*self.batch_size), self.batch_size)
 
             # Y labels are basically decided on whether i \in sample_index > self.batchsize or not.
             y = np.asarray([-1 if index < self.batch_size else 1 for index in sample_index])
-            return ([questions[sample_index], paths[sample_index]], y)
+            if self.schema == 'default':
+                return ([questions[sample_index], paths[sample_index]], y)
+            else:
+                return ([questions[sample_index], paths[sample_index],paths_rel1[sample_index],paths_rel2[sample_index]], y)
 
         else:
-            return ([batch_questions, batch_pos_paths, batch_neg_paths], self.dummy_y)
+            if self.schema == 'default':
+                return ([batch_questions, batch_pos_paths, batch_neg_paths], self.dummy_y)
+            else:
+                return ([batch_questions, batch_pos_paths, batch_neg_paths, \
+                         batch_pos_paths_rel1,batch_pos_paths_rel2,batch_neg_paths_rel1,batch_neg_paths_rel2], self.dummy_y)
 
     def shuffle(self):
         """
@@ -904,12 +975,36 @@ class TrainingDataGenerator(Dataset):
             \and then we shuffle the questions, pos and neg paths in tandem.
         :return: None
         """
+        sampling_index = np.random.randint(0, self.total_negative_samples, self.neg_paths_per_epoch)
         self.neg_paths_sampled = np.reshape(
-            self.neg_paths[:, np.random.randint(0, self.total_negative_samples, self.neg_paths_per_epoch), :],
+            self.neg_paths[:, sampling_index , :],
             (-1, self.max_length))
 
-        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
-            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+
+        if self.schema != 'default':
+
+            self.neg_paths_rel1_sampled = np.reshape(self.neg_paths_rel1[:,sampling_index, :],
+                                            (-1, self.max_length))
+
+            self.neg_paths_rel2_sampled = np.reshape(self.neg_paths_rel2[:, sampling_index, :],
+                                                     (-1, self.max_length))
+
+            self.pos_paths_rel1 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel1,
+                                                                  (
+                                                                  self.pos_paths_rel1.shape[0], 1, self.pos_paths_rel1.shape[1])),
+                                                       self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+
+            self.pos_paths_rel2 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel2,
+                                                                  (
+                                                                  self.pos_paths_rel2.shape[0], 1, self.pos_paths_rel2.shape[1])),
+                                                       self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+
+            self.questions_shuffled, self.pos_paths_shuffled, self.pos_paths_rel1_shuffled, self.pos_paths_rel2_shuffled, self.neg_paths_shuffled, self.neg_paths__rel1_shuffled, self.neg_paths__rel2_shuffled = \
+                shuffle(self.questions, self.pos_paths, self.pos_paths_rel1, self.pos_paths_rel2,
+                        self.neg_paths_sampled, self.neg_paths_rel1_sampled, self.neg_paths_rel2_sampled)
+        else:
+            self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
+                shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
 
 
 

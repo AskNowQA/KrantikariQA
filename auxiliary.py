@@ -152,7 +152,7 @@ def id_to_word(path, gloveid_to_word, embeddingid_to_gloveid, remove_pad = True)
     for q in path:
         try:
             w = gloveid_to_word[embeddingid_to_gloveid[q]]
-            if w != 'PAD' and remove_pad:
+            if w != '<MASK>' and remove_pad:
                 sent.append(w)
         except:
             sent.append('<unk>')
@@ -195,36 +195,103 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
                       _neg_paths_per_epoch_validation, _relations,
                       _index, _training_split, _validation_split, _model='core_chain_pairwise', _pairwise=not _pointwise, _debug=True, _rdf=False)
 
-
-
-    if _dataset == 'lcquad':
-        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
-    else:
-        print("warning: Test accuracy would not be calculated as the data has not been prepared.")
-        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors = _a
-        test_questions,test_neg_paths,test_pos_paths = None,None,None
-
-
     data = {}
-    if _train_over_validation:
-        data['train_questions'] = np.vstack((train_questions, valid_questions))
-        data['train_pos_paths'] = np.vstack((train_pos_paths, valid_pos_paths))
-        data['train_neg_paths'] = np.vstack((train_neg_paths,valid_neg_paths))
-    else:
-        data['train_questions'] = train_questions
-        data['train_pos_paths'] = train_pos_paths
-        data['train_neg_paths'] = train_neg_paths
 
-    data['valid_questions'] = valid_questions
-    data['valid_pos_paths'] = valid_pos_paths
-    data['valid_neg_paths'] = valid_neg_paths
-    data['test_pos_paths'] = test_pos_paths
-    data['test_neg_paths'] = test_neg_paths
-    data['test_questions'] = test_questions
-    data['vectors'] = vectors
-    data['dummy_y'] = torch.ones(_parameter_dict['batch_size'], device=_device)
+#   if _dataset == 'lcquad':
+#        train_questions, train_pos_paths, train_neg_paths, dummy_y_train,\
+#        valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
+
+    if _dataset != 'lcquad':
+        print("warning: Test accuracy would not be calculated as the data has not been prepared.")
+
+#        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors = _a
+#        test_questions,test_neg_paths,test_pos_paths = None,None,None
+
+        data['test_pos_paths'] = None
+        data['test_pos_paths_rel1_sp'] = None
+        data['test_pos_paths_rel2_sp'] = None
+        data['test_pos_paths_rel1_rd'] = None
+        data['test_pos_paths_rel2_rd'] = None
+
+        data['test_neg_paths'] = None
+        data['test_neg_paths_rel1_sp'] = None
+        data['test_neg_paths_rel2_sp'] = None
+        data['test_neg_paths_rel1_rd'] = None
+        data['test_neg_paths_rel2_rd'] = None
+
+        data['test_questions'] = _a['test_questions']
+
+    else:
+        data['test_pos_paths'] = _a['test_pos_paths']
+        data['test_pos_paths_rel1_sp'] = _a['test_pos_paths_rel1_sp']
+        data['test_pos_paths_rel2_sp'] = _a['test_pos_paths_rel2_sp']
+        data['test_pos_paths_rel1_rd'] = _a['test_pos_paths_rel1_rd']
+        data['test_pos_paths_rel2_rd'] = _a['test_pos_paths_rel2_rd']
+
+
+        data['test_neg_paths'] = _a['test_neg_paths']
+        data['test_neg_paths_rel1_sp'] = _a['test_neg_paths_rel1_sp']
+        data['test_neg_paths_rel2_sp'] = _a['test_neg_paths_rel2_sp']
+        data['test_neg_paths_rel1_rd'] = _a['test_neg_paths_rel1_rd']
+        data['test_neg_paths_rel2_rd'] = _a['test_neg_paths_rel2_rd']
+
+
+        data['test_questions'] = _a['test_questions']
+
+
+    if _train_over_validation:
+        data['train_questions'] = np.vstack((_a['train_questions'], _a['valid_questions']))
+
+        data['train_pos_paths'] = np.vstack((_a['train_pos_paths'], _a['valid_pos_paths']))
+        data['train_pos_paths_rel1_sp'] = np.vstack((_a['train_pos_paths_rel1_sp'],_a['valid_pos_paths_rel1_sp']))
+        data['train_pos_paths_rel2_sp'] = np.vstack((_a['train_pos_paths_rel2_sp'],_a['valid_pos_paths_rel2_sp']))
+        data['train_pos_paths_rel1_rd'] = np.vstack((_a['train_pos_paths_rel1_rd'],_a['valid_pos_paths_rel1_rd']))
+        data['train_pos_paths_rel2_rd'] = np.vstack((_a['train_pos_paths_rel2_rd'],_a['valid_pos_paths_rel2_rd']))
+
+
+        data['train_neg_paths'] = np.vstack((_a['train_neg_paths'], _a['valid_neg_paths']))
+        data['train_neg_paths_rel1_sp'] = np.vstack((_a['train_neg_paths_rel1_sp'],_a['valid_neg_paths_rel1_sp']))
+        data['train_neg_paths_rel2_sp'] = np.vstack((_a['train_neg_paths_rel2_sp'], _a['valid_neg_paths_rel2_sp']))
+        data['train_neg_paths_rel1_rd'] = np.vstack((_a['train_neg_paths_rel1_rd'], _a['valid_neg_paths_rel1_rd']))
+        data['train_neg_paths_rel2_rd'] = np.vstack((_a['train_neg_paths_rel2_rd'], _a['valid_neg_paths_rel1_rd']))
+
+    else:
+        data['train_questions'] = _a['train_questions']
+
+        data['train_pos_paths'] = _a['train_pos_paths']
+        data['train_pos_paths_rel1_sp'] = _a['train_pos_paths_rel1_sp']
+        data['train_pos_paths_rel2_sp'] = _a['train_pos_paths_rel2_sp']
+        data['train_pos_paths_rel1_rd'] = _a['train_pos_paths_rel1_rd']
+        data['train_pos_paths_rel2_rd'] = _a['train_pos_paths_rel2_rd']
+
+
+        data['train_neg_paths'] = _a['train_neg_paths']
+        data['train_neg_paths_rel1_sp'] = _a['train_neg_paths_rel1_sp']
+        data['train_neg_paths_rel2_sp'] = _a['train_neg_paths_rel2_sp']
+        data['train_neg_paths_rel1_rd'] = _a['train_neg_paths_rel1_rd']
+        data['train_neg_paths_rel2_rd'] = _a['train_neg_paths_rel2_rd']
+
+
+    data['valid_questions'] = _a['valid_questions']
+
+    data['valid_pos_paths'] = _a['valid_pos_paths']
+    data['valid_pos_paths_rel1_sp'] = _a['valid_pos_paths_rel1_sp']
+    data['valid_pos_paths_rel2_sp'] = _a['valid_pos_paths_rel2_sp']
+    data['valid_pos_paths_rel1_rd'] = _a['valid_pos_paths_rel1_rd']
+    data['valid_pos_paths_rel2_rd'] = _a['valid_pos_paths_rel2_rd']
+
+    data['valid_neg_paths'] = _a['valid_neg_paths']
+    data['valid_neg_paths_rel1_sp'] = _a['valid_neg_paths_rel1_sp']
+    data['valid_neg_paths_rel2_sp'] = _a['valid_neg_paths_rel2_sp']
+    data['valid_neg_paths_rel1_rd'] = _a['valid_neg_paths_rel1_rd']
+    data['valid_neg_paths_rel2_rd'] = _a['valid_neg_paths_rel2_rd']
+
+    data['vectors'] = _a['vectors']
+    data['dummy_y'] = torch.ones(_parameter_dict['batch_size'], device=torch.device("cpu"))
 
     return data
+
+
 def data_loading_parameters(dataset,parameter_dict,runtime=False):
 
     if dataset == 'lcquad':

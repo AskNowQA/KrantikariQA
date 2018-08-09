@@ -41,7 +41,7 @@ _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
 def load_data(data,parameter_dict,pointwise,shuffle = False):
     # Loading training data
-    td = dl.TrainingDataGenerator(data['train_questions'], data['train_pos_paths'], data['train_neg_paths'],
+    td = dl.TrainingDataGenerator(data,
                                   parameter_dict['max_length'],
                                   parameter_dict['_neg_paths_per_epoch_train'], parameter_dict['batch_size']
                                   , parameter_dict['total_negative_samples'], pointwise=pointwise)
@@ -182,7 +182,7 @@ if __name__ == "__main__":
                         help='train over validation', default=False)
 
     parser.add_argument('-device', action='store', dest='device',
-                        help='cuda for gpu else cpu', default='cuda')
+                        help='cuda for gpu else cpu', default='cpu')
 
     args = parser.parse_args()
 

@@ -397,7 +397,7 @@ class BiLstmDense(Model):
         return [('encoder', self.encoder), ('dense', self.dense)]
 
 
-class BiLstmDenseDot:
+class BiLstmDenseDot(Model):
     """
         This model uses the encoder, then condenses the vector into something of a smaller dimension.
         Then uses a regular dot product to compute the final deal.
@@ -560,7 +560,7 @@ class CNNDot(BiLstmDot):
 
 
 
-class DecomposibleAttention(Model):
+class DecomposableAttention(Model):
     """
         Implementation of https://arxiv.org/pdf/1606.01933.pdf.
         Uses an encoder and AttendCompareAggregate class in components
@@ -577,13 +577,19 @@ class DecomposibleAttention(Model):
         if self.debug:
             print("Init Models")
 
-        self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
-                                   dims=[self.parameter_dict['hidden_size']],
-                                   word_dic=self.word_to_id,
-                                   bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
-                                   dropout_in=self.parameter_dict['dropout_in']).to(self.device)
+        # self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
+        #                            dims=[self.parameter_dict['hidden_size']],
+        #                            word_dic=self.word_to_id,
+        #                            bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
+        #                            dropout_in=self.parameter_dict['dropout_in']).to(self.device)
 
-        self.scorer = com.AttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug)
+        self.encoder = com.Encoder(self.parameter_dict['max_length'], self.parameter_dict['hidden_size']
+                                   , self.parameter_dict['number_of_layer'], self.parameter_dict['embedding_dim'],
+                                   self.parameter_dict['vocab_size'],
+                                   bidirectional=self.parameter_dict['bidirectional'],
+                                   vectors=self.parameter_dict['vectors']).to(self.device)
+
+        self.scorer = com.AttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
         if self.pointwise:
@@ -595,15 +601,29 @@ class DecomposibleAttention(Model):
         ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data[
             'y_label']
 
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], device)
+
         optimizer.zero_grad()
         # Encoding all the data
-        ques_batch = self.encoder(ques_batch)
-        pos_batch = self.encoder(pos_batch)
-        neg_batch = self.encoder(neg_batch)
+        ques_batch, _ = self.encoder(ques_batch,hidden)
+        pos_batch, _ = self.encoder(pos_batch, hidden)
+        neg_batch, _ = self.encoder(neg_batch, hidden)
 
         # Now, we get a pos and a neg score.
         pos_scores = self.scorer(ques_batch, pos_batch)
         neg_scores = self.scorer(ques_batch, neg_batch)
+
+        '''
+                    If `y == 1` then it assumed the first input should be ranked higher
+                    (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        optimizer.step()
+        return loss
+
+
 
 
     def _train_pointwise_(self, data, optimizer, loss_fn, device):
@@ -619,11 +639,13 @@ class DecomposibleAttention(Model):
         # Unpacking the data and model from args
         ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
 
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], device)
+
         optimizer.zero_grad()
 
         # Encoding all the data
-        ques_batch = self.encoder(ques_batch)
-        pos_batch = self.encoder(path_batch)
+        ques_batch, _ = self.encoder(ques_batch, hidden)
+        pos_batch, _ = self.encoder(path_batch, hidden)
 
         # Calculating dot score
         score = self.scorer(ques_batch, pos_batch)
@@ -631,6 +653,7 @@ class DecomposibleAttention(Model):
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
         '''
+
         loss = loss_fn(score, y_label)
         loss.backward()
         optimizer.step()
@@ -642,8 +665,10 @@ class DecomposibleAttention(Model):
             Same code works for both pairwise or pointwise
         """
         with torch.no_grad():
-            question = self.encoder(ques.long())
-            paths = self.encoder(paths.long())
+            hidden = self.encoder.init_hidden(ques.shape[0], device)
+
+            question, _ = self.encoder(ques.long(),hidden)
+            paths, _ = self.encoder(paths.long(), hidden)
             score = self.scorer(question, paths)
             return score
 

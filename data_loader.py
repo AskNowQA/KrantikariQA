@@ -529,7 +529,7 @@ def create_dataset_slotpointer(file, max_sequence_length, relations, _dataset, _
     except (EOFError,IOError) as e:
         with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset}, file)) as fp:
             dataset = json.load(fp)
-            dataset = dataset[]
+            dataset = dataset
 
             dummy_path = [0]
             ignored = []

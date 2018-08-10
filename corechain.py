@@ -134,6 +134,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                 test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
                                                          data['test_neg_paths'], modeler, device))
                 if test_accuracy[-1] >= best_test_accuracy:
+                    best_test_accuracy = test_accuracy[-1]
                     aux_save_information['test_accuracy'] = best_test_accuracy
         else:
             test_accuracy.append(0)
@@ -244,6 +245,13 @@ if __name__ == "__main__":
                                              _device=device,_pointwise=pointwise, _debug=False)
 
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+
+    if training_model == 'decomposable_attention':
+        modeler = net.DecomposableAttention(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                            _device=device, _pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
+                               list(filter(lambda p: p.requires_grad, modeler.scorer.parameters())))
 
 
     if not pointwise:

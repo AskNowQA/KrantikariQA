@@ -38,6 +38,7 @@ _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 _relations = aux.load_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
+gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
 
 def load_data(data,parameter_dict,pointwise,shuffle = False):
     # Loading training data
@@ -102,11 +103,21 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                          dtype=torch.long, device=device)
                 y = torch.tensor(sample_batched[1],dtype = torch.float,device=device).view(-1)
 
+                # raise ValueError
+
                 data_batch = {
                     'ques_batch': ques_batch,
                     'path_batch': path_batch,
                     'y_label': y
                 }
+
+                # for i in range(len(ques_batch)):
+                #     print(aux.id_to_word(list(ques_batch[i].numpy()),gloveid_to_word=gloveid_to_word,embeddingid_to_gloveid=embeddingid_to_gloveid))
+                #     print(aux.id_to_word(list(path_batch[i].numpy()),gloveid_to_word=gloveid_to_word,embeddingid_to_gloveid=embeddingid_to_gloveid))
+                #     # print(aux.id_to_word(list(neg_batch[i].numpy()),gloveid_to_word=gloveid_to_word,embeddingid_to_gloveid=embeddingid_to_gloveid))
+                #     print(y[i])
+                #     print("****")
+                # raise ValueError
 
             # Train
             loss = modeler.train(data=data_batch,
@@ -177,7 +188,7 @@ if __name__ == "__main__":
                         help='name of the model to use',default='bilstm_dot')
 
     parser.add_argument('-pointwise', action='store', dest='pointwise',
-                        help='to use pointwise training procedure make it true',default=False)
+                        help='to use pointwise training procedure make it true',default=True)
 
     parser.add_argument('-train_valid', action='store', dest='train_over_validation',
                         help='train over validation', default=False)
@@ -257,7 +268,7 @@ if __name__ == "__main__":
     if not pointwise:
         loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
     else:
-        loss_func = nn.MSELoss()
+        loss_func = nn.BCEWithLogitsLoss()
         training_model += '_pointwise'
 
 
@@ -287,7 +298,7 @@ if __name__ == "__main__":
     # rsync -avz --progress components.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
     # rsync -avz --progress data_loader.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 
-    # rsync -avz --progress corechain.py priyansh@sda-srv04:/data/priyansh/new_kranti
-    # rsync -avz --progress auxiliary.py priyansh@sda-srv04:/data/priyansh/new_kranti
-    # rsync -avz --progress components.py priyansh@sda-srv04:/data/priansh/new_kranti
-    # rsync -avz --progress network.py priyansh@sda-srv04:/data/priyansh/new_kranti
+     # rsync -avz --progress corechain.py priyansh@sda-srv04:/data/priyansh/new_kranti
+     # rsync -avz --progress auxiliary.py priyansh@sda-srv04:/data/priyansh/new_kranti
+     # rsync -avz --progress components.py priyansh@sda-srv04:/data/priansh/new_kranti
+     # rsync -avz --progress network.py priyansh@sda-srv04:/data/priyansh/new_kranti

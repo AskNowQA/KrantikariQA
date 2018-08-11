@@ -101,14 +101,15 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, model
         for i in range(len(valid_questions)):
             question = np.repeat(valid_questions[i].reshape(1, -1), len(valid_neg_paths[i]) + 1,
                                  axis=0)  # +1 for positive path
-            paths = np.vstack((valid_pos_paths[i].reshape(1, -1), valid_neg_paths[i]))
+            # paths = np.vstack((valid_pos_paths[i].reshape(1, -1), valid_neg_paths[i]))
+            paths = np.vstack((valid_neg_paths[i],valid_pos_paths[i].reshape(1, -1)))
 
 
             question = torch.tensor(question, dtype=torch.long, device=device)
             paths = torch.tensor(paths, dtype=torch.long, device=device)
             score = modeler.predict(question, paths, device)
             arg_max = torch.argmax(score)
-            if arg_max.item() == 0:  # 0 is the positive path index
+            if arg_max.item() == len(paths)-1:  # 0 is the positive path index
                 precision.append(1)
             else:
                 precision.append(0)
@@ -219,7 +220,7 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
         data['test_neg_paths_rel1_rd'] = None
         data['test_neg_paths_rel2_rd'] = None
 
-        data['test_questions'] = _a['test_questions']
+        data['test_questions'] = None
 
     else:
         data['test_pos_paths'] = _a['test_pos_paths']

@@ -956,7 +956,7 @@ class TrainingDataGenerator(Dataset):
             sample_index = np.random.choice(np.arange(0, 2*self.batch_size), self.batch_size)
 
             # Y labels are basically decided on whether i \in sample_index > self.batchsize or not.
-            y = np.asarray([-1 if index < self.batch_size else 1 for index in sample_index])
+            y = np.asarray([1 if index < self.batch_size else 0 for index in sample_index])
             if self.schema == 'default':
                 return ([questions[sample_index], paths[sample_index]], y)
             else:

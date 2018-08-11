@@ -5,6 +5,7 @@ import numpy as np
 
 import components as com
 import torch
+import torch.nn.functional as F
 from qelos_core.scripts.lcquad.corerank import FlatEncoder
 
 
@@ -194,9 +195,15 @@ class BiLstmDot(Model):
 
         optimizer.zero_grad()
         #Encoding all the data
+
+
+
         ques_batch = self.encoder(ques_batch)
         pos_batch = self.encoder(pos_batch)
         neg_batch = self.encoder(neg_batch)
+
+
+
         #Calculating dot score
         pos_scores = torch.sum(ques_batch * pos_batch, -1)
         neg_scores = torch.sum(ques_batch * neg_batch, -1)
@@ -228,8 +235,29 @@ class BiLstmDot(Model):
         ques_batch = self.encoder(ques_batch)
         pos_batch = self.encoder(path_batch)
 
+        #
+        # norm_ques_batch = torch.abs(torch.norm(ques_batch,dim=1,p=1))
+        # norm_pos_batch = torch.abs(torch.norm(pos_batch,dim=1,p=1))
+
+        # ques_batch = F.normalize(F.relu(ques_batch),p=1,dim=1)
+        # pos_batch = F.normalize(F.relu(pos_batch),p=1,dim=1)
+        # ques_batch =(F.normalize(ques_batch,p=1,dim=1)/2) + .5
+        # pos_batch =(F.normalize(pos_batch,p=1,dim=1)/2) + .5
+
+
+
+
         # Calculating dot score
         score = torch.sum(ques_batch * pos_batch, -1)
+        # score = score.div(norm_ques_batch*norm_pos_batch).div_(2.0).add_(0.5)
+            # print("shape of score is,", score.shape)
+            # print("score is , ", score)
+            #
+            #
+            # print("shape of y label is ", y_label.shape)
+            # print("value of y label is ", y_label)
+
+        # raise ValueError
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
@@ -247,7 +275,15 @@ class BiLstmDot(Model):
         with torch.no_grad():
             question = self.encoder(ques.long())
             paths = self.encoder(paths.long())
-            score = torch.sum(question * paths, -1)
+            if self.pointwise:
+                # question = F.normalize(F.relu(question),p=1,dim=1)
+                # paths = F.normalize(F.relu(paths),p=1,dim=1)
+                # norm_ques_batch = torch.abs(torch.norm(question, dim=1, p=1))
+                # norm_pos_batch = torch.abs(torch.norm(paths, dim=1, p=1))
+                score = torch.sum(question * paths, -1)
+                # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
+            else:
+                score = torch.sum(question * paths, -1)
             return score
 
     def prepare_save(self):
@@ -362,7 +398,7 @@ class BiLstmDense(Model):
         pos_batch = self.encoder(path_batch)
 
         # Calculating dot score
-        score = self.dense(torch.cat((ques_batch, pos_batch), dim=1))
+        score = self.dense(torch.cat((ques_batch, pos_batch), dim=1)).squeeze()
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
@@ -382,7 +418,7 @@ class BiLstmDense(Model):
 
             question = self.encoder(ques.long())
             paths = self.encoder(paths.long())
-            score = self.dense(torch.cat((question, paths), dim=1))
+            score = self.dense(torch.cat((question, paths), dim=1)).squeeze()
 
             return score
 
@@ -453,10 +489,12 @@ class BiLstmDenseDot(Model):
         pos_batch = self.encoder(pos_batch)
         neg_batch = self.encoder(neg_batch)
 
+
         # Pass all encoded stuff through the dense too
         ques_batch = self.dense(ques_batch)
         pos_batch = self.dense(pos_batch)
         neg_batch = self.dense(neg_batch)
+
 
         # Calculating dot score
         pos_scores = torch.sum(ques_batch * pos_batch, -1)
@@ -648,7 +686,7 @@ class DecomposableAttention(Model):
         pos_batch, _ = self.encoder(path_batch, hidden)
 
         # Calculating dot score
-        score = self.scorer(ques_batch, pos_batch)
+        score = self.scorer(ques_batch, pos_batch).squeeze()
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
@@ -670,7 +708,7 @@ class DecomposableAttention(Model):
             question, _ = self.encoder(ques.long(),hidden)
             paths, _ = self.encoder(paths.long(), hidden)
             score = self.scorer(question, paths)
-            return score
+            return score.squeeze()
 
     def prepare_save(self):
         return [('encoder', self.encoder), ('scorer', self.scorer)]

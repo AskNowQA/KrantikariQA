@@ -25,7 +25,7 @@ from configs import config_loader as cl
 
 
 #setting up device,model name and loss types.
-device = torch.device("cuda")
+device = torch.device("cpu")
 training_model = 'bilstm_dot'
 _dataset = 'lcquad'
 pointwise = False
@@ -38,10 +38,11 @@ _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 _relations = aux.load_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
+gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
 
 def load_data(data,parameter_dict,pointwise,shuffle = False):
     # Loading training data
-    td = dl.TrainingDataGenerator(data['train_questions'], data['train_pos_paths'], data['train_neg_paths'],
+    td = dl.TrainingDataGenerator(data,
                                   parameter_dict['max_length'],
                                   parameter_dict['_neg_paths_per_epoch_train'], parameter_dict['batch_size']
                                   , parameter_dict['total_negative_samples'], pointwise=pointwise)
@@ -102,11 +103,21 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                          dtype=torch.long, device=device)
                 y = torch.tensor(sample_batched[1],dtype = torch.float,device=device).view(-1)
 
+                # raise ValueError
+
                 data_batch = {
                     'ques_batch': ques_batch,
                     'path_batch': path_batch,
                     'y_label': y
                 }
+
+                # for i in range(len(ques_batch)):
+                #     print(aux.id_to_word(list(ques_batch[i].numpy()),gloveid_to_word=gloveid_to_word,embeddingid_to_gloveid=embeddingid_to_gloveid))
+                #     print(aux.id_to_word(list(path_batch[i].numpy()),gloveid_to_word=gloveid_to_word,embeddingid_to_gloveid=embeddingid_to_gloveid))
+                #     # print(aux.id_to_word(list(neg_batch[i].numpy()),gloveid_to_word=gloveid_to_word,embeddingid_to_gloveid=embeddingid_to_gloveid))
+                #     print(y[i])
+                #     print("****")
+                # raise ValueError
 
             # Train
             loss = modeler.train(data=data_batch,
@@ -134,6 +145,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                 test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
                                                          data['test_neg_paths'], modeler, device))
                 if test_accuracy[-1] >= best_test_accuracy:
+                    best_test_accuracy = test_accuracy[-1]
                     aux_save_information['test_accuracy'] = best_test_accuracy
         else:
             test_accuracy.append(0)
@@ -170,19 +182,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-dataset', action='store', dest='dataset',
-                        help='dataset includes lcquad,qald')
+                        help='dataset includes lcquad,qald',default = 'lcquad')
 
     parser.add_argument('-model', action='store', dest='model',
-                        help='name of the model to use')
+                        help='name of the model to use',default='bilstm_dot')
 
     parser.add_argument('-pointwise', action='store', dest='pointwise',
-                        help='to use pointwise training procedure make it true',default=False)
+                        help='to use pointwise training procedure make it true',default=True)
 
     parser.add_argument('-train_valid', action='store', dest='train_over_validation',
                         help='train over validation', default=False)
 
     parser.add_argument('-device', action='store', dest='device',
-                        help='cuda for gpu else cpu', default='cuda')
+                        help='cuda for gpu else cpu', default='cpu')
 
     args = parser.parse_args()
 
@@ -245,11 +257,18 @@ if __name__ == "__main__":
 
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
 
+    if training_model == 'decomposable_attention':
+        modeler = net.DecomposableAttention(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                            _device=device, _pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
+                               list(filter(lambda p: p.requires_grad, modeler.scorer.parameters())))
+
 
     if not pointwise:
         loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
     else:
-        loss_func = nn.MSELoss()
+        loss_func = nn.BCEWithLogitsLoss()
         training_model += '_pointwise'
 
 
@@ -279,7 +298,7 @@ if __name__ == "__main__":
     # rsync -avz --progress components.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
     # rsync -avz --progress data_loader.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
 
-    # rsync -avz --progress corechain.py priyansh@sda-srv04:/data/priyansh/new_kranti
-    # rsync -avz --progress auxiliary.py priyansh@sda-srv04:/data/priyansh/new_kranti
-    # rsync -avz --progress components.py priyansh@sda-srv04:/data/priansh/new_kranti
-    # rsync -avz --progress network.py priyansh@sda-srv04:/data/priyansh/new_kranti
+     # rsync -avz --progress corechain.py priyansh@sda-srv04:/data/priyansh/new_kranti
+     # rsync -avz --progress auxiliary.py priyansh@sda-srv04:/data/priyansh/new_kranti
+     # rsync -avz --progress components.py priyansh@sda-srv04:/data/priansh/new_kranti
+     # rsync -avz --progress network.py priyansh@sda-srv04:/data/priyansh/new_kranti

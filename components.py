@@ -98,10 +98,10 @@ class DenseClf(nn.Module):
         _x = F.relu(self.hidden(x))
 
         if self.outputdim == 1:
-            return F.sigmoid(self.output(_x))
+            return F.relu(self.output(_x))
 
         else:
-            return F.softmax(self.output(_x))
+            return F.relu(self.output(_x))
 
 
 class CNN(nn.Module):

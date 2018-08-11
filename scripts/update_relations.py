@@ -23,13 +23,16 @@ for rel in relations.keys():
     vocabulary = list(set(vocabulary))
 
 vocabulary = [v.lower() for v in vocabulary]
+rel_keys = [k.lower() for k in relations.keys()]
 vocabulary = list(set(vocabulary))
+vocabulary = vocabulary + rel_keys
 
 
 '''
     Updates the vocabulary 
 '''
 print("updating vocab")
+print("len voab is", len(vocabulary))
 embeddings_interface.update_vocabulary(vocabulary)
 print("saving files")
 embeddings_interface.save()
@@ -38,6 +41,9 @@ print("saved")
 for rel in relations.keys():
     tokenized = relations[rel][2]
     relations[rel][3] = embeddings_interface.vocabularize(tokenized)
+    try:
+        relations[rel][4] = embeddings_interface.vocabularize([rel.lower()])
+    except:
+        relations[rel].append(embeddings_interface.vocabularize([rel.lower()]))
 
 pickle.dump(relations,open(relation_file,'w+'))
-

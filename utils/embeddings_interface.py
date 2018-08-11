@@ -21,6 +21,7 @@ import bottle
 import warnings
 import traceback
 import numpy as np
+from progressbar import ProgressBar
 
 from bottle import post, get, put, delete, request, response
 # from torch.nn._functions.thnn.pooling import MaxPool2d
@@ -370,8 +371,9 @@ def update_vocabulary(word_list,_embedding='glove'):
     __check_prepared__(_embedding, _only_vocab=False)
 
     appendages = []
+    pbar = ProgressBar()
 
-    for token in word_list:
+    for token in pbar(word_list):
 
         token = token.lower()
 

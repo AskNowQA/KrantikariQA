@@ -649,3 +649,96 @@ class DecomposibleAttention(Model):
 
     def prepare_save(self):
         return [('encoder', self.encoder), ('scorer', self.scorer)]
+
+
+class RelDetection(Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+        self.hiddendim = self.parameter_dict['hidden_size'] * (1+ int(self.parameter_dict['bidirectional']))
+
+        if self.debug:
+            print("Init Models")
+
+        self.model = com.HRBiLSTM(hidden_dim=_parameter_dict['hidden_size'],
+                                  max_len_path=_parameter_dict['max_length'],
+                                  max_len_ques=_parameter_dict['max_length'],
+                                  embedding_dim=_parameter_dict['embedding_dim'],
+                                  dropout=_parameter_dict['dropout'],
+                                  vocab_size=_parameter_dict['vocab_size'],
+                                  vectors=_parameter_dict['vectors'],
+                                  debug=_parameter_dict['debug'])
+
+    def train(self, data, optimizer, loss_fn, device):
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, pos_batch, pos_rel1_batch, pos_rel2_batch, neg_batch, neg_rel1_batch, neg_rel2_batch, y_label = \
+            data['ques_batch'], data['pos_batch'], data['pos_rel1_batch'], data['pos_rel2_batch'], \
+            data['neg_batch'], data['neg_rel1_batch'], data['neg_rel2_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Instantiate hidden states
+        _h = self.model.init_hidden(self.parameter_dict['batch_size'])
+        __h = self.model.init_hidden(self.parameter_dict['batch_size'])
+
+        # Encoding all the data
+        pos_scores = self.model(ques=ques_batch,
+                               path_word=pos_batch,
+                               path_rel_1=pos_rel1_batch,
+                               path_rel_2=pos_rel2_batch,
+                               _h=_h, __h=__h)
+
+        neg_scores = self.model(ques=ques_batch,
+                               path_word=neg_batch,
+                               path_rel_1=neg_rel1_batch,
+                               path_rel_2=neg_rel2_batch,
+                               _h=_h, __h=__h)
+
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def _train_pointwise(self, data, optimizer, loss_fn, device):
+        ques_batch, path_batch, path_rel1_batch, path_rel2_batch, y_label = \
+            data['ques_batch'], data['path_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Instantiate hidden states
+        _h = self.model.init_hidden(self.parameter_dict['batch_size'])
+        __h = self.model.init_hidden(self.parameter_dict['batch_size'])
+
+        # Encoding all the data
+        score = self.model(ques=ques_batch,
+                                path_word=path_batch,
+                                path_rel_1=path_rel1_batch,
+                                path_rel_2=path_rel2_batch,
+                                _h=_h, __h=__h)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+    def prepare_save(self):
+        return [('model',self.model)]
+

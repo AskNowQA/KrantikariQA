@@ -313,3 +313,108 @@ class AttendCompareAggregate(nn.Module):
             print("\tresult:\t", result.shape)
 
         return result
+
+
+class HRBiLSTM(nn.Module):
+    """
+        ## Improved Relation Detection
+
+        Implementation of the paper here: https://arxiv.org/pdf/1704.06194.pdf.
+        In our implementation, we first add then pool instead of the other way round.
+
+        **NOTE: We assume that path encoder's last states are relevant, and we pool from them.**
+    """
+
+    def __init__(self, hidden_dim,
+                 max_len_ques,
+                 max_len_path,
+                 embedding_dim,
+                 vocab_size,
+                 dropout=0.0,
+                 vectors=None,
+                 debug=False):
+
+        super(HRBiLSTM, self).__init__()
+
+        # Save the parameters locally
+        self.max_len_ques = max_len_ques
+        self.max_len_path = max_len_path
+        self.hidden_dim = hidden_dim
+        self.embedding_dim = embedding_dim
+        self.vocab_size = vocab_size
+        self.dropout = dropout
+        self.debug = debug
+
+        if vectors is not None:
+            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
+            self.embedding_layer.weight.requires_grad = True
+        else:
+            # Embedding layer
+            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
+
+        self.layer1 = nn.LSTM(self.embedding_dim, self.hidden_dim, bidirectional=True, dropout=self.dropout)
+        self.layer2 = nn.LSTM(self.hidden_dim * 2, self.hidden_dim, bidirectional=True, dropout=self.dropout)
+
+    def init_hidden(self, batch_size, device):
+
+        return (torch.zeros((2, batch_size, self.hidden_dim), device=device),
+                torch.zeros((2, batch_size, self.hidden_dim), device=device))
+
+    def forward(self, ques, path_word, path_rel_1, path_rel_2, _h, __h):
+        """
+        :params
+            :ques: torch.tensor (batch, seq)
+            :path_word: torch tensor (batch, seq)
+            :path_rel_1: torch.tensor (batch, 1)
+            :path_rel_2: torch.tensor (batch, 1)
+        """
+        batch_size = ques.shape[0]
+
+        # Join two paths into a path rel
+        path_rel = torch.cat((path_rel_1, path_rel_2), dim=-1).squeeze()
+
+        if self.debug:
+            print("question:\t", ques.shape)
+            print("path_word:\t", path_word.shape)
+            print("path_rel:\t", path_rel.shape)
+            print("hidden_l1:\t", _h[0].shape)
+            print("hidden_l2:\t", __h[0].shape)
+
+        # Embed all the things!
+        q = self.embedding_layer(ques)
+        pw = self.embedding_layer(path_word)
+        pr = self.embedding_layer(path_rel)
+
+        if self.debug:
+            print("\nembedded_q:\t", q.shape)
+            print("embedded_pw:\t", pw.shape)
+            print("embedded_pr:\t", pr.shape)
+
+        _q, _ = self.layer1(q.transpose(1, 0), _h)
+        _pw, _h = self.layer1(pw.transpose(1, 0), _h)
+        _pr, _h = self.layer1(pr.transpose(1, 0), _h)
+
+        if self.debug:
+            print("\nencode_pw:\t", _pw.shape)
+            print("encode_pr:\t", _pr.shape)
+            print("encode_q:\t", _q.shape)
+
+            # Pass encoded question through another layer
+        __q, _ = self.layer2(_q, __h)
+        if self.debug: print("\nencoded__q:\t", __q.shape)
+
+        # Pointwise sum both question representations
+        sum_q = _q + __q
+        if self.debug: print("\nsum_q:\t\t", sum_q.shape)
+
+        # Pool it along the sequence
+        h_q, _ = torch.max(sum_q, dim=0)
+        if self.debug: print("\npooled_q:\t", h_q.shape)
+
+        # Now, we pool the last hidden states of _pw and _pr to get h_r
+        h_r, _ = torch.max(torch.stack((_pw[-1], _pr[-1]), dim=1), dim=1)
+        if self.debug: print("\npooled_p:\t", h_r.shape)
+
+        score = F.cosine_similarity(h_q, h_r)
+
+        return score

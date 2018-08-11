@@ -17,6 +17,7 @@ from torch.utils.data import  DataLoader
 
 # Other libs
 from qelos_core.scripts.lcquad.corerank import FlatEncoder
+from sklearn.metrics import confusion_matrix
 # import matplotlib.pyplot as plt
 import ConfigParser
 import numpy as np
@@ -246,7 +247,9 @@ class RdfTypeClassifier(net.Model):
 
             return out
 
-    def eval(self, y_true, y_pred):
+    def eval(self, y_true, y_pred, cm=False):
+        if cm:
+            print(confusion_matrix(np.argmax(y_true, axis=1), np.argmax(y_pred.detach().cpu().numpy(), axis=1)))
         return np.mean(np.argmax(y_true, axis=1) == np.argmax(y_pred.detach().cpu().numpy(), axis=1))
 
     def prepare_save(self):
@@ -299,7 +302,7 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
         data['ques_batch'] = dataset['valid_X']
         data['y_label'] = dataset['valid_Y']
         y_pred = classifier.predict(data, device)
-        valid_acc.append(classifier.eval(y_true=data['y_label'], y_pred=y_pred))
+        valid_acc.append(classifier.eval(y_true=data['y_label'], y_pred=y_pred, cm=True))
 
         # IF it outperformed, save model.
         if best_valid_acc < valid_acc[-1]:

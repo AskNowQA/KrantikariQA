@@ -95,7 +95,36 @@ def save_model(loc, modeler, model_name='model.torch', epochs=0, optimizer=None,
     pickle.dump(_aux_save_information,open(aux_save, 'w+'))
 
 
-def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, modeler, device):
+# def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, valid_pos_paths_rel1, valid_pos_paths_rel2, valid_neg_paths_rel1, valid_neg_paths_rel2, modeler, device):
+#     precision = []
+#     with torch.no_grad():
+#         for i in range(len(valid_questions)):
+#             question = np.repeat(valid_questions[i].reshape(1, -1), len(valid_neg_paths[i]) + 1,
+#                                  axis=0)  # +1 for positive path
+#             # paths = np.vstack((valid_pos_paths[i].reshape(1, -1), valid_neg_paths[i]))
+#             paths = np.vstack((valid_neg_paths[i],valid_pos_paths[i].reshape(1, -1)))
+#             paths_rel1 = np.vstack((valid_neg_paths_rel1[i],valid_pos_paths_rel1[i].reshape(1, -1)))
+#             paths_rel2 = np.vstack((valid_neg_paths_rel2[i],valid_pos_paths_rel2[i].reshape(1, -1)))
+#             question = torch.tensor(question, dtype=torch.long, device=device)
+#             paths = torch.tensor(paths, dtype=torch.long, device=device)
+#             paths_rel1 = torch.tensor(paths_rel1, dtype = torch.long, device=device)
+#             paths_rel2 = torch.tensor(paths_rel2, dtype = torch.long, device=device)
+#             score = modeler.predict(question, paths, paths_rel1, paths_rel2, device)
+#             arg_max = torch.argmax(score)
+#             if arg_max.item() == len(paths)-1:  # 0 is the positive path index
+#                 precision.append(1)
+#             else:
+#                 precision.append(0)
+#     return sum(precision) * 1.0 / len(precision)
+
+
+
+
+def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  modeler, device, *path_rel):
+
+    if path_rel:
+        valid_pos_paths_rel1, valid_pos_paths_rel2, valid_neg_paths_rel1, valid_neg_paths_rel2 = path_rel[0],path_rel[1],path_rel[2],path_rel[3]
+
     precision = []
     with torch.no_grad():
         for i in range(len(valid_questions)):
@@ -103,18 +132,25 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, model
                                  axis=0)  # +1 for positive path
             # paths = np.vstack((valid_pos_paths[i].reshape(1, -1), valid_neg_paths[i]))
             paths = np.vstack((valid_neg_paths[i],valid_pos_paths[i].reshape(1, -1)))
-
+            if path_rel:
+                paths_rel1 = np.vstack((valid_neg_paths_rel1[i],valid_pos_paths_rel1[i].reshape(1, -1)))
+                paths_rel2 = np.vstack((valid_neg_paths_rel2[i],valid_pos_paths_rel2[i].reshape(1, -1)))
+                paths_rel1 = torch.tensor(paths_rel1, dtype=torch.long, device=device)
+                paths_rel2 = torch.tensor(paths_rel2, dtype=torch.long, device=device)
 
             question = torch.tensor(question, dtype=torch.long, device=device)
             paths = torch.tensor(paths, dtype=torch.long, device=device)
-            score = modeler.predict(question, paths, device)
+
+            if path_rel:
+                score = modeler.predict(question, paths, paths_rel1, paths_rel2, device)
+            else:
+                score = modeler.predict(question, paths, device)
             arg_max = torch.argmax(score)
             if arg_max.item() == len(paths)-1:  # 0 is the positive path index
                 precision.append(1)
             else:
                 precision.append(0)
     return sum(precision) * 1.0 / len(precision)
-
 
 def validation_accuracy_alter(valid_questions, valid_pos_paths, valid_neg_paths, modeler, device, qa):
     precision = []

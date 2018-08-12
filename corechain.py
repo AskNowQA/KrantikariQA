@@ -40,12 +40,12 @@ _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
 gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
 
-def load_data(data,parameter_dict,pointwise,shuffle = False):
+def load_data(data,parameter_dict,pointwise,schema='default',shuffle = False):
     # Loading training data
     td = dl.TrainingDataGenerator(data,
                                   parameter_dict['max_length'],
                                   parameter_dict['_neg_paths_per_epoch_train'], parameter_dict['batch_size']
-                                  , parameter_dict['total_negative_samples'], pointwise=pointwise)
+                                  , parameter_dict['total_negative_samples'], pointwise=pointwise,schema=schema)
     return DataLoader(td, shuffle=shuffle)
 
 def training_loop(training_model, parameter_dict,modeler,train_loader,
@@ -90,12 +90,33 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                 neg_batch = torch.tensor(np.reshape(sample_batched[0][2], (-1, parameter_dict['max_length'])),
                                          dtype=torch.long, device=device)
 
-                data_batch = {
-                    'ques_batch': ques_batch,
-                    'pos_batch': pos_batch,
-                    'neg_batch': neg_batch,
-                    'y_label': data['dummy_y']
-                }
+                if parameter_dict['schema'] != 'default':
+                    pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
+                                                  dtype=torch.long, device=device)
+                    pos_rel2_batch = torch.tensor(np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
+                                                  dtype=torch.long, device=device)
+                    neg_rel1_batch = torch.tensor(np.reshape(sample_batched[0][5], (-1, parameter_dict['max_length'])),
+                                                  dtype=torch.long, device=device)
+                    neg_rel2_batch = torch.tensor(np.reshape(sample_batched[0][6], (-1, parameter_dict['max_length'])),
+                                                  dtype=torch.long, device=device)
+
+
+                    data_batch = {
+                        'ques_batch': ques_batch,
+                        'pos_batch': pos_batch,
+                        'neg_batch': neg_batch,
+                        'y_label': data['dummy_y'],
+                        'pos_rel1_batch': pos_rel1_batch,
+                        'pos_rel2_batch':pos_rel2_batch,
+                        'neg_rel1_batch':neg_rel1_batch,
+                        'neg_rel2_batch' : neg_rel2_batch
+                    }
+                else:
+                    data_batch = {
+                        'ques_batch': ques_batch,
+                        'pos_batch': pos_batch,
+                        'neg_batch': neg_batch,
+                        'y_label': data['dummy_y']}
             else:
                 ques_batch = torch.tensor(np.reshape(sample_batched[0][0], (-1, parameter_dict['max_length'])),
                                           dtype=torch.long, device=device)
@@ -103,23 +124,28 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                          dtype=torch.long, device=device)
                 y = torch.tensor(sample_batched[1],dtype = torch.float,device=device).view(-1)
 
-                # raise ValueError
 
-                data_batch = {
-                    'ques_batch': ques_batch,
-                    'path_batch': path_batch,
-                    'y_label': y
-                }
+                if parameter_dict['schema'] != 'default':
+                    path_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
+                                                  dtype=torch.long, device=device)
+                    path_rel2_batch = torch.tensor(np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
+                                                  dtype=torch.long, device=device)
 
-                # for i in range(len(ques_batch)):
-                #     print(aux.id_to_word(list(ques_batch[i].numpy()),gloveid_to_word=gloveid_to_word,embeddingid_to_gloveid=embeddingid_to_gloveid))
-                #     print(aux.id_to_word(list(path_batch[i].numpy()),gloveid_to_word=gloveid_to_word,embeddingid_to_gloveid=embeddingid_to_gloveid))
-                #     # print(aux.id_to_word(list(neg_batch[i].numpy()),gloveid_to_word=gloveid_to_word,embeddingid_to_gloveid=embeddingid_to_gloveid))
-                #     print(y[i])
-                #     print("****")
-                # raise ValueError
+                    data_batch = {
+                        'ques_batch': ques_batch,
+                        'path_batch': path_batch,
+                        'y_label': y,
+                        'path_rel1_batch': path_rel1_batch,
+                        'path_rel2_batch': path_rel2_batch
+                    }
+                else:
+                    data_batch = {
+                        'ques_batch': ques_batch,
+                        'path_batch': path_batch,
+                        'y_label': y
+                    }
 
-            # Train
+
             loss = modeler.train(data=data_batch,
                               optimizer=optimizer,
                               loss_fn=loss_func,
@@ -142,8 +168,13 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
         if test_every:
             # Run on test set
             if epoch%test_every == 0:
-                test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
-                                                         data['test_neg_paths'], modeler, device))
+                if parameter_dict['schema'] != 'default':
+                    test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
+                                                         data['test_neg_paths'],modeler, device,data['test_pos_paths_rel1_sp'],data['test_pos_paths_rel2_sp'],
+                                                             data['test_neg_paths_rel1_sp'],data['test_neg_paths_rel2_sp']))
+                else:
+                    test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
+                                                                 data['test_neg_paths'], modeler, device))
                 if test_accuracy[-1] >= best_test_accuracy:
                     best_test_accuracy = test_accuracy[-1]
                     aux_save_information['test_accuracy'] = best_test_accuracy
@@ -154,8 +185,13 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
         # Run on validation set
         if validate_every:
             if epoch%validate_every == 0:
-                valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
-                                                          data['valid_neg_paths'],  modeler, device))
+                if parameter_dict['schema'] != 'default':
+                    valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
+                                                          data['valid_neg_paths'],  modeler, device, data['valid_pos_paths_rel1_sp'],data['valid_pos_paths_rel2_sp'],
+                                                             data['valid_neg_paths_rel1_sp'],data['valid_neg_paths_rel2_sp']))
+                else:
+                    valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
+                                                                  data['valid_neg_paths'], modeler, device))
                 if valid_accuracy[-1] >= best_validation_accuracy:
                     print("MODEL WEIGHTS RIGHT NOW: ", modeler.get_parameter_sum())
                     best_validation_accuracy = valid_accuracy[-1]
@@ -185,10 +221,10 @@ if __name__ == "__main__":
                         help='dataset includes lcquad,qald',default = 'lcquad')
 
     parser.add_argument('-model', action='store', dest='model',
-                        help='name of the model to use',default='bilstm_dot')
+                        help='name of the model to use',default='reldet')
 
     parser.add_argument('-pointwise', action='store', dest='pointwise',
-                        help='to use pointwise training procedure make it true',default=True)
+                        help='to use pointwise training procedure make it true',default=False)
 
     parser.add_argument('-train_valid', action='store', dest='train_over_validation',
                         help='train over validation', default=False)
@@ -226,9 +262,16 @@ if __name__ == "__main__":
     data = aux.load_data(_dataset=_dataset , _train_over_validation = _train_over_validation,
               _parameter_dict=parameter_dict, _relations =  _relations, _pointwise=pointwise, _device=device)
 
+    if training_model == 'reldet':
+        schema = 'reldet'
+    elif training_model == 'slotptr':
+        schema = 'slotptr'
+    else:
+        schema = 'default'
 
-    train_loader = load_data(data,parameter_dict,pointwise)
+    train_loader = load_data(data, parameter_dict, pointwise, schema=schema)
     parameter_dict['vectors'] = data['vectors']
+    parameter_dict['schema'] = schema
 
 
     if training_model == 'bilstm_dot':
@@ -263,6 +306,11 @@ if __name__ == "__main__":
 
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
                                list(filter(lambda p: p.requires_grad, modeler.scorer.parameters())))
+    if training_model == 'reldet':
+        modeler = net.RelDetection(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                            _device=device, _pointwise=pointwise, _debug=False)
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+
 
 
     if not pointwise:

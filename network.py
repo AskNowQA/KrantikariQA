@@ -728,14 +728,14 @@ class RelDetection(Model):
         if self.debug:
             print("Init Models")
 
-        self.model = com.HRBiLSTM(hidden_dim=_parameter_dict['hidden_size'],
-                                  max_len_path=_parameter_dict['max_length'],
-                                  max_len_ques=_parameter_dict['max_length'],
-                                  embedding_dim=_parameter_dict['embedding_dim'],
-                                  dropout=_parameter_dict['dropout'],
-                                  vocab_size=_parameter_dict['vocab_size'],
-                                  vectors=_parameter_dict['vectors'],
-                                  debug=_parameter_dict['debug'])
+        self.encoder = com.HRBiLSTM(hidden_dim=_parameter_dict['hidden_size'],
+                                    max_len_path=_parameter_dict['max_length'],
+                                    max_len_ques=_parameter_dict['max_length'],
+                                    embedding_dim=_parameter_dict['embedding_dim'],
+                                    dropout=_parameter_dict['dropout'],
+                                    vocab_size=_parameter_dict['vocab_size'],
+                                    vectors=_parameter_dict['vectors'],
+                                    debug=self.debug).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
         if self.pointwise:
@@ -751,21 +751,22 @@ class RelDetection(Model):
         optimizer.zero_grad()
 
         # Instantiate hidden states
-        _h = self.model.init_hidden(self.parameter_dict['batch_size'])
-        __h = self.model.init_hidden(self.parameter_dict['batch_size'])
+        _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+        _h2 = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
 
         # Encoding all the data
-        pos_scores = self.model(ques=ques_batch,
-                               path_word=pos_batch,
-                               path_rel_1=pos_rel1_batch,
-                               path_rel_2=pos_rel2_batch,
-                               _h=_h, __h=__h)
+        pos_scores = self.encoder(ques=ques_batch,
+                                  path_word=pos_batch,
+                                  path_rel_1=pos_rel1_batch,
+                                  path_rel_2=pos_rel2_batch,
+                                  _h=_h,
+                                  _h2=_h2)
 
-        neg_scores = self.model(ques=ques_batch,
-                               path_word=neg_batch,
-                               path_rel_1=neg_rel1_batch,
-                               path_rel_2=neg_rel2_batch,
-                               _h=_h, __h=__h)
+        neg_scores = self.encoder(ques=ques_batch,
+                                  path_word=neg_batch,
+                                  path_rel_1=neg_rel1_batch,
+                                  path_rel_2=neg_rel2_batch,
+                                  _h=_h, _h2=_h2)
 
         '''
             If `y == 1` then it assumed the first input should be ranked higher
@@ -785,15 +786,15 @@ class RelDetection(Model):
         optimizer.zero_grad()
 
         # Instantiate hidden states
-        _h = self.model.init_hidden(self.parameter_dict['batch_size'])
-        __h = self.model.init_hidden(self.parameter_dict['batch_size'])
+        _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+        __h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
 
         # Encoding all the data
-        score = self.model(ques=ques_batch,
-                                path_word=path_batch,
-                                path_rel_1=path_rel1_batch,
-                                path_rel_2=path_rel2_batch,
-                                _h=_h, __h=__h)
+        score = self.encoder(ques=ques_batch,
+                             path_word=path_batch,
+                             path_rel_1=path_rel1_batch,
+                             path_rel_2=path_rel2_batch,
+                             _h=_h, _h2=__h)
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
@@ -802,5 +803,22 @@ class RelDetection(Model):
         loss.backward()
         optimizer.step()
 
+
+    def predict(self, ques, paths, paths_rel1,paths_rel2, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+            _h = self.encoder.init_hidden(ques.shape[0], device=device)
+            __h = self.encoder.init_hidden(ques.shape[0], device=device)
+
+            score = self.encoder(ques=ques,
+                                 path_word=paths,
+                                 path_rel_1=paths_rel1,
+                                 path_rel_2=paths_rel2,
+                                 _h=_h, _h2=__h).squeeze()
+
+            return score
+
     def prepare_save(self):
-        return [('model',self.model)]
+        return [('model',self.encoder)]

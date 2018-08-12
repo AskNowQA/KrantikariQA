@@ -988,18 +988,19 @@ class TrainingDataGenerator(Dataset):
 
             self.neg_paths_rel2_sampled = np.reshape(self.neg_paths_rel2[:, sampling_index, :],
                                                      (-1, self.max_length))
+            #
+            # self.pos_paths_rel1 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel1,
+            #                                                       (
+            #                                                       self.pos_paths_rel1.shape[0], 1, self.pos_paths_rel1.shape[1])),
+            #                                            self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+            #
+            # self.pos_paths_rel2 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel2,
+            #                                                       (
+            #                                                       self.pos_paths_rel2.shape[0], 1, self.pos_paths_rel2.shape[1])),
+            #                                            self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
 
-            self.pos_paths_rel1 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel1,
-                                                                  (
-                                                                  self.pos_paths_rel1.shape[0], 1, self.pos_paths_rel1.shape[1])),
-                                                       self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
-
-            self.pos_paths_rel2 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel2,
-                                                                  (
-                                                                  self.pos_paths_rel2.shape[0], 1, self.pos_paths_rel2.shape[1])),
-                                                       self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
-
-            self.questions_shuffled, self.pos_paths_shuffled, self.pos_paths_rel1_shuffled, self.pos_paths_rel2_shuffled, self.neg_paths_shuffled, self.neg_paths__rel1_shuffled, self.neg_paths__rel2_shuffled = \
+            self.questions_shuffled, self.pos_paths_shuffled, self.pos_paths_rel1_shuffled,\
+            self.pos_paths_rel2_shuffled, self.neg_paths_shuffled, self.neg_paths__rel1_shuffled, self.neg_paths__rel2_shuffled = \
                 shuffle(self.questions, self.pos_paths, self.pos_paths_rel1, self.pos_paths_rel2,
                         self.neg_paths_sampled, self.neg_paths_rel1_sampled, self.neg_paths_rel2_sampled)
         else:

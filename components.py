@@ -360,7 +360,7 @@ class HRBiLSTM(nn.Module):
         return (torch.zeros((2, batch_size, self.hidden_dim), device=device),
                 torch.zeros((2, batch_size, self.hidden_dim), device=device))
 
-    def forward(self, ques, path_word, path_rel_1, path_rel_2, _h, __h):
+    def forward(self, ques, path_word, path_rel_1, path_rel_2, _h, _h2):
         """
         :params
             :ques: torch.tensor (batch, seq)
@@ -378,7 +378,7 @@ class HRBiLSTM(nn.Module):
             print("path_word:\t", path_word.shape)
             print("path_rel:\t", path_rel.shape)
             print("hidden_l1:\t", _h[0].shape)
-            print("hidden_l2:\t", __h[0].shape)
+            print("hidden_l2:\t", _h2[0].shape)
 
         # Embed all the things!
         q = self.embedding_layer(ques)
@@ -400,7 +400,7 @@ class HRBiLSTM(nn.Module):
             print("encode_q:\t", _q.shape)
 
             # Pass encoded question through another layer
-        __q, _ = self.layer2(_q, __h)
+        __q, _ = self.layer2(_q, _h2)
         if self.debug: print("\nencoded__q:\t", __q.shape)
 
         # Pointwise sum both question representations

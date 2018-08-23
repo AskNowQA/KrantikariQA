@@ -42,9 +42,12 @@ def corechain_parameters(dataset, training_model, training_config, config_file =
     parameter_dict['dropout'] = float(config.get(dataset, 'dropout'))
     parameter_dict['dropout_rec'] = float(config.get(dataset, 'dropout_rec'))
     parameter_dict['dropout_in'] = float(config.get(dataset, 'dropout_in'))
+    parameter_dict['rel_pad'] = int(config.get(dataset, 'rel_pad'))
+    parameter_dict['relsp_pad'] = int(config.get(dataset, 'relsp_pad'))
+    parameter_dict['relrd_pad'] = int(config.get(dataset, 'relrd_pad'))
+
     if training_model == 'cnn_dot':
         parameter_dict['output_dim'] = int(config.get(dataset, 'output_dim'))
-
     parameter_dict['validate_every'] = int(config.get('Commons', 'validate_every'))
     parameter_dict['test_every'] = int(config.get('Commons', 'test_every'))
 

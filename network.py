@@ -136,10 +136,16 @@ class BiLstmDotOld(Model):
             Same code works for both pairwise or pointwise
         """
         with torch.no_grad():
+
+            self.encoder.eval()
+
             hidden = self.encoder.init_hidden(ques.shape[0], device)
             question, _ = self.encoder(ques.long(), hidden)
             paths, _ = self.encoder(paths.long(), hidden)
             score = torch.sum(question[-1] * paths[-1], -1)
+
+            self.encoder.train()
+
             return score
 
     def prepare_save(self):
@@ -273,6 +279,8 @@ class BiLstmDot(Model):
             Same code works for both pairwise or pointwise
         """
         with torch.no_grad():
+
+            self.encoder.eval()
             question = self.encoder(ques.long())
             paths = self.encoder(paths.long())
             if self.pointwise:
@@ -284,6 +292,8 @@ class BiLstmDot(Model):
                 # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
             else:
                 score = torch.sum(question * paths, -1)
+
+            self.encoder.train()
             return score
 
     def prepare_save(self):
@@ -416,9 +426,11 @@ class BiLstmDense(Model):
         """
         with torch.no_grad():
 
+            self.encoder.eval()
             question = self.encoder(ques.long())
             paths = self.encoder(paths.long())
             score = self.dense(torch.cat((question, paths), dim=1)).squeeze()
+            self.encoder.train()
 
             return score
 
@@ -555,6 +567,8 @@ class BiLstmDenseDot(Model):
 
         with torch.no_grad():
 
+            self.encoder.eval()
+
             question = self.encoder(ques.long())
             paths = self.encoder(paths.long())
 
@@ -563,6 +577,8 @@ class BiLstmDenseDot(Model):
             paths = self.dense(paths)
 
             score = torch.sum(question * paths, -1)
+
+            self.encoder.train()
 
             return score
 
@@ -703,11 +719,14 @@ class DecomposableAttention(Model):
             Same code works for both pairwise or pointwise
         """
         with torch.no_grad():
+            self.encoder.eval()
             hidden = self.encoder.init_hidden(ques.shape[0], device)
 
             question, _ = self.encoder(ques.long(),hidden)
             paths, _ = self.encoder(paths.long(), hidden)
             score = self.scorer(question, paths)
+
+            self.encoder.train()
             return score.squeeze()
 
     def prepare_save(self):
@@ -809,6 +828,7 @@ class RelDetection(Model):
             Same code works for both pairwise or pointwise
         """
         with torch.no_grad():
+            self.encoder.eval()
             _h = self.encoder.init_hidden(ques.shape[0], device=device)
             __h = self.encoder.init_hidden(ques.shape[0], device=device)
 
@@ -817,7 +837,7 @@ class RelDetection(Model):
                                  path_rel_1=paths_rel1,
                                  path_rel_2=paths_rel2,
                                  _h=_h, _h2=__h).squeeze()
-
+            self.encoder.train()
             return score
 
     def prepare_save(self):

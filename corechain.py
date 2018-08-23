@@ -48,6 +48,46 @@ def load_data(data,parameter_dict,pointwise,schema='default',shuffle = False):
                                   , parameter_dict['total_negative_samples'], pointwise=pointwise,schema=schema)
     return DataLoader(td, shuffle=shuffle)
 
+
+def curatail_padding(data,parameter_dict):
+
+    '''
+        Since schema is already implicitly defined/present in the parameter_dict['rel1_pad']
+    '''
+
+    data['test_neg_paths'] = data['test_neg_paths'][:, :, :parameter_dict['rel_pad']]
+    data['test_pos_paths'] = data['test_pos_paths'][:, :parameter_dict['rel_pad']]
+
+    if parameter_dict['schema'] == 'reldet':
+        data['test_neg_paths_rel1_rd'] = data['test_neg_paths_rel1_rd'][:, :, :parameter_dict['rel1_pad']]
+        data['test_neg_paths_rel2_rd'] = data['test_neg_paths_rel2_rd'][:, :, :parameter_dict['rel1_pad']]
+        data['test_pos_paths_rel1_rd'] = data['test_pos_paths_rel1_rd'][:, :parameter_dict['rel1_pad']]
+        data['test_pos_paths_rel2_rd'] = data['test_pos_paths_rel2_rd'][:, :parameter_dict['rel1_pad']]
+    elif parameter_dict['schema'] == 'slotptr':
+        data['test_neg_paths_rel1_sp'] = data['test_neg_paths_rel1_sp'][:, :, :parameter_dict['rel1_pad']]
+        data['test_neg_paths_rel2_sp'] = data['test_neg_paths_rel2_sp'][:, :, :parameter_dict['rel1_pad']]
+        data['test_pos_paths_rel1_sp'] = data['test_pos_paths_rel1_sp'][:, :parameter_dict['rel1_pad']]
+        data['test_pos_paths_rel2_sp'] = data['test_pos_paths_rel2_sp'][:, :parameter_dict['rel1_pad']]
+
+    data['valid_neg_paths'] = data['valid_neg_paths'][:, :, :parameter_dict['rel_pad']]
+    data['valid_pos_paths'] = data['valid_pos_paths'][:, :parameter_dict['rel_pad']]
+
+    if parameter_dict['schema'] == 'reldet':
+        data['valid_neg_paths_rel1_rd'] = data['valid_neg_paths_rel1_rd'][:, :, :parameter_dict['rel1_pad']]
+        data['valid_neg_paths_rel2_rd'] = data['valid_neg_paths_rel2_rd'][:, :, :parameter_dict['rel1_pad']]
+        data['valid_pos_paths_rel1_rd'] = data['valid_pos_paths_rel1_rd'][:, :parameter_dict['rel1_pad']]
+        data['valid_pos_paths_rel2_rd'] = data['valid_pos_paths_rel2_rd'][:, :parameter_dict['rel1_pad']]
+    elif parameter_dict['schema'] == 'slotptr':
+        data['valid_neg_paths_rel1_sp'] = data['valid_neg_paths_rel1_sp'][:, :, :parameter_dict['rel1_pad']]
+        data['valid_neg_paths_rel2_sp'] = data['valid_neg_paths_rel2_sp'][:, :, :parameter_dict['rel1_pad']]
+        data['valid_pos_paths_rel1_sp'] = data['valid_pos_paths_rel1_sp'][:, :parameter_dict['rel1_pad']]
+        data['valid_pos_paths_rel2_sp'] = data['valid_pos_paths_rel2_sp'][:, :parameter_dict['rel1_pad']]
+
+    return data
+
+
+
+
 def training_loop(training_model, parameter_dict,modeler,train_loader,
                   optimizer,loss_func, data, dataset, device, test_every, validate_every , pointwise = False, problem='core_chain'):
 
@@ -64,9 +104,18 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
     best_validation_accuracy = 0
     best_test_accuracy = 0
 
-    ###############
+    if parameter_dict['schema'] == 'reldet':
+        parameter_dict['rel1_pad'] =  parameter_dict['relrd_pad']
+    elif parameter_dict['schema'] == 'slotptr':
+        parameter_dict['rel1_pad'] = parameter_dict['relsp_pad']
+
+        ###############
     # Training Loop
     ###############
+
+
+    #Makes test data of appropriate shape
+    data = curatail_padding(data, parameter_dict)
     for epoch in range(parameter_dict['epochs']):
 
         # Epoch start print
@@ -103,20 +152,23 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
                     data_batch = {
                         'ques_batch': ques_batch,
-                        'pos_batch': pos_batch,
-                        'neg_batch': neg_batch,
+                        'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
+                        'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
                         'y_label': data['dummy_y'],
-                        'pos_rel1_batch': pos_rel1_batch,
-                        'pos_rel2_batch':pos_rel2_batch,
-                        'neg_rel1_batch':neg_rel1_batch,
-                        'neg_rel2_batch' : neg_rel2_batch
+                        'pos_rel1_batch': pos_rel1_batch[:,:parameter_dict['rel1_pad']],
+                        'pos_rel2_batch':pos_rel2_batch[:,:parameter_dict['rel1_pad']],
+                        'neg_rel1_batch':neg_rel1_batch[:,:parameter_dict['rel1_pad']],
+                        'neg_rel2_batch' : neg_rel2_batch[:,:parameter_dict['rel1_pad']]
                     }
+
                 else:
+
                     data_batch = {
                         'ques_batch': ques_batch,
-                        'pos_batch': pos_batch,
-                        'neg_batch': neg_batch,
+                        'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
+                        'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
                         'y_label': data['dummy_y']}
+
             else:
                 ques_batch = torch.tensor(np.reshape(sample_batched[0][0], (-1, parameter_dict['max_length'])),
                                           dtype=torch.long, device=device)
@@ -133,15 +185,15 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
                     data_batch = {
                         'ques_batch': ques_batch,
-                        'path_batch': path_batch,
+                        'path_batch': path_batch[:,:parameter_dict['rel_pad']],
                         'y_label': y,
-                        'path_rel1_batch': path_rel1_batch,
-                        'path_rel2_batch': path_rel2_batch
+                        'path_rel1_batch': path_rel1_batch[:,:parameter_dict['rel1_pad']],
+                        'path_rel2_batch': path_rel2_batch[:,:parameter_dict['rel1_pad']]
                     }
                 else:
                     data_batch = {
                         'ques_batch': ques_batch,
-                        'path_batch': path_batch,
+                        'path_batch': path_batch[:,:parameter_dict['rel_pad']],
                         'y_label': y
                     }
 
@@ -169,9 +221,17 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
             # Run on test set
             if epoch%test_every == 0:
                 if parameter_dict['schema'] != 'default':
-                    test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
+                    if parameter_dict['schema']  == 'slotptr':
+                        test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
                                                          data['test_neg_paths'],modeler, device,data['test_pos_paths_rel1_sp'],data['test_pos_paths_rel2_sp'],
                                                              data['test_neg_paths_rel1_sp'],data['test_neg_paths_rel2_sp']))
+                    else:
+                        test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
+                                                                     data['test_neg_paths'], modeler, device,
+                                                                     data['test_pos_paths_rel1_rd'],
+                                                                     data['test_pos_paths_rel2_rd'],
+                                                                     data['test_neg_paths_rel1_rd'],
+                                                                     data['test_neg_paths_rel2_rd']))
                 else:
                     test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
                                                                  data['test_neg_paths'], modeler, device))
@@ -186,9 +246,17 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
         if validate_every:
             if epoch%validate_every == 0:
                 if parameter_dict['schema'] != 'default':
-                    valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
+                    if parameter_dict['schema'] == 'slotptr':
+                        valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
                                                           data['valid_neg_paths'],  modeler, device, data['valid_pos_paths_rel1_sp'],data['valid_pos_paths_rel2_sp'],
                                                              data['valid_neg_paths_rel1_sp'],data['valid_neg_paths_rel2_sp']))
+                    else:
+                        valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
+                                                                      data['valid_neg_paths'], modeler, device,
+                                                                      data['valid_pos_paths_rel1_rd'],
+                                                                      data['valid_pos_paths_rel2_rd'],
+                                                                      data['valid_neg_paths_rel1_rd'],
+                                                                      data['valid_neg_paths_rel2_rd']))
                 else:
                     valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
                                                                   data['valid_neg_paths'], modeler, device))

@@ -452,6 +452,9 @@ class SlotPointer(nn.Module):
         self.encoder_q = nn.LSTM(self.embedding_dim, self.hidden_dim, bidirectional=True, dropout=self.dropout)
         self.encoder_p = nn.LSTM(self.embedding_dim, self.hidden_dim, bidirectional=True, dropout=self.dropout)
 
+        # A dense layer to normalize dimensions
+        self.normalize = nn.Linear(self.embedding_dim, self.hidden_dim * 2)
+
         # Attention parameters
         self.k1 = nn.Parameter(torch.randn((self.hidden_dim * 2,), dtype=torch.float))
         self.k2 = nn.Parameter(torch.randn((self.hidden_dim * 2,), dtype=torch.float))
@@ -517,7 +520,7 @@ class SlotPointer(nn.Module):
             print('alpha:\t\t', alpha.shape)
 
         # For v, first prepare (q + _q)
-        sum_q = _q.transpose(1, 0) + q
+        sum_q = _q.transpose(1,0) + self.normalize(q)
         v = torch.bmm(alpha, sum_q)
 
         if self.debug:
@@ -525,8 +528,8 @@ class SlotPointer(nn.Module):
             print('v:\t\t', v.shape)
 
         # for r, we need the last state of encoders, and summed up embeddings.
-        r1 = _p1[-1] + torch.mean(p1, dim=1)
-        r2 = _p2[-1] + torch.mean(p2, dim=1)
+        r1 = _p1[-1] + self.normalize(torch.mean(p1, dim=1))
+        r2 = _p2[-1] + self.normalize(torch.mean(p2, dim=1))
         r = torch.stack((r1, r2), dim=1)
 
         if self.debug:

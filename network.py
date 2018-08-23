@@ -747,7 +747,7 @@ class RelDetection(Model):
             print("Init Models")
 
         self.encoder = com.HRBiLSTM(hidden_dim=_parameter_dict['hidden_size'],
-                                    max_len_path=_parameter_dict['max_length'],
+                                    max_len_path=_parameter_dict['relrd_pad'],
                                     max_len_ques=_parameter_dict['max_length'],
                                     embedding_dim=_parameter_dict['embedding_dim'],
                                     dropout=_parameter_dict['dropout'],

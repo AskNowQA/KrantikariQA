@@ -613,7 +613,6 @@ class CNNDot(BiLstmDot):
                            _embedding_dim = self.parameter_dict['embedding_dim'] , _output_dim = self.parameter_dict['output_dim'],_debug=self.debug).to(self.device)
 
 
-
 class DecomposableAttention(Model):
     """
         Implementation of https://arxiv.org/pdf/1606.01933.pdf.
@@ -806,14 +805,14 @@ class RelDetection(Model):
 
         # Instantiate hidden states
         _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
-        __h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+        _h2 = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
 
         # Encoding all the data
         score = self.encoder(ques=ques_batch,
                              path_word=path_batch,
                              path_rel_1=path_rel1_batch,
                              path_rel_2=path_rel2_batch,
-                             _h=_h, _h2=__h)
+                             _h=_h, _h2=_h2)
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
@@ -822,6 +821,7 @@ class RelDetection(Model):
         loss.backward()
         optimizer.step()
 
+        return loss
 
     def predict(self, ques, paths, paths_rel1,paths_rel2, device):
         """
@@ -842,3 +842,107 @@ class RelDetection(Model):
 
     def prepare_save(self):
         return [('model',self.encoder)]
+
+
+class SlotPointerAttn(Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder = com.SlotPointer(
+            hidden_dim=self.parameter_dict['hidden_size'],
+            max_len_ques=self.parameter_dict['max_length'],
+            max_len_path=self.parameter_dict['relsp_pad'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            debug=self.parameter_dict['debug']).to(_device)
+
+    def train(self, data, optimizer, loss_fn, device):
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, pos_rel1_batch, pos_rel2_batch, neg_rel1_batch, neg_rel2_batch, y_label = \
+            data['ques_batch'], data['pos_rel1_batch'], data['pos_rel2_batch'], \
+            data['neg_rel1_batch'], data['neg_rel2_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Instantiate hidden states
+        _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+
+        # Encoding all the data
+        pos_scores = self.encoder(ques=ques_batch,
+                                  path_rel_1=pos_rel1_batch,
+                                  path_rel_2=pos_rel2_batch,
+                                  _h=_h)
+
+        neg_scores = self.encoder(ques=ques_batch,
+                                  path_rel_1=neg_rel1_batch,
+                                  path_rel_2=neg_rel2_batch,
+                                  _h=_h)
+
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def _train_pointwise(self, data, optimizer, loss_fn, device):
+        ques_batch, path_rel1_batch, path_rel2_batch, y_label = \
+            data['ques_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Instantiate hidden states
+        _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+
+        # Encoding all the data
+        score = self.encoder(ques=ques_batch,
+                             path_rel_1=path_rel1_batch,
+                             path_rel_2=path_rel2_batch,
+                             _h=_h)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths_rel1,paths_rel2, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+            self.encoder.eval()
+            _h = self.encoder.init_hidden(ques.shape[0], device=device)
+
+            score = self.encoder(ques=ques,
+                                 path_rel_1=paths_rel1,
+                                 path_rel_2=paths_rel2,
+                                 _h=_h).squeeze()
+            self.encoder.train()
+            return score
+
+    def prepare_save(self):
+        return [('model', self.encoder)]

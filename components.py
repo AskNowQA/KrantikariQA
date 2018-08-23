@@ -418,3 +418,123 @@ class HRBiLSTM(nn.Module):
         score = F.cosine_similarity(h_q, h_r)
 
         return score
+
+
+class SlotPointer(nn.Module):
+
+    def __init__(self, hidden_dim,
+                 max_len_ques,
+                 max_len_path,
+                 embedding_dim,
+                 vocab_size,
+                 dropout=0.0,
+                 vectors=None,
+                 debug=False):
+
+        super(SlotPointer, self).__init__()
+
+        # Save the parameters locally
+        self.max_len_ques = max_len_ques
+        self.max_len_path = max_len_path
+        self.hidden_dim = hidden_dim
+        self.embedding_dim = embedding_dim
+        self.vocab_size = vocab_size
+        self.dropout = dropout
+        self.debug = debug
+
+        if vectors is not None:
+            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
+            self.embedding_layer.weight.requires_grad = True
+        else:
+            # Embedding layer
+            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
+
+        self.encoder_q = nn.LSTM(self.embedding_dim, self.hidden_dim, bidirectional=True, dropout=self.dropout)
+        self.encoder_p = nn.LSTM(self.embedding_dim, self.hidden_dim, bidirectional=True, dropout=self.dropout)
+
+        # Attention parameters
+        self.k1 = nn.Parameter(torch.randn((self.hidden_dim * 2,), dtype=torch.float))
+        self.k2 = nn.Parameter(torch.randn((self.hidden_dim * 2,), dtype=torch.float))
+
+    def init_hidden(self, batch_size, device):
+
+        return (torch.zeros((2, batch_size, self.hidden_dim), device=device),
+                torch.zeros((2, batch_size, self.hidden_dim), device=device))
+
+    def forward(self, ques, path_rel_1, path_rel_2, _h):
+        """
+        :params
+            :ques: torch.tensor (batch, seq)
+            :path_word: torch tensor (batch, seq)
+            :path_rel_1: torch.tensor (batch, 1)
+            :path_rel_2: torch.tensor (batch, 1)
+        """
+
+        batch_size = ques.shape[0]
+
+        if self.debug:
+            print("ques:\t\t", ques.shape)
+            print("path_rel_1\t", path_rel_1.shape)
+            print("path_rel_2\t", path_rel_2.shape)
+            print("hidden_l1:\t", _h[0].shape)
+            # print("hidden_l2:\t", _h2[0].shape)
+
+        # Embed question
+        q = self.embedding_layer(ques)
+        p1 = self.embedding_layer(path_rel_1)
+        p2 = self.embedding_layer(path_rel_2)
+
+        if self.debug:
+            print("\nembedded_q:\t", q.shape)
+            print("embedded_p1:\t", p1.shape)
+            print("embedded_p2:\t", p2.shape)
+
+        # Use RNNs here
+        _q, _ = self.encoder_q(q.transpose(1, 0), _h)
+        _p1, _ = self.encoder_p(p1.transpose(1, 0), _h)
+        _p2, _ = self.encoder_p(p2.transpose(1, 0), _h)
+
+        if self.debug:
+            print("\nencoded_q:\t", _q.shape)
+            print("encoded_p1:\t", _p1.shape)
+            print("encoded_p2:\t", _p2.shape)
+            print("If something's fishy, might want to check here!")
+
+        # Energy. For one path. dot of k and q_T
+        e_1 = torch.mv(_q.transpose(1, 0).contiguous().view(-1, _q.shape[-1]), self.k1).view(_q.shape[1], _q.shape[0])
+        e_2 = torch.mv(_q.transpose(1, 0).contiguous().view(-1, _q.shape[-1]), self.k2).view(_q.shape[1], _q.shape[0])
+
+        # Softmax over this axis
+        alpha_1 = F.softmax(e_1, dim=1)
+        alpha_2 = F.softmax(e_2, dim=1)
+
+        # Stack them for ease of use
+        alpha = torch.stack((alpha_1, alpha_2), dim=1)
+
+        if self.debug:
+            print('\nalpha_1:\t', alpha_1.shape)
+            print('alpha_2:\t', alpha_2.shape)
+            print('alpha:\t\t', alpha.shape)
+
+        # For v, first prepare (q + _q)
+        sum_q = _q.transpose(1, 0) + q
+        v = torch.bmm(alpha, sum_q)
+
+        if self.debug:
+            print('\nsum_q:\t\t', sum_q.shape)
+            print('v:\t\t', v.shape)
+
+        # for r, we need the last state of encoders, and summed up embeddings.
+        r1 = _p1[-1] + torch.mean(p1, dim=1)
+        r2 = _p2[-1] + torch.mean(p2, dim=1)
+        r = torch.stack((r1, r2), dim=1)
+
+        if self.debug:
+            print('\nr1:\t\t', r1.shape)
+            print('r2:\t\t', r2.shape)
+            print('r:\t\t', r.shape)
+
+        # Get the dot of r and v, and add it for both path 1 & 2
+        res = torch.sum((r * v).view(r.shape[0], -1), dim=1)
+
+        return res

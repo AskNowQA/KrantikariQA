@@ -353,9 +353,9 @@ def vocabularize(_tokens, _report_unks=False, _embedding='glove'):
 
                 op += [token_id]
         except:
-            print traceback.print_exc()
-            print token
-            print token_id
+            print(traceback.print_exc())
+            print(token)
+            print(token_id)
 
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
 

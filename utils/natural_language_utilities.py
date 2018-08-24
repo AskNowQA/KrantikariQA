@@ -1,9 +1,12 @@
-import validators
-import string
 import re
+import sys
+import string
 import os.path
 import warnings
-from urlparse import urlparse
+import validators
+
+if sys.version[0] == '2': from urlparse import urlparse
+else: from urllib.parse import urlparse
 
 # SOME MACROS
 STOPWORDLIST = 'resources/atire_puurula.txt'

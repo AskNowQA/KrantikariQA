@@ -25,8 +25,15 @@ import json
 import re
 
 # Our scripts
-import natural_language_utilities as nlutils
-import labels_mulitple_form
+try:
+    import natural_language_utilities as nlutils
+except ImportError:
+    from utils import natural_language_utilities as nlutils
+
+try:
+    import labels_mulitple_form
+except ImportError:
+    from utils import labels_mulitple_form
 
 # GLOBAL MACROS
 # DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/']

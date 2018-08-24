@@ -29,5 +29,4 @@ def merge_multiple_forms():
 			labels[u'http://dbpedia.org/ontology/'+key] = list(set(labels[u'http://dbpedia.org/ontology/'+key]+forms[key]))
 		except KeyError:
 			labels[u'http://dbpedia.org/ontology/'+key] = forms[key]
-	print "here"
 	pickle.dump(labels,open('../resources/labels.pickle','w+'))

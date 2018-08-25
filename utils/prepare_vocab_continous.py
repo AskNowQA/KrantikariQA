@@ -17,6 +17,10 @@ import warnings
 import numpy as np
 from sklearn.utils import shuffle
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 
 import keras.backend.tensorflow_backend as K
 from keras.preprocessing.sequence import pad_sequences
@@ -32,6 +36,13 @@ from keras.regularizers import l2
 from keras.layers.normalization import BatchNormalization
 from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.regularizers import L1L2
+
+sys.path.append('/data/priyansh/conda/fastai')
+from fastai.text import *
+
+device = torch.device('cuda')
+np.random.seed(42)
+torch.manual_seed(42)
 
 try:
     from utils import embeddings_interface
@@ -70,7 +81,8 @@ def better_warning(message, category, filename, lineno, file=None, line=None):
 
 
 def _load_relations_():
-    relations = pickle.load(open(COMMON_DATA_DIR+'/relations.pickle'))
+    relations = pickle.load(open(COMMON_DATA_DIR+'/relations.pickle', 'rb'), encoding='bytes') \
+        if sys.version_info[0] == 3  else pickle.load(open(COMMON_DATA_DIR+'/relations.pickle', 'rb'))
     inverse_relations = {}
     for key in relations:
         value = relations[key]
@@ -103,8 +115,12 @@ def _prepare_():
     global dbp
 
     try:
-        vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, "vocab.pickle")))
-        vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npy")))
+        if sys.version_info[0] == 3:
+            vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, "vocab.pickle"),'rb'),encoding='bytes')
+            vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npy"),'rb'), encoding='bytes')
+        else:
+            vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, "vocab.pickle"), 'rb'))
+            vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npy"), 'rb'))
         print("length of vocab file is before calling prepare i.e current vocab file is ", len(vocab))
         print("length of vector file is before calling prepare i.e current vector file is ", len(vocab))
     except (IOError, EOFError) as e:
@@ -426,7 +442,7 @@ def _prepare_():
     if DEBUG: print("Vectors and Vocab prepared. Now, we gotsta save 'em")
     print("new length of vocab file is before calling prepare i.e new current vocab file is ", len(vocab))
     print("new length of vector file is before calling prepare i.e new current vector file is ", len(vocab))
-    pickle.dump(vocab, open(os.path.join(COMMON_DATA_DIR, "vocab.pickle"), 'w+'))
+    pickle.dump(vocab, open(os.path.join(COMMON_DATA_DIR, "vocab.pickle"), 'wb+'))
     np.save(os.path.join(COMMON_DATA_DIR, "vectors"), vectors)
 
     return vocab, vectors
@@ -439,8 +455,12 @@ def load():
     global vocab, vectors
 
     try:
-        vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, "vocab.pickle")))
-        vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npy" )))
+        if sys.version_info[0] == 3:
+            vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, "vocab.pickle"), 'rb'), encoding='utf-8')
+            vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npy" ), 'rb'), encoding='bytes')
+        else:
+            vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, "vocab.pickle"), 'rb'))
+            vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npy"), 'rb'))
     except (IOError, EOFError) as e:
         if DEBUG:
             warnings.warn("Did not find the vocabulary.")
@@ -449,6 +469,76 @@ def load():
 
     return vocab, vectors
 
+
+def load_ulmfit():
+
+    glove_id_to_cont_id, vectors = load()
+
+    # We first need to get a list of words we use.
+    # And so we need the original untrimmed glove vocab
+
+    _get_glove_embeddings_()
+    glove_words_to_glove_id = embeddings_interface.glove_vocab
+
+    new_vocab = {}
+    for key, value in glove_words_to_glove_id.items():
+        if isinstance(key, bytes):
+            new_vocab[key.decode('utf-8')] = value
+        else:
+            new_vocab[key] = value
+    glove_words_to_glove_id = new_vocab
+
+    # We then reverse it to get glove_id: glove_word mapping.
+    glove_id_to_glove_words = {value: key for key, value in glove_words_to_glove_id.items()}
+
+    # Then we also reverse vocab to get cont_id: glove_id mapping
+    cont_id_to_glove_id = {value: key for key, value in glove_id_to_cont_id.items()}
+
+    # Now, for a list of words in glove, we assume a range suffices for keys in contid2gloveid
+    #     (cont id are cont).
+    glove_words = [glove_id_to_glove_words[cont_id_to_glove_id[cont_id]] for cont_id in range(len(cont_id_to_glove_id))]
+
+    # Start with load fastai_words
+    fastai_words = pickle.load(open('./ulmfit/wt103/itos_wt103.pkl', 'rb'))
+    fastai_words_to_id = {word: index for index, word in enumerate(fastai_words)}
+
+    # Now that we have glove words, we need to add the ones which dont exist to fastai word-id thing.
+    not_in_fastai = []
+    for word in glove_words:
+
+        try:
+            _ = fastai_words_to_id[word]
+        except KeyError:
+            fastai_words_to_id[word] = len(fastai_words_to_id)
+            not_in_fastai.append(word)
+
+    # Finally we need to replace glove_id for all the characters that we can (in fastaiwords2id) to get gloveid2fastaiid
+    # For the words which didn't exist in contid, safe to assume they dont need to be handled
+    #    and can be allotted some random id
+    randomid = len(glove_id_to_glove_words)
+    glove_id_to_fastai_id = {}
+    for glove_word, fastai_id in fastai_words_to_id.items():
+        try:
+            glove_id = glove_words_to_glove_id[glove_word]
+            #         assert glove_id in glove_words_to_glove_id
+            glove_id_to_fastai_id[glove_id] = fastai_id
+        except KeyError:
+            # Word not in continous id or not in glove altogether
+            glove_id_to_fastai_id[randomid] = fastai_id
+            randomid += 1
+
+    # We now have a perfect vocab done.
+    # Now we need vectors. For that, we load the vectors from the trained encoder, and append it with new words.
+    m = torch.load('./ulmfit/wt103/fwd_wt103_enc.h5', map_location=lambda storage, loc: storage)
+    vectors = to_np(m['encoder.weight'])
+
+    # We want the new vectors to be centered around the mean of values in pre-trained embeddings, plus some deviation.
+    sigma = np.std(vectors)
+    mu = np.mean(vectors)
+    new_vectors = sigma * np.random.randn(len(glove_id_to_fastai_id), 400) + mu
+    new_vectors[:vectors.shape[0]] = vectors
+
+    return glove_id_to_fastai_id, new_vectors
 
 # def convert(data, singular=False):
 #     """

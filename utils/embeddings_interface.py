@@ -14,10 +14,9 @@
 """
 
 import os
-import json
+import sys
 import gensim
 import pickle
-import bottle
 import warnings
 import traceback
 import numpy as np
@@ -94,7 +93,10 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
         if glove_vocab is None:
 
             try:
-                glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab'])))
+                if sys.version_info[0] ==3:
+                    glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab']), 'rb'), encoding='bytes')
+                else:
+                    glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab'])))
                 # '''
                 #     Load the OOV word with their id's
                 # '''
@@ -154,7 +156,7 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
                 # except:
                 #     pass
                 # Now store this object
-                pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))
+                pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'wb+'))
 
                 if DEBUG: print("GloVe vocab successfully parsed and stored. This won't happen again.")
 
@@ -166,7 +168,7 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
         try:
 
             # Let's try to load the embeddings now.
-            glove_embeddings = np.load(open(os.path.join(glove_location['dir'], glove_location['parsed'])))
+            glove_embeddings = np.load(open(os.path.join(glove_location['dir'], glove_location['parsed']), 'rb'), encoding='bytes')
             #Now load the oov words
             # try:
             #     oov = pickle.load(open(OUT_OF_VOCAB))
@@ -395,4 +397,4 @@ def save():
 
     # How to save it?
     np.save(os.path.join(glove_location['dir'], glove_location['parsed']), glove_embeddings)
-    pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'w+'))
+    pickle.dump(glove_vocab, open(os.path.join(glove_location['dir'], glove_location['vocab']), 'wb+'))

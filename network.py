@@ -932,22 +932,21 @@ class RelDetection(Model):
         optimizer.zero_grad()
 
         # Instantiate hidden states
-        _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
-        _h2 = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+        _hp = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+        _hn = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
 
         # Encoding all the data
         pos_scores = self.encoder(ques=ques_batch,
                                   path_word=pos_batch,
                                   path_rel_1=pos_rel1_batch,
                                   path_rel_2=pos_rel2_batch,
-                                  _h=_h,
-                                  _h2=_h2)
+                                  _h=_hp)
 
         neg_scores = self.encoder(ques=ques_batch,
                                   path_word=neg_batch,
                                   path_rel_1=neg_rel1_batch,
                                   path_rel_2=neg_rel2_batch,
-                                  _h=_h, _h2=_h2)
+                                  _h=_hn)
 
         '''
             If `y == 1` then it assumed the first input should be ranked higher
@@ -968,14 +967,13 @@ class RelDetection(Model):
 
         # Instantiate hidden states
         _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
-        _h2 = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
 
         # Encoding all the data
         score = self.encoder(ques=ques_batch,
                              path_word=path_batch,
                              path_rel_1=path_rel1_batch,
                              path_rel_2=path_rel2_batch,
-                             _h=_h, _h2=_h2)
+                             _h=_h)
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.

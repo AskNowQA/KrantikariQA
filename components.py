@@ -360,7 +360,7 @@ class HRBiLSTM(nn.Module):
         return (torch.zeros((2, batch_size, self.hidden_dim), device=device),
                 torch.zeros((2, batch_size, self.hidden_dim), device=device))
 
-    def forward(self, ques, path_word, path_rel_1, path_rel_2, _h, _h2):
+    def forward(self, ques, path_word, path_rel_1, path_rel_2, _h):
         """
         :params
             :ques: torch.tensor (batch, seq)
@@ -390,9 +390,9 @@ class HRBiLSTM(nn.Module):
             print("embedded_pw:\t", pw.shape)
             print("embedded_pr:\t", pr.shape)
 
-        _q, _ = self.layer1(q.transpose(1, 0), _h)
-        _pw, _h = self.layer1(pw.transpose(1, 0), _h)
-        _pr, _h = self.layer1(pr.transpose(1, 0), _h)
+        _q, _h2 = self.layer1(q.transpose(1, 0), _h)
+        _pw, _ = self.layer1(pw.transpose(1, 0), _h)
+        _pr, _ = self.layer1(pr.transpose(1, 0), _h)
 
         if self.debug:
             print("\nencode_pw:\t", _pw.shape)

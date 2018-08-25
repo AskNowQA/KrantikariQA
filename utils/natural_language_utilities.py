@@ -3,6 +3,7 @@ import string
 import re
 import os.path
 import warnings
+import html
 from urlparse import urlparse
 
 # SOME MACROS
@@ -226,6 +227,18 @@ def checker(uri,reverse=True,update=True):
 	if reverse:
 		return uri[1:-1]
 	return uri
+
+
+
+re1 = re.compile(r'  +')
+
+def fixup(x):
+    x = x.replace('#39;', "'").replace('amp;', '&').replace('#146;', "'").replace(
+        'nbsp;', ' ').replace('#36;', '$').replace('\\n', "\n").replace('quot;', "'").replace(
+        '<br />', "\n").replace('\\"', '"').replace('<unk>','u_n').replace(' @.@ ','.').replace(
+        ' @-@ ','-').replace('\\', ' \\ ')
+    return re1.sub(' ', html.unescape(x))
+
 
 
 if __name__ == "__main__":

@@ -865,7 +865,7 @@ class SlotPointerAttn(Model):
             vocab_size=self.parameter_dict['vocab_size'],
             dropout=self.parameter_dict['dropout'],
             vectors=self.parameter_dict['vectors'],
-            debug=self.parameter_dict['debug']).to(_device)
+            debug=self.debug).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
         if self.pointwise:
@@ -929,7 +929,7 @@ class SlotPointerAttn(Model):
 
         return loss
 
-    def predict(self, ques, paths_rel1,paths_rel2, device):
+    def predict(self, ques, paths, paths_rel1,paths_rel2, device):
         """
             Same code works for both pairwise or pointwise
         """

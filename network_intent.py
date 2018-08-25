@@ -17,13 +17,16 @@ from torch.utils.data import  DataLoader
 
 # Other libs
 from qelos_core.scripts.lcquad.corerank import FlatEncoder
-# import matplotlib.pyplot as plt
-import ConfigParser
-import numpy as np
-# import pylab
+
+import os
+import sys
 import time
 import json
-import os
+import numpy as np
+# import matplotlib.pyplot as plt
+if sys.version_info[0] == 3: import configparser as ConfigParser
+else: import ConfigParser
+# import pylab
 
 device = torch.device("cuda")
 np.random.seed(42)

@@ -3,8 +3,9 @@
     File loads macros for different models,datasets.
 
 '''
-
-import ConfigParser
+import sys
+if sys.version_info[0] == 3: import configparser as ConfigParser
+else: import ConfigParser
 
 
 def corechain_parameters(dataset, training_model, training_config, config_file ='configs/macros.cfg'):

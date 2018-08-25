@@ -15,9 +15,12 @@ from torch import optim
 from torch.utils.data import  DataLoader
 
 # Other libs
-import ConfigParser
-import numpy as np
+import sys
 import time
+import numpy as np
+
+if sys.version_info[0] == 3: import configparser as ConfigParser
+else: import ConfigParser
 
 
 device = torch.device("cuda")

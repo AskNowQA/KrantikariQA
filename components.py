@@ -378,7 +378,6 @@ class HRBiLSTM(nn.Module):
             print("path_word:\t", path_word.shape)
             print("path_rel:\t", path_rel.shape)
             print("hidden_l1:\t", _h[0].shape)
-            print("hidden_l2:\t", _h2[0].shape)
 
         # Embed all the things!
         q = self.embedding_layer(ques)

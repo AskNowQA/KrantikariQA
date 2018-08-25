@@ -19,12 +19,15 @@ from torch.utils.data import  DataLoader
 from qelos_core.scripts.lcquad.corerank import FlatEncoder
 from sklearn.metrics import confusion_matrix
 # import matplotlib.pyplot as plt
-import ConfigParser
 import numpy as np
 # import pylab
 import time
 import json
+import sys
 import os
+
+if sys.version_info[0] == 3: import configparser as ConfigParser
+else: import ConfigParser
 
 device = torch.device("cuda")
 np.random.seed(42)

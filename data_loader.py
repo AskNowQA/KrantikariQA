@@ -3,24 +3,23 @@
 '''
 
 import os
+import sys
 import json
 import math
 import numpy as np
-import ConfigParser
 from sklearn.utils import shuffle
 from torch.utils.data import Dataset, DataLoader
 from keras.preprocessing.sequence import pad_sequences
 
-
+if sys.version_info[0] == 3: import configparser as ConfigParser
+else: import ConfigParser
 
 # Custom imports
 from utils import embeddings_interface
 from utils import prepare_vocab_continous as vocab_master
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
-
 import auxiliary as aux
-
 
 config = ConfigParser.RawConfigParser()
 config.read('configs/macros.cfg')

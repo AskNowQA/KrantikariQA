@@ -17,14 +17,17 @@ import data_loader as dl
 import auxiliary as aux
 import network as net
 
-from pprint import pprint
-from progressbar import ProgressBar
-import ConfigParser
-import numpy as np
+import os
+import sys
+import json
 import time
 import pickle
-import json
-import os
+import numpy as np
+from pprint import pprint
+from progressbar import ProgressBar
+
+if sys.version_info[0] == 3: import configparser as ConfigParser
+else: import ConfigParser
 
 device = torch.device("cuda")
 sparql_constructor.init(embeddings_interface)

@@ -302,7 +302,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
 
     try:
         with open(os.path.join(_model_specific_data_dir % {'dataset': _dataset, 'model': _model},
-                               file + ".mapped.npz")) as data:
+                               file + ".mapped.npz"),'rb') as data:
             dataset = np.load(data)
             questions, pos_paths, neg_paths, \
             pos_paths_rel1_sp, pos_paths_rel2_sp,neg_paths_rel1_sp, neg_paths_rel2_sp, \

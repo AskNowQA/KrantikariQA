@@ -139,6 +139,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                 neg_batch = torch.tensor(np.reshape(sample_batched[0][2], (-1, parameter_dict['max_length'])),
                                          dtype=torch.long, device=device)
 
+                data['dummy_y'] = torch.ones(ques_batch.shape[0], device=device)
                 if parameter_dict['schema'] != 'default':
                     pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
                                                   dtype=torch.long, device=device)

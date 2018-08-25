@@ -25,8 +25,15 @@ import json
 import re
 
 # Our scripts
-import natural_language_utilities as nlutils
-import labels_mulitple_form
+try:
+    import natural_language_utilities as nlutils
+except ImportError:
+    from utils import natural_language_utilities as nlutils
+
+try:
+    import labels_mulitple_form
+except ImportError:
+    from utils import labels_mulitple_form
 
 # GLOBAL MACROS
 # DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/']
@@ -109,7 +116,7 @@ class DBPedia:
         try:
             self.labels = pickle.load(open('resources/labels.pickle'))
         except:
-            print "Label Cache not found. Creating a new one"
+            print("Label Cache not found. Creating a new one")
             traceback.print_exc()
             labels_mulitple_form.merge_multiple_forms()  # This should populate the dictionary with multiple form info and already pickle it
             self.labels = pickle.load(open('../resources/labels.pickle'))
@@ -428,12 +435,12 @@ class DBPedia:
         try:
             response_uri_1 = self.shoot_custom_query(GET_SUPERCLASS % {'target_class': specific_class_uri_1})
         except:
-            print traceback.print_exception()
+            print(traceback.print_exception())
         try:
             results_1 = [x[u'type'][u'value'].encode('ascii', 'ignore') for x in
                          response_uri_1[u'results'][u'bindings']]
         except:
-            print traceback.print_exception()
+            print(traceback.print_exception())
         filtered_type_list_1 = [x for x in results_1 if
                                 x[:28] in ['http://dbpedia.org/ontology/', 'http://dbpedia.org/property/']]
         if len(filtered_type_list_1) >= 1:
@@ -491,7 +498,7 @@ class DBPedia:
             return entity_list
         except:
             # TODO: Find and handle exceptions appropriately
-            print traceback.print_exc()
+            print(traceback.print_exc())
 
     def get_dbpedia_URL(self, _uri):
         '''
@@ -529,6 +536,6 @@ if __name__ == '__main__':
     # q = 'http://dbpedia.org/ontology/birthPlace'
     # pprint(dbp.get_label(q))
     # q = 'http://dbpedia.org/resource/Mumbai'
-    print dbp.get_parent(uri)
+    print(dbp.get_parent(uri))
     pprint(dbp.get_properties(uri))
 # r = 'http://dbpedia.org/resource/India'

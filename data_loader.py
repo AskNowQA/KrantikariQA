@@ -945,6 +945,7 @@ class TrainingDataGenerator(Dataset):
             batch_pos_paths_rel2 = index(self.pos_paths_rel2_shuffled)    # Shape (batch, seqlen)
 
         if self.pointwise:
+            self.batch_size = batch_questions.shape[0]
             questions = np.vstack((batch_questions, batch_questions))
             paths = np.vstack((batch_pos_paths, batch_neg_paths))
             if self.schema != 'default':

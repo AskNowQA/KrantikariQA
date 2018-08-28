@@ -89,11 +89,11 @@ class DenseClf(nn.Module):
 
         super(DenseClf, self).__init__()
 
-        self.inputdim = inputdim
-        self.hiddendim = hiddendim
-        self.outputdim = outputdim
-        self.hidden = nn.Linear(inputdim, hiddendim)
-        self.output = nn.Linear(hiddendim, outputdim)
+        self.inputdim = int(inputdim)
+        self.hiddendim = int(hiddendim)
+        self.outputdim = int(outputdim)
+        self.hidden = nn.Linear(self.inputdim, self.hiddendim)
+        self.output = nn.Linear(self.hiddendim, self.outputdim)
 
     def forward(self, x):
 

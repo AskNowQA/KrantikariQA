@@ -94,7 +94,7 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
 
             try:
                 if sys.version_info[0] ==3:
-                    glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab']), 'rb'), encoding='bytes')
+                    glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab']), 'rb'), encoding='latin1')
                 else:
                     glove_vocab = pickle.load(open(os.path.join(glove_location['dir'], glove_location['vocab'])))
                 # '''
@@ -168,7 +168,7 @@ def __prepare__(_word2vec=True, _glove=False, _only_vocab=False):
         try:
 
             # Let's try to load the embeddings now.
-            glove_embeddings = np.load(open(os.path.join(glove_location['dir'], glove_location['parsed']), 'rb'), encoding='bytes')
+            glove_embeddings = np.load(open(os.path.join(glove_location['dir'], glove_location['parsed']), 'rb'), encoding='latin1')
             #Now load the oov words
             # try:
             #     oov = pickle.load(open(OUT_OF_VOCAB))

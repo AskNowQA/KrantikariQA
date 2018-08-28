@@ -552,7 +552,7 @@ class SlotPointer(nn.Module):
         return res
 
 
-class BetterEncoder(nn.Module):
+class ShitEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
                  embedding_dim, vocab_size, bidirectional,
                  dropout=0.0, mode='LSTM', enable_layer_norm=False,
@@ -572,7 +572,7 @@ class BetterEncoder(nn.Module):
 
         TODO: Implement multilayered shit someday.
         '''
-        super(BetterEncoder, self).__init__()
+        super(ShitEncoder, self).__init__()
 
         self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = max_length, hidden_dim, embedding_dim, vocab_size
         self.enable_layer_norm = enable_layer_norm
@@ -743,8 +743,8 @@ if __name__ == "__main__":
     question = question[:,:(question.shape[1] - torch.min(torch.sum(question.eq(0).long(), dim=1))).item()]
     vectors = torch.randn((1000, embedding_dim))
 
-    encoder = BetterEncoder(max_length, hidden_dim, 1,
-                            embedding_dim, vocab_size, bidirectional, vectors=vectors).to(device)
+    encoder = ShitEncoder(max_length, hidden_dim, 1,
+                          embedding_dim, vocab_size, bidirectional, vectors=vectors).to(device)
 
     hidden_0 = encoder.init_hidden(question.shape[0], device)
     # hidden_0 = (torch.zeros((2 * 1, question.shape[0], hidden_dim), device=device),

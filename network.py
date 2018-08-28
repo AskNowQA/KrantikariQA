@@ -336,13 +336,13 @@ class BiLstmDot(Model):
 
 
 
-        self.encoder = com.BetterEncoder(max_length = self.parameter_dict['max_length'],
-                                         hidden_dim = self.parameter_dict['hidden_size'],
-                                         number_of_layer = self.parameter_dict['number_of_layer'],
-                                         embedding_dim = self.parameter_dict['embedding_dim'],
-                                         vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
-                                         dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
-                                         vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
+        self.encoder = com.ShitEncoder(max_length = self.parameter_dict['max_length'],
+                                       hidden_dim = self.parameter_dict['hidden_size'],
+                                       number_of_layer = self.parameter_dict['number_of_layer'],
+                                       embedding_dim = self.parameter_dict['embedding_dim'],
+                                       vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
+                                       dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
+                                       vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
     #
@@ -666,13 +666,13 @@ class BiLstmDense(Model):
         if self.debug:
             print("Init Models")
 
-        self.encoder = com.BetterEncoder(max_length=self.parameter_dict['max_length'],
-                                         hidden_dim=self.parameter_dict['hidden_size'],
-                                         number_of_layer=self.parameter_dict['number_of_layer'],
-                                         embedding_dim=self.parameter_dict['embedding_dim'],
-                                         vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
-                                         dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
-                                         vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
+        self.encoder = com.ShitEncoder(max_length=self.parameter_dict['max_length'],
+                                       hidden_dim=self.parameter_dict['hidden_size'],
+                                       number_of_layer=self.parameter_dict['number_of_layer'],
+                                       embedding_dim=self.parameter_dict['embedding_dim'],
+                                       vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
+                                       dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
+                                       vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
 
         self.dense = com.DenseClf(inputdim=self.hiddendim*2,        # *2 because we have two things concatinated here
                                   hiddendim=self.hiddendim/2,
@@ -802,13 +802,13 @@ class BiLstmDenseDot(Model):
 
         if self.debug:
             print("Init Models")
-        self.encoder = com.BetterEncoder(max_length=self.parameter_dict['max_length'],
-                                         hidden_dim=self.parameter_dict['hidden_size'],
-                                         number_of_layer=self.parameter_dict['number_of_layer'],
-                                         embedding_dim=self.parameter_dict['embedding_dim'],
-                                         vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
-                                         dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
-                                         vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
+        self.encoder = com.ShitEncoder(max_length=self.parameter_dict['max_length'],
+                                       hidden_dim=self.parameter_dict['hidden_size'],
+                                       number_of_layer=self.parameter_dict['number_of_layer'],
+                                       embedding_dim=self.parameter_dict['embedding_dim'],
+                                       vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
+                                       dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
+                                       vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
 
         self.dense = com.DenseClf(inputdim=self.hiddendim,
                                   hiddendim=self.hiddendim/2,
@@ -988,13 +988,13 @@ class DecomposableAttention(Model):
         #                            bidirectional=self.parameter_dict['bidirectional'],
         #                            vectors=self.parameter_dict['vectors']).to(self.device)
 
-        self.encoder = com.BetterEncoder(max_length = self.parameter_dict['max_length'],
-                                         hidden_dim = self.parameter_dict['hidden_size'],
-                                         number_of_layer = self.parameter_dict['number_of_layer'],
-                                         embedding_dim = self.parameter_dict['embedding_dim'],
-                                         vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
-                                         dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
-                                         vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
+        self.encoder = com.ShitEncoder(max_length = self.parameter_dict['max_length'],
+                                       hidden_dim = self.parameter_dict['hidden_size'],
+                                       number_of_layer = self.parameter_dict['number_of_layer'],
+                                       embedding_dim = self.parameter_dict['embedding_dim'],
+                                       vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
+                                       dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
+                                       vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
 
         self.scorer = com.BetterAttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug).to(self.device)
 
@@ -1194,6 +1194,9 @@ class RelDetection(Model):
 
 class SlotPointerModel(Model):
 
+    """
+        EAT MY SAHIT DENIS
+    """
     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
 
         self.debug = _debug
@@ -1205,7 +1208,7 @@ class SlotPointerModel(Model):
         if self.debug:
             print("Init Models")
 
-        self.encoder_q = com.BetterEncoder(
+        self.encoder_q = com.ShitEncoder(
             number_of_layer=self.parameter_dict['number_of_layer'],
             embedding_dim=self.parameter_dict['embedding_dim'],
             hidden_dim=self.parameter_dict['hidden_size'],
@@ -1219,7 +1222,7 @@ class SlotPointerModel(Model):
             mode = 'LSTM',
             debug = self.debug).to(self.device)
 
-        self.encoder_p = com.BetterEncoder(
+        self.encoder_p = com.ShitEncoder(
             number_of_layer=self.parameter_dict['number_of_layer'],
             embedding_dim=self.parameter_dict['embedding_dim'],
             hidden_dim=self.parameter_dict['hidden_size'],

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+DUMMY_WORD = 458
 
 def masked_softmax(x, m=None, dim=-1):
     """
@@ -34,3 +35,17 @@ def compute_mask(t, padding_idx=0):
 
 # Trim a tensor by the length of the max thing
 trim = lambda x : x[:, :(x.shape[1] - torch.min(torch.sum(x.eq(0).long(), dim=1))).item()]
+
+
+def no_one_left_behind(t):
+    """
+        In case a tensor is empty at any pos, append a random key there.
+        The key used is 458 which is 'nothing' in glove vocab
+
+    :param t: 2d torch tensor
+    :return: 2d torch tensor
+    """
+
+    superimposed = torch.zeros_like(t)
+    superimposed[:,0] = (torch.sum(t, dim=1).eq(0)).int().view(1, -1)*DUMMY_WORD
+    return superimposed + t

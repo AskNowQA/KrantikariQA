@@ -1177,7 +1177,7 @@ class RelDetection(Model):
         return [('model',self.encoder)]
 
 
-class SlotPointerAttn(Model):
+class SlotPointerModel(Model):
 
     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
 
@@ -1190,14 +1190,40 @@ class SlotPointerAttn(Model):
         if self.debug:
             print("Init Models")
 
-        self.encoder = com.SlotPointer(
-            hidden_dim=self.parameter_dict['hidden_size'],
-            max_len_ques=self.parameter_dict['max_length'],
-            max_len_path=self.parameter_dict['relsp_pad'],
+        self.encoder_q = com.BetterEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
             embedding_dim=self.parameter_dict['embedding_dim'],
+            hidden_dim=self.parameter_dict['hidden_size'],
             vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
             dropout=self.parameter_dict['dropout'],
             vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            bidirectional=True,
+            residual=True,
+            mode = 'LSTM',
+            debug = self.debug).to(self.device)
+
+        self.encoder_p = com.BetterEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            bidirectional=True,
+            residual=True,
+            mode = 'LSTM',
+            debug = self.debug).to(self.device)
+
+        self.comparer = com.SlotPointer(
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            max_len_ques=self.parameter_dict['max_length'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            max_len_path=self.parameter_dict['relsp_pad'],
+            vocab_size=self.parameter_dict['vocab_size'],
             debug=self.debug).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
@@ -1207,25 +1233,43 @@ class SlotPointerAttn(Model):
             return self._train_pairwise_(data, optimizer, loss_fn, device)
 
     def _train_pairwise_(self, data, optimizer, loss_fn, device):
-        ques_batch, pos_rel1_batch, pos_rel2_batch, neg_rel1_batch, neg_rel2_batch, y_label = \
+        ques_batch, pos_1_batch, pos_2_batch, neg_1_batch, neg_2_batch, y_label = \
             data['ques_batch'], data['pos_rel1_batch'], data['pos_rel2_batch'], \
             data['neg_rel1_batch'], data['neg_rel2_batch'], data['y_label']
 
+        hidden = self.encoder_q.init_hidden(ques_batch.shape[0], device)
+
         optimizer.zero_grad()
 
-        # Instantiate hidden states
-        _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+        # Have to manually check if the 2nd paths holds anything in this batch.
+        # If not, we have to pad everything up with zeros, or even call a limited part of the comparison module.
+        pos_2_batch = tu.no_one_left_behind(pos_2_batch)
+        neg_2_batch = tu.no_one_left_behind(neg_2_batch)
 
         # Encoding all the data
-        pos_scores = self.encoder(ques=ques_batch,
-                                  path_rel_1=pos_rel1_batch,
-                                  path_rel_2=pos_rel2_batch,
-                                  _h=_h)
+        ques_batch_encoded, _, _, ques_mask, ques_batch_embedded, _ = self.encoder_q(tu.trim(ques_batch),hidden)
+        _, pos_1_encoded, _, _, _, pos_1_embedded = self.encoder_p(pos_1_batch, hidden)
+        _, pos_2_encoded, _, _, _, pos_2_embedded = self.encoder_p(pos_2_batch, hidden)
+        _, neg_1_encoded, _, _, _, neg_1_embedded = self.encoder_p(neg_1_batch, hidden)
+        _, neg_2_encoded, _, _, _, neg_2_embedded = self.encoder_p(neg_2_batch, hidden)
 
-        neg_scores = self.encoder(ques=ques_batch,
-                                  path_rel_1=neg_rel1_batch,
-                                  path_rel_2=neg_rel2_batch,
-                                  _h=_h)
+        # Pass them to the comparison module
+        pos_scores = self.comparer(ques_enc=ques_batch_encoded,
+                                   ques_emb=ques_batch_embedded,
+                                   ques_mask=ques_mask,
+                                   path_1_enc=pos_1_encoded,
+                                   path_1_emb=pos_1_embedded,
+                                   path_2_enc=pos_2_encoded,
+                                   path_2_emb=pos_2_embedded)
+
+        # Pass them to the comparison module
+        neg_scores = self.comparer(ques_enc=ques_batch_encoded,
+                                   ques_emb=ques_batch_embedded,
+                                   ques_mask=ques_mask,
+                                   path_1_enc=neg_1_encoded,
+                                   path_1_emb=neg_1_embedded,
+                                   path_2_enc=neg_2_encoded,
+                                   path_2_emb=neg_2_embedded)
 
         '''
             If `y == 1` then it assumed the first input should be ranked higher
@@ -1239,19 +1283,27 @@ class SlotPointerAttn(Model):
         return loss
 
     def _train_pointwise(self, data, optimizer, loss_fn, device):
-        ques_batch, path_rel1_batch, path_rel2_batch, y_label = \
+        ques_batch, path_1_batch, path_2_batch, y_label = \
             data['ques_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
+
+        path_2_batch = tu.no_one_left_behind(path_2_batch)
+
+        hidden = self.encoder_q.init_hidden(ques_batch.shape[0], device)
 
         optimizer.zero_grad()
 
-        # Instantiate hidden states
-        _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
-
         # Encoding all the data
-        score = self.encoder(ques=ques_batch,
-                             path_rel_1=path_rel1_batch,
-                             path_rel_2=path_rel2_batch,
-                             _h=_h)
+        ques_batch_encoded, _, _, ques_mask, ques_batch_embedded, _ = self.encoder_q(tu.trim(ques_batch), hidden)
+        _, pos_1_encoded, _, _, _, pos_1_embedded = self.encoder_p(path_1_batch, hidden)
+        _, pos_2_encoded, _, _, _, pos_2_embedded = self.encoder_p(path_2_batch, hidden)
+
+        score = self.comparer(ques_enc=ques_batch_encoded,
+                                   ques_emb=ques_batch_embedded,
+                                   ques_mask=ques_mask,
+                                   path_1_enc=pos_1_encoded,
+                                   path_1_emb=pos_1_embedded,
+                                   path_2_enc=pos_2_encoded,
+                                   path_2_emb=pos_2_embedded)
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
@@ -1267,147 +1319,30 @@ class SlotPointerAttn(Model):
             Same code works for both pairwise or pointwise
         """
         with torch.no_grad():
-            self.encoder.eval()
-            _h = self.encoder.init_hidden(ques.shape[0], device=device)
+            self.encoder_q.eval()
+            self.encoder_p.eval()
+            self.comparer.eval()
+            hidden = self.encoder_q.init_hidden(ques.shape[0], device=device)
 
-            score = self.encoder(ques=ques,
-                                 path_rel_1=paths_rel1,
-                                 path_rel_2=paths_rel2,
-                                 _h=_h).squeeze()
-            self.encoder.train()
+            paths_rel2 = tu.no_one_left_behind(paths_rel2)
+
+            # Encoding all the data
+            ques_batch_encoded, _, _, ques_mask, ques_batch_embedded, _ = self.encoder_q(tu.trim(ques), hidden)
+            _, pos_1_encoded, _, _, _, pos_1_embedded = self.encoder_p(paths_rel1, hidden)
+            _, pos_2_encoded, _, _, _, pos_2_embedded = self.encoder_p(paths_rel2, hidden)
+
+            score = self.comparer(ques_enc=ques_batch_encoded,
+                                  ques_emb=ques_batch_embedded,
+                                  ques_mask=ques_mask,
+                                  path_1_enc=pos_1_encoded,
+                                  path_1_emb=pos_1_embedded,
+                                  path_2_enc=pos_2_encoded,
+                                  path_2_emb=pos_2_embedded).squeeze()
+
+            self.encoder_q.train()
+            self.encoder_p.train()
+            self.comparer.train()
             return score
 
     def prepare_save(self):
-        return [('model', self.encoder)]
-
-
-# class DecomposableAttention(Model):
-#     """
-#         Implementation of https://arxiv.org/pdf/1606.01933.pdf.
-#         Uses an encoder and AttendCompareAggregate class in components
-#     """
-#     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
-#
-#         self.debug = _debug
-#         self.parameter_dict = _parameter_dict
-#         self.device = _device
-#         self.pointwise = _pointwise
-#         self.word_to_id = _word_to_id
-#         self.hiddendim = self.parameter_dict['hidden_size'] * (1+ int(self.parameter_dict['bidirectional']))
-#
-#         if self.debug:
-#             print("Init Models")
-#
-#         # self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
-#         #                            dims=[self.parameter_dict['hidden_size']],
-#         #                            word_dic=self.word_to_id,
-#         #                            bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
-#         #                            dropout_in=self.parameter_dict['dropout_in']).to(self.device)
-#
-#         self.encoder = com.Encoder(self.parameter_dict['max_length'], self.parameter_dict['hidden_size']
-#                                    , self.parameter_dict['number_of_layer'], self.parameter_dict['embedding_dim'],
-#                                    self.parameter_dict['vocab_size'],
-#                                    bidirectional=self.parameter_dict['bidirectional'],
-#                                    vectors=self.parameter_dict['vectors']).to(self.device)
-#
-#         # self.encoder = com.BetterEncoder(max_length = self.parameter_dict['max_length'],
-#         #                                  hidden_dim = self.parameter_dict['hidden_size'],
-#         #                                  number_of_layer = self.parameter_dict['number_of_layer'],
-#         #                                  embedding_dim = self.parameter_dict['embedding_dim'],
-#         #                                  vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
-#         #                                  dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
-#         #                                  vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
-#
-#         self.scorer = com.AttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug).to(self.device)
-#
-#     def train(self, data, optimizer, loss_fn, device):
-#         if self.pointwise:
-#             return self._train_pointwise_(data, optimizer, loss_fn, device)
-#         else:
-#             return self._train_pairwise_(data, optimizer, loss_fn, device)
-#
-#     def _train_pairwise_(self, data, optimizer, loss_fn, device):
-#         ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data[
-#             'y_label']
-#
-#         hidden = self.encoder.init_hidden(ques_batch.shape[0], device)
-#
-#         optimizer.zero_grad()
-#         # Encoding all the data
-#         ques_batch_encoded, _ = self.encoder(tu.trim(ques_batch), hidden)
-#         pos_batch_encoded, _ = self.encoder(tu.trim(pos_batch), hidden)
-#         neg_batch_encoded, _ = self.encoder(tu.trim(neg_batch), hidden)
-#
-#         ques_mask = tu.compute_mask(ques_batch)
-#         pos_mask = tu.compute_mask(pos_batch)
-#         neg_mask = tu.compute_mask(neg_batch)
-#
-#         # Now, we get a pos and a neg score.
-#         pos_scores = self.scorer(ques_batch_encoded, pos_batch_encoded, ques_mask, pos_mask)
-#         neg_scores = self.scorer(ques_batch_encoded, neg_batch_encoded, ques_mask, neg_mask)
-#
-#         '''
-#                     If `y == 1` then it assumed the first input should be ranked higher
-#                     (have a larger value) than the second input, and vice-versa for `y == -1`
-#         '''
-#
-#         loss = loss_fn(pos_scores, neg_scores, y_label)
-#         loss.backward()
-#         optimizer.step()
-#         return loss
-#
-#     def _train_pointwise_(self, data, optimizer, loss_fn, device):
-#         '''
-#             Given data, passes it through model, inited in constructor, returns loss and updates the weight
-#             :params data: {batch of question, paths and y labels}
-#             :params models list of [models]
-#             :params optimizer: torch.optim object
-#             :params loss fn: torch.nn loss object
-#             :params device: torch.device object
-#             returrns loss
-#         '''
-#         # Unpacking the data and model from args
-#         ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
-#
-#         hidden = self.encoder.init_hidden(ques_batch.shape[0], device)
-#
-#         optimizer.zero_grad()
-#
-#         # Encoding all the data
-#         ques_batch, _, _, ques_mask = self.encoder(tu.trim(ques_batch), hidden)
-#         path_batch, _, _, path_mask = self.encoder(tu.trim(path_batch), hidden)
-#
-#         # Calculating dot score
-#         score = self.scorer(ques_batch, path_batch, ques_mask, path_mask).squeeze()
-#
-#         '''
-#             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
-#         '''
-#
-#         loss = loss_fn(score, y_label)
-#         loss.backward()
-#         optimizer.step()
-#
-#         return loss
-#
-#     def predict(self, ques, paths, device):
-#         """
-#             Same code works for both pairwise or pointwise
-#         """
-#         with torch.no_grad():
-#             self.encoder.eval()
-#             hidden = self.encoder.init_hidden(ques.shape[0], device)
-#
-#             question, _ = self.encoder(tu.trim(ques.long()), hidden)
-#             path, _ = self.encoder(tu.trim(paths.long()), hidden)
-#
-#             question_mask = tu.compute_mask(ques)
-#             paths_mask = tu.compute_mask(paths)
-#
-#             score = self.scorer(question, path, question_mask, paths_mask)
-#
-#             self.encoder.train()
-#             return score.squeeze()
-#
-#     def prepare_save(self):
-#         return [('encoder', self.encoder), ('scorer', self.scorer)]
+        return [('model', self.encoder_q)]

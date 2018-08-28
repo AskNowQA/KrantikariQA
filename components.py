@@ -438,36 +438,31 @@ class HRBiLSTM(nn.Module):
 
 
 class SlotPointer(nn.Module):
+    """
+        This is an implementation of the model described in our paper (Sec: slot pointer).
+
+        We make certain assumptions namely:
+            - only use the last state of paths
+            - while calculating energies, we use encoded and not embedded version of the question
+
+    """
 
     def __init__(self, hidden_dim,
                  max_len_ques,
                  max_len_path,
                  embedding_dim,
                  vocab_size,
-                 dropout=0.0,
-                 vectors=None,
                  debug=False):
 
         super(SlotPointer, self).__init__()
 
         # Save the parameters locally
+        self.embedding_dim = embedding_dim
         self.max_len_ques = max_len_ques
         self.max_len_path = max_len_path
         self.hidden_dim = hidden_dim
-        self.embedding_dim = embedding_dim
         self.vocab_size = vocab_size
-        self.dropout = dropout
         self.debug = debug
-
-        if vectors is not None:
-            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
-            self.embedding_layer.weight.requires_grad = True
-        else:
-            # Embedding layer
-            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
-
-        self.encoder_q = nn.LSTM(self.embedding_dim, self.hidden_dim, bidirectional=True, dropout=self.dropout)
-        self.encoder_p = nn.LSTM(self.embedding_dim, self.hidden_dim, bidirectional=True, dropout=self.dropout)
 
         # A dense layer to normalize dimensions
         self.normalize = nn.Linear(self.embedding_dim, self.hidden_dim * 2)
@@ -476,86 +471,83 @@ class SlotPointer(nn.Module):
         self.k1 = nn.Parameter(torch.randn((self.hidden_dim * 2,), dtype=torch.float))
         self.k2 = nn.Parameter(torch.randn((self.hidden_dim * 2,), dtype=torch.float))
 
-    def init_hidden(self, batch_size, device):
-
-        return (torch.zeros((2, batch_size, self.hidden_dim), device=device),
-                torch.zeros((2, batch_size, self.hidden_dim), device=device))
-
-    def forward(self, ques, path_rel_1, path_rel_2, _h):
+    def forward(self, ques_enc, ques_emb, ques_mask, path_1_enc, path_1_emb, path_2_enc, path_2_emb):
         """
         :params
             :ques: torch.tensor (batch, seq)
             :path_word: torch tensor (batch, seq)
             :path_rel_1: torch.tensor (batch, 1)
             :path_rel_2: torch.tensor (batch, 1)
+
+            TODO: Put in the mask while calculating mask
         """
 
-        batch_size = ques.shape[0]
+        batch_size = ques_enc.shape[1]
 
         if self.debug:
-            print("ques:\t\t", ques.shape)
-            print("path_rel_1\t", path_rel_1.shape)
-            print("path_rel_2\t", path_rel_2.shape)
-            print("hidden_l1:\t", _h[0].shape)
-            # print("hidden_l2:\t", _h2[0].shape)
-
-        # Embed question
-        q = self.embedding_layer(ques)
-        p1 = self.embedding_layer(path_rel_1)
-        p2 = self.embedding_layer(path_rel_2)
-
-        if self.debug:
-            print("\nembedded_q:\t", q.shape)
-            print("embedded_p1:\t", p1.shape)
-            print("embedded_p2:\t", p2.shape)
-
-        # Use RNNs here
-        _q, _ = self.encoder_q(q.transpose(1, 0), _h)
-        _p1, _ = self.encoder_p(p1.transpose(1, 0), _h)
-        _p2, _ = self.encoder_p(p2.transpose(1, 0), _h)
-
-        if self.debug:
-            print("\nencoded_q:\t", _q.shape)
-            print("encoded_p1:\t", _p1.shape)
-            print("encoded_p2:\t", _p2.shape)
-            print("If something's fishy, might want to check here!")
+            print("ques_enc:\t", ques_enc.shape)
+            print("ques_emb:\t", ques_emb.shape)
+            print("ques_mask:\t", ques_mask.shape)
+            print("path_1_enc\t", path_1_enc.shape)
+            print("path_2_enc\t", path_1_emb.shape)
+            print("path_2_enc\t", path_2_enc.shape)
+            print("path_2_emb\t", path_2_emb.shape)
 
         # Energy. For one path. dot of k and q_T
-        e_1 = torch.mv(_q.transpose(1, 0).contiguous().view(-1, _q.shape[-1]), self.k1).view(_q.shape[1], _q.shape[0])
-        e_2 = torch.mv(_q.transpose(1, 0).contiguous().view(-1, _q.shape[-1]), self.k2).view(_q.shape[1], _q.shape[0])
+        e_1 = torch.mv(ques_enc.transpose(1, 0).contiguous().view(-1, ques_enc.shape[-1]), self.k1).view(
+            ques_enc.shape[1], ques_enc.shape[0])
+        e_2 = torch.mv(ques_enc.transpose(1, 0).contiguous().view(-1, ques_enc.shape[-1]), self.k2).view(
+            ques_enc.shape[1], ques_enc.shape[0])
 
         # Softmax over this axis
-        alpha_1 = F.softmax(e_1, dim=1)
-        alpha_2 = F.softmax(e_2, dim=1)
+        alpha_1 = tu.masked_softmax(e_1, dim=1, m=ques_mask)
+        alpha_2 = tu.masked_softmax(e_2, dim=1, m=ques_mask)
+        # alpha_1 = F.softmax(e_1, dim=1)
+        # alpha_2 = F.softmax(e_2, dim=1)
 
         # Stack them for ease of use
-        alpha = torch.stack((alpha_1, alpha_2), dim=1)
+        #         alpha = torch.stack((alpha_1, alpha_2), dim=1)
 
         if self.debug:
             print('\nalpha_1:\t', alpha_1.shape)
             print('alpha_2:\t', alpha_2.shape)
-            print('alpha:\t\t', alpha.shape)
+            print('sum_input_1:\t', ques_enc.transpose(1, 0).shape)
+            print('sum_input_2:\t', self.normalize(ques_emb.transpose(1, 0)).shape)
 
-        # For v, first prepare (q + _q)
-        sum_q = _q.transpose(1,0) + self.normalize(q)
-        v = torch.bmm(alpha, sum_q)
+        # For q, first prepare (q + _q)
+        sum_q = ques_enc.transpose(1, 0) # + self.normalize(ques_emb.transpose(1, 0))
+        q1 = torch.sum(alpha_1.unsqueeze(2).repeat(1, 1, sum_q.shape[2]) * sum_q, dim=1)
+        q2 = torch.sum(alpha_2.unsqueeze(2).repeat(1, 1, sum_q.shape[2]) * sum_q, dim=1)
+        q = torch.stack((q1, q2), dim=1)
 
         if self.debug:
             print('\nsum_q:\t\t', sum_q.shape)
-            print('v:\t\t', v.shape)
+            print('q1:\t\t', q1.shape)
+            print('q2:\t\t', q2.shape)
+            # print('q:\t\t', q.shape)
+            print('p_ input_a:\t', path_1_enc.shape)
+            print('p_ input_b:\t', self.normalize(torch.mean(path_1_emb.transpose(1, 0), dim=1)).shape)
 
-        # for r, we need the last state of encoders, and summed up embeddings.
-        r1 = _p1[-1] + self.normalize(torch.mean(p1, dim=1))
-        r2 = _p2[-1] + self.normalize(torch.mean(p2, dim=1))
-        r = torch.stack((r1, r2), dim=1)
+        # for p, we need the last state of encoders, and summed up embeddings.
+        p1 = path_1_enc #+ self.normalize(torch.mean(path_1_emb.transpose(1, 0), dim=1))
+        p2 = path_2_enc #+ self.normalize(torch.mean(path_2_emb.transpose(1, 0), dim=1))
+        p = torch.stack((p1, p2), dim=1)
 
         if self.debug:
-            print('\nr1:\t\t', r1.shape)
-            print('r2:\t\t', r2.shape)
-            print('r:\t\t', r.shape)
+            print('\np1:\t\t', p1.shape)
+            print('p2:\t\t', p2.shape)
+            # print('p:\t\t', p.shape)
+            # print('dot input_a:\t', q.view(-1, q.shape[-1]).shape)
+            # print('dot input_b:\t', p.view(-1, p.shape[-1]).shape)
+            # print('penultimatesum:\t',
+            #       torch.sum(q.view(-1, q.shape[-1]) * p.view(-1, p.shape[-1]), dim=1).view(batch_size, -1).shape)
 
-        # Get the dot of r and v, and add it for both path 1 & 2
-        res = torch.sum((r * v).view(r.shape[0], -1), dim=1)
+        # Get the dot of p and q, and add it for both path 1 & 2
+        # # Cross check the dot.
+        # res1 = torch.sum(q1*p1, dim=1)
+        # res2 = torch.sum(q2*p2, dim=1)
+        # res = res1 + res2
+        res = torch.sum(torch.sum(q.view(-1, q.shape[-1]) * p.view(-1, p.shape[-1]), dim=1).view(batch_size, -1), dim=1)
 
         return res
 
@@ -564,7 +556,7 @@ class BetterEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
                  embedding_dim, vocab_size, bidirectional,
                  dropout=0.0, mode='LSTM', enable_layer_norm=False,
-                 vectors=None, debug=False):
+                 vectors=None, debug=False, residual=False):
         '''
             :param max_length: Max length of the sequence.
             :param hidden_dim: dimension of the output of the LSTM.
@@ -576,6 +568,7 @@ class BetterEncoder(nn.Module):
             :param debug: Bool/ prints shapes and some other meta data.
             :param enable_layer_norm: Bool/ layer normalization.
             :param mode: LSTM/GRU.
+            :param residual: Bool/ return embedded state of the input.
 
         TODO: Implement multilayered shit someday.
         '''
@@ -588,6 +581,7 @@ class BetterEncoder(nn.Module):
         self.dropout = dropout
         self.debug = debug
         self.mode = mode
+        self.residual = residual
 
         assert self.mode in ['LSTM', 'GRU']
 
@@ -723,7 +717,15 @@ class BetterEncoder(nn.Module):
             print("len_idx:\t", len_idx.shape)
             print("o_last:\t", o_last.shape)
 
-        return o_unsort, o_last, h_unsort, mask
+        # Need to also return the last embedded state. Wtf. How?
+
+        if self.residual:
+            len_idx = (lengths - 1).view(-1, 1).expand(-1, x.size(2)).unsqueeze(0)
+            x_last = x.gather(0, len_idx)
+            x_last = x_last.squeeze(0)
+            return o_unsort, o_last, h_unsort, mask, x, x_last
+        else:
+            return o_unsort, o_last, h_unsort, mask
 
 
 if __name__ == "__main__":

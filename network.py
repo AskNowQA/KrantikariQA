@@ -3,14 +3,15 @@
 '''
 import numpy as np
 
-import components as com
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
+
 # from qelos_core.scripts.lcquad.corerank import FlatEncoder
 
-# Trim a tensor by the length of the max thing
-trim = lambda x : x[:, :(x.shape[1] - torch.min(torch.sum(x.eq(0).long(), dim=1))).item()]
-
+# Local imports
+import components as com
+from utils import tensor_utils as tu
 
 class Model(object):
     """
@@ -368,9 +369,9 @@ class BiLstmDot(Model):
         #Encoding all the data
 
         hidden = self.encoder.init_hidden(ques_batch.shape[0],self.device)
-        _, ques_batch_encoded, _, _ = self.encoder(trim(ques_batch), hidden)
-        _, pos_batch_encoded, _, _ = self.encoder(trim(pos_batch), hidden)
-        _, neg_batch_encoded, _, _  = self.encoder(trim(neg_batch), hidden)
+        _, ques_batch_encoded, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch_encoded, _, _ = self.encoder(tu.trim(pos_batch), hidden)
+        _, neg_batch_encoded, _, _  = self.encoder(tu.trim(neg_batch), hidden)
 
 
 
@@ -406,8 +407,8 @@ class BiLstmDot(Model):
 
         # Encoding all the data
         hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
-        _, ques_batch, _, _ = self.encoder(trim(ques_batch), hidden)
-        _, pos_batch, _, _ = self.encoder(trim(path_batch), hidden)
+        _, ques_batch, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch, _, _ = self.encoder(tu.trim(path_batch), hidden)
 
         #
         # norm_ques_batch = torch.abs(torch.norm(ques_batch,dim=1,p=1))
@@ -451,8 +452,8 @@ class BiLstmDot(Model):
             self.encoder.eval()
             hidden = self.encoder.init_hidden(ques.shape[0], self.device)
 
-            _, question, _, _ = self.encoder(trim(ques.long()), hidden)
-            _, paths, _, _ = self.encoder(trim(paths.long()), hidden)
+            _, question, _, _ = self.encoder(tu.trim(ques.long()), hidden)
+            _, paths, _, _ = self.encoder(tu.trim(paths.long()), hidden)
 
             if self.pointwise:
                 # question = F.normalize(F.relu(question),p=1,dim=1)
@@ -483,9 +484,7 @@ class BiLstmDot(Model):
         self.encoder.load_state_dict(torch.load(location)['encoder'])
         if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
 
-        # # Load parameters
-        # for key in self.prepare_save():
-        #     key[1].load_state_dict(model_dump[key[0]])
+
 class BiLstmDot_ULMFiT(Model):
 
     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
@@ -968,13 +967,21 @@ class DecomposableAttention(Model):
         #                            bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
         #                            dropout_in=self.parameter_dict['dropout_in']).to(self.device)
 
-        self.encoder = com.Encoder(self.parameter_dict['max_length'], self.parameter_dict['hidden_size']
-                                   , self.parameter_dict['number_of_layer'], self.parameter_dict['embedding_dim'],
-                                   self.parameter_dict['vocab_size'],
-                                   bidirectional=self.parameter_dict['bidirectional'],
-                                   vectors=self.parameter_dict['vectors']).to(self.device)
+        # self.encoder = com.Encoder(self.parameter_dict['max_length'], self.parameter_dict['hidden_size']
+        #                            , self.parameter_dict['number_of_layer'], self.parameter_dict['embedding_dim'],
+        #                            self.parameter_dict['vocab_size'],
+        #                            bidirectional=self.parameter_dict['bidirectional'],
+        #                            vectors=self.parameter_dict['vectors']).to(self.device)
 
-        self.scorer = com.AttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug).to(self.device)
+        self.encoder = com.BetterEncoder(max_length = self.parameter_dict['max_length'],
+                                         hidden_dim = self.parameter_dict['hidden_size'],
+                                         number_of_layer = self.parameter_dict['number_of_layer'],
+                                         embedding_dim = self.parameter_dict['embedding_dim'],
+                                         vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
+                                         dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
+                                         vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
+
+        self.scorer = com.BetterAttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
         if self.pointwise:
@@ -990,13 +997,13 @@ class DecomposableAttention(Model):
 
         optimizer.zero_grad()
         # Encoding all the data
-        ques_batch, _ = self.encoder(ques_batch,hidden)
-        pos_batch, _ = self.encoder(pos_batch, hidden)
-        neg_batch, _ = self.encoder(neg_batch, hidden)
+        ques_batch_encoded, _, _, ques_mask = self.encoder(tu.trim(ques_batch),hidden)
+        pos_batch_encoded, _, _, pos_mask = self.encoder(tu.trim(pos_batch), hidden)
+        neg_batch_encoded, _, _, neg_mask = self.encoder(tu.trim(neg_batch), hidden)
 
         # Now, we get a pos and a neg score.
-        pos_scores = self.scorer(ques_batch, pos_batch)
-        neg_scores = self.scorer(ques_batch, neg_batch)
+        pos_scores = self.scorer(ques_batch_encoded, pos_batch_encoded, ques_mask, pos_mask)
+        neg_scores = self.scorer(ques_batch_encoded, neg_batch_encoded, ques_mask, neg_mask)
 
         '''
                     If `y == 1` then it assumed the first input should be ranked higher
@@ -1007,9 +1014,6 @@ class DecomposableAttention(Model):
         loss.backward()
         optimizer.step()
         return loss
-
-
-
 
     def _train_pointwise_(self, data, optimizer, loss_fn, device):
         '''
@@ -1029,11 +1033,11 @@ class DecomposableAttention(Model):
         optimizer.zero_grad()
 
         # Encoding all the data
-        ques_batch, _ = self.encoder(ques_batch, hidden)
-        pos_batch, _ = self.encoder(path_batch, hidden)
+        ques_batch, _, _, ques_mask = self.encoder(tu.trim(ques_batch), hidden)
+        path_batch, _, _, path_mask = self.encoder(tu.trim(path_batch), hidden)
 
         # Calculating dot score
-        score = self.scorer(ques_batch, pos_batch).squeeze()
+        score = self.scorer(ques_batch, path_batch, ques_mask, path_mask).squeeze()
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
@@ -1053,9 +1057,9 @@ class DecomposableAttention(Model):
             self.encoder.eval()
             hidden = self.encoder.init_hidden(ques.shape[0], device)
 
-            question, _ = self.encoder(ques.long(),hidden)
-            paths, _ = self.encoder(paths.long(), hidden)
-            score = self.scorer(question, paths)
+            question, _, _, question_mask = self.encoder(tu.trim(ques.long()),hidden)
+            paths, _, _, paths_mask = self.encoder(tu.trim(paths.long()), hidden)
+            score = self.scorer(question, paths, question_mask, paths_mask)
 
             self.encoder.train()
             return score.squeeze()
@@ -1101,8 +1105,8 @@ class RelDetection(Model):
         optimizer.zero_grad()
 
         # Instantiate hidden states
-        _hp = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
-        _hn = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+        _hp = self.encoder.init_hidden(ques_batch.shape[0], device=device)
+        _hn = self.encoder.init_hidden(ques_batch.shape[0], device=device)
 
         # Encoding all the data
         pos_scores = self.encoder(ques=ques_batch,
@@ -1135,7 +1139,7 @@ class RelDetection(Model):
         optimizer.zero_grad()
 
         # Instantiate hidden states
-        _h = self.encoder.init_hidden(self.parameter_dict['batch_size'], device=device)
+        _h = self.encoder.init_hidden(ques_batch.shape[0], device=device)
 
         # Encoding all the data
         score = self.encoder(ques=ques_batch,
@@ -1160,13 +1164,12 @@ class RelDetection(Model):
         with torch.no_grad():
             self.encoder.eval()
             _h = self.encoder.init_hidden(ques.shape[0], device=device)
-            __h = self.encoder.init_hidden(ques.shape[0], device=device)
 
             score = self.encoder(ques=ques,
                                  path_word=paths,
                                  path_rel_1=paths_rel1,
                                  path_rel_2=paths_rel2,
-                                 _h=_h, _h2=__h).squeeze()
+                                 _h=_h).squeeze()
             self.encoder.train()
             return score
 
@@ -1276,3 +1279,135 @@ class SlotPointerAttn(Model):
 
     def prepare_save(self):
         return [('model', self.encoder)]
+
+
+# class DecomposableAttention(Model):
+#     """
+#         Implementation of https://arxiv.org/pdf/1606.01933.pdf.
+#         Uses an encoder and AttendCompareAggregate class in components
+#     """
+#     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+#
+#         self.debug = _debug
+#         self.parameter_dict = _parameter_dict
+#         self.device = _device
+#         self.pointwise = _pointwise
+#         self.word_to_id = _word_to_id
+#         self.hiddendim = self.parameter_dict['hidden_size'] * (1+ int(self.parameter_dict['bidirectional']))
+#
+#         if self.debug:
+#             print("Init Models")
+#
+#         # self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
+#         #                            dims=[self.parameter_dict['hidden_size']],
+#         #                            word_dic=self.word_to_id,
+#         #                            bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
+#         #                            dropout_in=self.parameter_dict['dropout_in']).to(self.device)
+#
+#         self.encoder = com.Encoder(self.parameter_dict['max_length'], self.parameter_dict['hidden_size']
+#                                    , self.parameter_dict['number_of_layer'], self.parameter_dict['embedding_dim'],
+#                                    self.parameter_dict['vocab_size'],
+#                                    bidirectional=self.parameter_dict['bidirectional'],
+#                                    vectors=self.parameter_dict['vectors']).to(self.device)
+#
+#         # self.encoder = com.BetterEncoder(max_length = self.parameter_dict['max_length'],
+#         #                                  hidden_dim = self.parameter_dict['hidden_size'],
+#         #                                  number_of_layer = self.parameter_dict['number_of_layer'],
+#         #                                  embedding_dim = self.parameter_dict['embedding_dim'],
+#         #                                  vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
+#         #                                  dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
+#         #                                  vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
+#
+#         self.scorer = com.AttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug).to(self.device)
+#
+#     def train(self, data, optimizer, loss_fn, device):
+#         if self.pointwise:
+#             return self._train_pointwise_(data, optimizer, loss_fn, device)
+#         else:
+#             return self._train_pairwise_(data, optimizer, loss_fn, device)
+#
+#     def _train_pairwise_(self, data, optimizer, loss_fn, device):
+#         ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data[
+#             'y_label']
+#
+#         hidden = self.encoder.init_hidden(ques_batch.shape[0], device)
+#
+#         optimizer.zero_grad()
+#         # Encoding all the data
+#         ques_batch_encoded, _ = self.encoder(tu.trim(ques_batch), hidden)
+#         pos_batch_encoded, _ = self.encoder(tu.trim(pos_batch), hidden)
+#         neg_batch_encoded, _ = self.encoder(tu.trim(neg_batch), hidden)
+#
+#         ques_mask = tu.compute_mask(ques_batch)
+#         pos_mask = tu.compute_mask(pos_batch)
+#         neg_mask = tu.compute_mask(neg_batch)
+#
+#         # Now, we get a pos and a neg score.
+#         pos_scores = self.scorer(ques_batch_encoded, pos_batch_encoded, ques_mask, pos_mask)
+#         neg_scores = self.scorer(ques_batch_encoded, neg_batch_encoded, ques_mask, neg_mask)
+#
+#         '''
+#                     If `y == 1` then it assumed the first input should be ranked higher
+#                     (have a larger value) than the second input, and vice-versa for `y == -1`
+#         '''
+#
+#         loss = loss_fn(pos_scores, neg_scores, y_label)
+#         loss.backward()
+#         optimizer.step()
+#         return loss
+#
+#     def _train_pointwise_(self, data, optimizer, loss_fn, device):
+#         '''
+#             Given data, passes it through model, inited in constructor, returns loss and updates the weight
+#             :params data: {batch of question, paths and y labels}
+#             :params models list of [models]
+#             :params optimizer: torch.optim object
+#             :params loss fn: torch.nn loss object
+#             :params device: torch.device object
+#             returrns loss
+#         '''
+#         # Unpacking the data and model from args
+#         ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+#
+#         hidden = self.encoder.init_hidden(ques_batch.shape[0], device)
+#
+#         optimizer.zero_grad()
+#
+#         # Encoding all the data
+#         ques_batch, _, _, ques_mask = self.encoder(tu.trim(ques_batch), hidden)
+#         path_batch, _, _, path_mask = self.encoder(tu.trim(path_batch), hidden)
+#
+#         # Calculating dot score
+#         score = self.scorer(ques_batch, path_batch, ques_mask, path_mask).squeeze()
+#
+#         '''
+#             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+#         '''
+#
+#         loss = loss_fn(score, y_label)
+#         loss.backward()
+#         optimizer.step()
+#
+#         return loss
+#
+#     def predict(self, ques, paths, device):
+#         """
+#             Same code works for both pairwise or pointwise
+#         """
+#         with torch.no_grad():
+#             self.encoder.eval()
+#             hidden = self.encoder.init_hidden(ques.shape[0], device)
+#
+#             question, _ = self.encoder(tu.trim(ques.long()), hidden)
+#             path, _ = self.encoder(tu.trim(paths.long()), hidden)
+#
+#             question_mask = tu.compute_mask(ques)
+#             paths_mask = tu.compute_mask(paths)
+#
+#             score = self.scorer(question, path, question_mask, paths_mask)
+#
+#             self.encoder.train()
+#             return score.squeeze()
+#
+#     def prepare_save(self):
+#         return [('encoder', self.encoder), ('scorer', self.scorer)]

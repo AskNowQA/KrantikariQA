@@ -289,7 +289,7 @@ if __name__ == "__main__":
                         help='dataset includes lcquad,qald',default = 'lcquad')
 
     parser.add_argument('-model', action='store', dest='model',
-                        help='name of the model to use',default='reldet')
+                        help='name of the model to use',default='bilstm_dot')
 
     parser.add_argument('-pointwise', action='store', dest='pointwise',
                         help='to use pointwise training procedure make it true',default=False)
@@ -376,6 +376,10 @@ if __name__ == "__main__":
                                list(filter(lambda p: p.requires_grad, modeler.scorer.parameters())))
     if training_model == 'reldet':
         modeler = net.RelDetection(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                            _device=device, _pointwise=pointwise, _debug=False)
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+    if training_model == 'slotptr':
+        modeler = net.SlotPointerAttn(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                             _device=device, _pointwise=pointwise, _debug=False)
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
 

@@ -8,6 +8,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+def compute_mask(t, padding_idx=0):
+    """
+    compute mask on given tensor t
+    :param t:
+    :param padding_idx:
+    :return:
+    """
+    mask = torch.ne(t, padding_idx).float()
+    return mask
+
 class Encoder(nn.Module):
 
     """LSTM encoder."""
@@ -540,3 +550,200 @@ class SlotPointer(nn.Module):
         res = torch.sum((r * v).view(r.shape[0], -1), dim=1)
 
         return res
+
+
+class BetterEncoder(nn.Module):
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, debug=False):
+        '''
+            :param max_length: Max length of the sequence.
+            :param hidden_dim: dimension of the output of the LSTM.
+            :param number_of_layer: Number of LSTM to be stacked.
+            :param embedding_dim: The output dimension of the embedding layer/ important only if vectors=none
+            :param vocab_size: Size of vocab / number of rows in embedding matrix
+            :param bidirectional: boolean - if true creates BIdir LStm
+            :param vectors: embedding matrix
+            :param debug: Bool/ prints shapes and some other meta data.
+            :param enable_layer_norm: Bool/ layer normalization.
+            :param mode: LSTM/GRU.
+
+        TODO: Implement multilayered shit someday.
+        '''
+        super(BetterEncoder, self).__init__()
+
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = max_length, hidden_dim, embedding_dim, vocab_size
+        self.enable_layer_norm = enable_layer_norm
+        self.number_of_layer = number_of_layer
+        self.bidirectional = bidirectional
+        self.dropout = dropout
+        self.debug = debug
+        self.mode = mode
+
+        assert self.mode in ['LSTM', 'GRU']
+
+        if vectors is not None:
+            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
+            self.embedding_layer.weight.requires_grad = True
+        else:
+            # Embedding layer
+            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
+
+        # Mode
+        if self.mode == 'LSTM':
+            self.rnn = torch.nn.LSTM(input_size=self.embedding_dim,
+                                     hidden_size=self.hidden_dim,
+                                     num_layers=1,
+                                     bidirectional=self.bidirectional)
+        elif self.mode == 'GRU':
+            self.rnn = torch.nn.GRU(input_size=self.embedding_dim,
+                                    hidden_size=self.hidden_dim,
+                                    num_layers=1,
+                                    bidirectional=self.bidirectional)
+        self.dropout = torch.nn.Dropout(p=self.dropout)
+        self.reset_parameters()
+
+    def init_hidden(self, batch_size, device):
+        """
+            Hidden states to be put in the model as needed.
+        :param batch_size: desired batchsize for the hidden
+        :param device: torch device
+        :return:
+        """
+        if self.mode == 'LSTM':
+            return (torch.ones((2 * 1, batch_size, self.hidden_dim), device=device),
+                    torch.ones((2 * 1, batch_size, self.hidden_dim), device=device))
+        else:
+            return torch.ones((2 * 1, batch_size, self.hidden_dim), device=device)
+
+    def reset_parameters(self):
+        """
+        Here we reproduce Keras default initialization weights to initialize Embeddings/LSTM weights
+        """
+        ih = (param for name, param in self.named_parameters() if 'weight_ih' in name)
+        hh = (param for name, param in self.named_parameters() if 'weight_hh' in name)
+        b = (param for name, param in self.named_parameters() if 'bias' in name)
+        for t in ih:
+            torch.nn.init.xavier_uniform_(t)
+        for t in hh:
+            torch.nn.init.orthogonal_(t)
+        for t in b:
+            torch.nn.init.constant_(t, 0)
+
+    def forward(self, x, h):
+        """
+
+        :param x: input (batch, seq)
+        :param h: hiddenstate (depends on mode. see init hidden)
+        :param device: torch device
+        :return: depends on booleans passed @ init.
+        """
+
+        if self.debug:
+            print ("\tx:\t\t", x.shape)
+            if self.mode is "LSTM":
+                print ("\th[0]:\t\t", h[0].shape)
+            else:
+                print ("\th:\t\t", h.shape)
+
+        mask = compute_mask(x)
+
+        x = self.embedding_layer(x).transpose(0, 1)
+
+        if self.debug: print ("x_emb:\t\t", x.shape)
+
+        if self.enable_layer_norm:
+            seq_len, batch, input_size = x.shape
+            x = x.view(-1, input_size)
+            x = self.layer_norm(x)
+            x = x.view(seq_len, batch, input_size)
+
+        if self.debug: print("x_emb bn:\t", x.shape)
+
+        # get sorted v
+        lengths = mask.eq(1).long().sum(1)
+        lengths_sort, idx_sort = torch.sort(lengths, dim=0, descending=True)
+        _, idx_unsort = torch.sort(idx_sort, dim=0)
+
+        x_sort = x.index_select(1, idx_sort)
+        h_sort = (h[0].index_select(1, idx_sort), h[1].index_select(1, idx_sort)) \
+            if self.mode is "LSTM" else h.index_select(1, idx_sort)
+
+        x_pack = torch.nn.utils.rnn.pack_padded_sequence(x_sort, lengths_sort)
+        x_dropout = self.dropout.forward(x_pack.data)
+        x_pack_dropout = torch.nn.utils.rnn.PackedSequence(x_dropout, x_pack.batch_sizes)
+
+        if self.debug:
+            print("\nidx_sort:", idx_sort.shape)
+            print("idx_unsort:", idx_unsort.shape)
+            print("x_sort:", x_sort.shape)
+            print("h_sort:", h_sort.shape)
+            print("x_pack:", x_pack.shape)
+            print("x_pack_dropout:", x_pack_dropout.shape)
+
+
+        o_pack_dropout, h_sort = self.rnn.forward(x_pack_dropout, h_sort)
+        o, _ = torch.nn.utils.rnn.pad_packed_sequence(o_pack_dropout)
+
+        # Unsort o based ont the unsort index we made
+        o_unsort = o.index_select(1, idx_unsort)  # Note that here first dim is seq_len
+        h_unsort = (h_sort[0].index_select(1, idx_unsort), h_sort[1].index_select(1, idx_unsort)) \
+            if self.mode is "LSTM" else h_sort.index_select(1, idx_unsort)
+
+
+        # @TODO: Do we also unsort h? Does h not change based on the sort?
+
+        if self.debug:
+            print("\no_pack_dropout:", o_pack_dropout.shape)
+            if self.mode is "LSTM":
+                print("h_sort\t\t", h_sort[0].shape)
+            else:
+                print("h_sort\t\t", h_sort.shape)
+            print("\no\t\t\t", o.shape)
+            print("o_unsort\t\t", o_unsort)
+            if self.mode is "LSTM":
+                print("h_unsort\t\t", h_unsort[0].shape)
+            else:
+                print("h_unsort\t\t", h_unsort.shape)
+
+        # get the last time state
+        len_idx = (lengths - 1).view(-1, 1).expand(-1, o_unsort.size(2)).unsqueeze(0)
+        o_last = o_unsort.gather(0, len_idx)
+        o_last = o_last.squeeze(0)
+
+        if self.debug:
+            print("len_idx:\t", len_idx.shape)
+            print("o_last:\t", o_last.shape)
+
+        return o_unsort, o_last, h_unsort, mask
+
+
+if __name__ == "__main__":
+    max_length = 25
+    hidden_dim = 30
+    embedding_dim = 300
+    vocab_size = 1000,
+    bidirectional = True
+    batch_size = 10
+    device = torch.device('cpu')
+
+    question = torch.randint(1, 1000, (10, 25), device=device, dtype=torch.long)
+    question[:5, 20:] = torch.zeros_like(question[:5, 20:])
+    question[5:,14:] = torch.zeros_like(question[5:,14:])
+    question = question[:,:(question.shape[1] - torch.min(torch.sum(question.eq(0).long(), dim=1))).item()]
+    vectors = torch.randn((1000, embedding_dim))
+
+    encoder = BetterEncoder(max_length, hidden_dim, 1,
+                            embedding_dim, vocab_size, bidirectional, vectors=vectors).to(device)
+
+    hidden_0 = encoder.init_hidden(question.shape[0], device)
+    # hidden_0 = (torch.zeros((2 * 1, question.shape[0], hidden_dim), device=device),
+    #                     torch.zeros((2 * 1, question.shape[0], hidden_dim), device=device))
+    # hidden_1 = (torch.ones((2 * 1, question.shape[0], hidden_dim), device=device),
+    #                     torch.ones((2 * 1, question.shape[0], hidden_dim), device=device))
+    # hidden_r = (torch.randint(0,1000,(2 * 1, question.shape[0], hidden_dim), device=device),
+    #                     torch.randint(0,1000, (2 * 1, question.shape[0], hidden_dim), device=device))
+    out0 = encoder.forward(question, hidden_0, device)
+    # out1 = encoder.forward(question, hidden_1, device)[0]
+    # outr = encoder.forward(question, hidden_r, device)[0]

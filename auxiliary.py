@@ -1,8 +1,9 @@
-import pickle,os,torch
-import numpy as np
+import sys
 import json
-import prepare_transfer_learning as ptl
+import numpy as np
+import pickle,os,torch
 import data_loader as dl
+import prepare_transfer_learning as ptl
 
 
 #Should be shifted to some other locations
@@ -14,7 +15,11 @@ def load_relation(COMMON_DATA_DIR):
     :param relation_file: str
     :return: dict
     """
-    relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle')))
+
+    if sys.version_info[0] == 3:
+        relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle'), 'rb'), encoding='bytes')
+    else:
+        relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle'),'rb'))
     inverse_relations = {}
     for key in relations:
         value = relations[key]
@@ -27,7 +32,10 @@ def load_relation(COMMON_DATA_DIR):
 
 #Loads word list from given COMMON_DATA_DIR. To be used by FlatEncoder.
 def load_word_list(COMMON_DATA_DIR):
-    word_list = pickle.load(open(COMMON_DATA_DIR + '/glove.300d.words'))
+    if sys.version_info[0] == 3:
+        word_list = pickle.load(open(COMMON_DATA_DIR + '/glove.300d.words','rb'), encoding='bytes')
+    else:
+        word_list = pickle.load(open(COMMON_DATA_DIR + '/glove.300d.words','rb'))
     word_to_id = {}
     for index, word in enumerate(word_list):
         word_to_id[word] = index
@@ -92,7 +100,7 @@ def save_model(loc, modeler, model_name='model.torch', epochs=0, optimizer=None,
     except KeyError:
         print("in model save, no vectors were found.")
         pass
-    pickle.dump(_aux_save_information,open(aux_save, 'w+'))
+    pickle.dump(_aux_save_information,open(aux_save, 'wb+'))
 
 
 # def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths, valid_pos_paths_rel1, valid_pos_paths_rel2, valid_neg_paths_rel1, valid_neg_paths_rel2, modeler, device):
@@ -201,13 +209,20 @@ def load_embeddingid_gloveid():
     '''
         Loads required dictionary files for id_to_word functionality
     '''
-    gloveid_to_embeddingid = pickle.load(open('data/data/common/vocab.pickle'))
+    if sys.version_info[0] == 3:
+        gloveid_to_embeddingid = pickle.load(open('data/data/common/vocab.pickle','rb'),encoding='bytes')
+    else:
+        gloveid_to_embeddingid = pickle.load(open('data/data/common/vocab.pickle','rb'))
     # reverse vocab it
     embeddingid_to_gloveid = {}
     for keys in gloveid_to_embeddingid:
         embeddingid_to_gloveid[gloveid_to_embeddingid[keys]] = keys
 
-    word_to_gloveid = pickle.load(open('./resources/glove_vocab.pickle'))
+    if sys.version_info[0] == 3:
+        word_to_gloveid = pickle.load(open('./resources/glove_vocab.pickle','rb'),encoding='bytes')
+    else:
+        word_to_gloveid = pickle.load(open('./resources/glove_vocab.pickle', 'rb'))
+
     gloveid_to_word = {}
     for keys in word_to_gloveid:
         gloveid_to_word[word_to_gloveid[keys]] = keys

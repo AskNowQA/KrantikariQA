@@ -666,10 +666,13 @@ class BiLstmDense(Model):
         if self.debug:
             print("Init Models")
 
-        self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
-                                   dims=[self.parameter_dict['hidden_size']],
-                                   word_dic=self.word_to_id,
-                                   bidir=True).to(self.device)
+        self.encoder = com.BetterEncoder(max_length=self.parameter_dict['max_length'],
+                                         hidden_dim=self.parameter_dict['hidden_size'],
+                                         number_of_layer=self.parameter_dict['number_of_layer'],
+                                         embedding_dim=self.parameter_dict['embedding_dim'],
+                                         vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
+                                         dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
+                                         vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
 
         self.dense = com.DenseClf(inputdim=self.hiddendim*2,        # *2 because we have two things concatinated here
                                   hiddendim=self.hiddendim/2,
@@ -699,13 +702,14 @@ class BiLstmDense(Model):
 
         optimizer.zero_grad()
         # Encoding all the data
-        ques_batch = self.encoder(ques_batch)
-        pos_batch = self.encoder(pos_batch)
-        neg_batch = self.encoder(neg_batch)
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch_encoded, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch_encoded, _, _ = self.encoder(tu.trim(pos_batch), hidden)
+        _, neg_batch_encoded, _, _  = self.encoder(tu.trim(neg_batch), hidden)
 
         # Calculating dot score
-        pos_scores = self.dense(torch.cat((ques_batch, pos_batch), dim=1))
-        neg_scores = self.dense(torch.cat((ques_batch, neg_batch), dim=1))
+        pos_scores = self.dense(torch.cat((ques_batch_encoded, pos_batch_encoded), dim=1))
+        neg_scores = self.dense(torch.cat((ques_batch_encoded, neg_batch_encoded), dim=1))
 
         '''
             If `y == 1` then it assumed the first input should be ranked higher
@@ -735,8 +739,9 @@ class BiLstmDense(Model):
         optimizer.zero_grad()
 
         # Encoding all the data
-        ques_batch = self.encoder(ques_batch)
-        pos_batch = self.encoder(path_batch)
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch, _, _ = self.encoder(tu.trim(path_batch), hidden)
 
         # Calculating dot score
         score = self.dense(torch.cat((ques_batch, pos_batch), dim=1)).squeeze()
@@ -758,8 +763,10 @@ class BiLstmDense(Model):
         with torch.no_grad():
 
             self.encoder.eval()
-            question = self.encoder(ques.long())
-            paths = self.encoder(paths.long())
+            hidden = self.encoder.init_hidden(ques.shape[0], self.device)
+
+            _, question, _, _ = self.encoder(tu.trim(ques.long()), hidden)
+            _, paths, _, _ = self.encoder(tu.trim(paths.long()), hidden)
             score = self.dense(torch.cat((question, paths), dim=1)).squeeze()
             self.encoder.train()
 
@@ -795,10 +802,14 @@ class BiLstmDenseDot(Model):
 
         if self.debug:
             print("Init Models")
-        self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
-                                   dims=[self.parameter_dict['hidden_size']],
-                                   word_dic=self.word_to_id,
-                                   bidir=True).to(self.device)
+        self.encoder = com.BetterEncoder(max_length=self.parameter_dict['max_length'],
+                                         hidden_dim=self.parameter_dict['hidden_size'],
+                                         number_of_layer=self.parameter_dict['number_of_layer'],
+                                         embedding_dim=self.parameter_dict['embedding_dim'],
+                                         vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
+                                         dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
+                                         vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
+
         self.dense = com.DenseClf(inputdim=self.hiddendim,
                                   hiddendim=self.hiddendim/2,
                                   outputdim=self.hiddendim/4).to(self.device)
@@ -828,15 +839,16 @@ class BiLstmDenseDot(Model):
         optimizer.zero_grad()
 
         # Encoding all the data
-        ques_batch = self.encoder(ques_batch)
-        pos_batch = self.encoder(pos_batch)
-        neg_batch = self.encoder(neg_batch)
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch_encoded, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch_encoded, _, _ = self.encoder(tu.trim(pos_batch), hidden)
+        _, neg_batch_encoded, _, _ = self.encoder(tu.trim(neg_batch), hidden)
 
 
         # Pass all encoded stuff through the dense too
-        ques_batch = self.dense(ques_batch)
-        pos_batch = self.dense(pos_batch)
-        neg_batch = self.dense(neg_batch)
+        ques_batch = self.dense(ques_batch_encoded)
+        pos_batch = self.dense(pos_batch_encoded)
+        neg_batch = self.dense(neg_batch_encoded)
 
 
         # Calculating dot score
@@ -871,8 +883,9 @@ class BiLstmDenseDot(Model):
         optimizer.zero_grad()
 
         # Encoding all the data
-        ques_batch = self.encoder(ques_batch)
-        pos_batch = self.encoder(path_batch)
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch, _, _ = self.encoder(tu.trim(path_batch), hidden)
 
         # Compress the last state
         ques_batch = self.dense(ques_batch)
@@ -900,8 +913,10 @@ class BiLstmDenseDot(Model):
 
             self.encoder.eval()
 
-            question = self.encoder(ques.long())
-            paths = self.encoder(paths.long())
+            hidden = self.encoder.init_hidden(ques.shape[0], self.device)
+
+            _, question, _, _ = self.encoder(tu.trim(ques.long()), hidden)
+            _, paths, _, _ = self.encoder(tu.trim(paths.long()), hidden)
 
             # Dense
             question = self.dense(question)

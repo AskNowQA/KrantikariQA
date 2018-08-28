@@ -89,11 +89,11 @@ class DenseClf(nn.Module):
 
         super(DenseClf, self).__init__()
 
-        self.inputdim = inputdim
-        self.hiddendim = hiddendim
-        self.outputdim = outputdim
-        self.hidden = nn.Linear(inputdim, hiddendim)
-        self.output = nn.Linear(hiddendim, outputdim)
+        self.inputdim = int(inputdim)
+        self.hiddendim = int(hiddendim)
+        self.outputdim = int(outputdim)
+        self.hidden = nn.Linear(self.inputdim, self.hiddendim)
+        self.output = nn.Linear(self.hiddendim, self.outputdim)
 
     def forward(self, x):
 
@@ -564,7 +564,7 @@ class BetterEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
                  embedding_dim, vocab_size, bidirectional,
                  dropout=0.0, mode='LSTM', enable_layer_norm=False,
-                 vectors=None, debug=False):
+                 vectors=None, debug=False, residual=False):
         '''
             :param max_length: Max length of the sequence.
             :param hidden_dim: dimension of the output of the LSTM.
@@ -576,6 +576,7 @@ class BetterEncoder(nn.Module):
             :param debug: Bool/ prints shapes and some other meta data.
             :param enable_layer_norm: Bool/ layer normalization.
             :param mode: LSTM/GRU.
+            :param residual: Bool/ return embedded state of the input.
 
         TODO: Implement multilayered shit someday.
         '''
@@ -588,6 +589,7 @@ class BetterEncoder(nn.Module):
         self.dropout = dropout
         self.debug = debug
         self.mode = mode
+        self.residual = residual
 
         assert self.mode in ['LSTM', 'GRU']
 
@@ -723,7 +725,10 @@ class BetterEncoder(nn.Module):
             print("len_idx:\t", len_idx.shape)
             print("o_last:\t", o_last.shape)
 
-        return o_unsort, o_last, h_unsort, mask
+        if self.residual:
+            return o_unsort, o_last, h_unsort, mask, x.transpose(1,0)
+        else:
+            return o_unsort, o_last, h_unsort, mask
 
 
 if __name__ == "__main__":

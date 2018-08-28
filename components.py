@@ -8,15 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-def compute_mask(t, padding_idx=0):
-    """
-    compute mask on given tensor t
-    :param t:
-    :param padding_idx:
-    :return:
-    """
-    mask = torch.ne(t, padding_idx).float()
-    return mask
+from utils import tensor_utils as tu
 
 class Encoder(nn.Module):
 
@@ -209,7 +201,7 @@ class CNN(nn.Module):
         return output
 
 
-class AttendCompareAggregate(nn.Module):
+class BetterAttendCompareAggregate(nn.Module):
     """
         Corresponds to the equations above. Init needs inputoutput dims.
         Suggestion:
@@ -250,16 +242,16 @@ class AttendCompareAggregate(nn.Module):
     """
 
     def __init__(self, inputdim, debug=False):
-        super(AttendCompareAggregate, self).__init__()
+        super(BetterAttendCompareAggregate, self).__init__()
 
         self.inputdim = inputdim
         self.debug = debug
 
-        self.F = nn.Linear(self.inputdim, self.inputdim)
-        self.G = nn.Linear(self.inputdim * 2, self.inputdim)
-        self.H = nn.Linear(self.inputdim * 2, 1)
+        self.F = nn.Linear(self.inputdim, self.inputdim, bias=False)
+        self.G = nn.Linear(self.inputdim * 2, self.inputdim, bias=False)
+        self.H = nn.Linear(self.inputdim * 2, 1, bias=False)
 
-    def forward(self, q, p):
+    def forward(self, q, p, qm, pm):
 
         # Collect some temp macros
         batch_size = q.shape[1]
@@ -268,6 +260,8 @@ class AttendCompareAggregate(nn.Module):
             print("Input:")
             print("\tq:\t", q.shape)
             print("\tp:\t", p.shape)
+            print("\tqm:\t", qm.shape)
+            print("\tpm:\t", pm.shape)
 
         # Create att_p, q matrices. We use view to change the input and the output. VIEW IS TESTED DONT PANIC.
         att_q = self.F(q.view(-1, q.shape[2])).view(seq_length_q, batch_size, -1).transpose(1, 0)
@@ -279,19 +273,33 @@ class AttendCompareAggregate(nn.Module):
         # Now we calculate e. To do so, we transpose att_q, and BMM it with att_p
         # Note: correspondence held between q->i & p->j in the matrix e.
         e = torch.bmm(att_q, att_p.transpose(2, 1))
+        pm = pm.unsqueeze(1).repeat(1, qm.shape[-1], 1)
+        qm = qm.unsqueeze(1).repeat(1, pm.shape[-1], 1).transpose(2, 1)
+        m = qm * pm
+        # Make both masks of the same shape as that of e
+
         if self.debug:
             print ("\te:\t", e.shape)
+            print ("\tqm:\t", qm.shape)
+            print ("\tpm:\t", pm.shape)
 
         # We now prepare softmax_j and softmax_i (as defined in eq above)
-        softmax_j = F.softmax(e.view(-1, e.shape[2]), dim=1).view(-1, e.shape[1], e.shape[2])
-        softmax_i = F.softmax(e.transpose(2, 1).contiguous().view(-1, e.shape[1]), dim=1).transpose(1, 0). \
-            view(e.shape[1], -1, e.shape[2]).transpose(1, 0)
+        softmax_j = tu.masked_softmax(e.view(-1, e.shape[2]),
+                                      m=m.contiguous().view(-1, m.shape[2]),
+                                      dim=1).view(-1, e.shape[1],e.shape[2])
+        softmax_i = tu.masked_softmax(e.transpose(2, 1).contiguous().view(-1, e.shape[1]),
+                                      m=m.transpose(2, 1).contiguous().view(-1, e.shape[1]),
+                                      dim=1).view(-1, e.shape[2], e.shape[1])
+        #         softmax_j = F.softmax(e.view(-1, e.shape[2]), dim=1)
+
+        #         softmax_i = F.softmax(e.transpose(2, 1).contiguous().view(-1, e.shape[1]), dim=1).transpose(1, 0). \
+        #             view(e.shape[1], -1, e.shape[2]).transpose(1, 0)
         if self.debug:
             print ("       softmaxj:\t\b", softmax_j.shape)
             print ("       softmaxi:\t\b", softmax_i.shape)
 
         beta = torch.bmm(softmax_j, p.transpose(1, 0))
-        alpha = torch.bmm(softmax_i.transpose(2, 1), q.transpose(1, 0))
+        alpha = torch.bmm(softmax_i, q.transpose(1, 0))
         if self.debug:
             print ("\tbeta:\t", beta.shape)
             print ("\talpha:\t", alpha.shape)
@@ -641,13 +649,13 @@ class BetterEncoder(nn.Module):
         """
 
         if self.debug:
-            print ("\tx:\t\t", x.shape)
+            print ("\tx:\t", x.shape)
             if self.mode is "LSTM":
-                print ("\th[0]:\t\t", h[0].shape)
+                print ("\th[0]:\t", h[0].shape)
             else:
-                print ("\th:\t\t", h.shape)
+                print ("\th:\t", h.shape)
 
-        mask = compute_mask(x)
+        mask = tu.compute_mask(x)
 
         x = self.embedding_layer(x).transpose(0, 1)
 
@@ -678,9 +686,10 @@ class BetterEncoder(nn.Module):
             print("\nidx_sort:", idx_sort.shape)
             print("idx_unsort:", idx_unsort.shape)
             print("x_sort:", x_sort.shape)
-            print("h_sort:", h_sort.shape)
-            print("x_pack:", x_pack.shape)
-            print("x_pack_dropout:", x_pack_dropout.shape)
+            if self.mode is "LSTM":
+                print ("h_sort[0]:\t\t", h_sort[0].shape)
+            else:
+                print ("h_sort:\t\t", h_sort.shape)
 
 
         o_pack_dropout, h_sort = self.rnn.forward(x_pack_dropout, h_sort)
@@ -695,13 +704,11 @@ class BetterEncoder(nn.Module):
         # @TODO: Do we also unsort h? Does h not change based on the sort?
 
         if self.debug:
-            print("\no_pack_dropout:", o_pack_dropout.shape)
             if self.mode is "LSTM":
                 print("h_sort\t\t", h_sort[0].shape)
             else:
                 print("h_sort\t\t", h_sort.shape)
-            print("\no\t\t\t", o.shape)
-            print("o_unsort\t\t", o_unsort)
+            print("o_unsort\t\t", o_unsort.shape)
             if self.mode is "LSTM":
                 print("h_unsort\t\t", h_unsort[0].shape)
             else:

@@ -41,6 +41,7 @@ def load_word_list(COMMON_DATA_DIR):
         word_to_id[word] = index
     return word_to_id
 
+
 def save_location(problem, model_name, dataset):
     '''
             Location - data/models/problem/model_name/dataset/0X
@@ -160,6 +161,7 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  mode
                 precision.append(0)
     return sum(precision) * 1.0 / len(precision)
 
+
 def validation_accuracy_alter(valid_questions, valid_pos_paths, valid_neg_paths, modeler, device, qa):
     precision = []
 
@@ -204,7 +206,6 @@ def id_to_word(path, gloveid_to_word, embeddingid_to_gloveid, remove_pad = True)
     return " ".join(sent)
 
 
-
 def load_embeddingid_gloveid():
     '''
         Loads required dictionary files for id_to_word functionality
@@ -228,11 +229,13 @@ def load_embeddingid_gloveid():
         gloveid_to_word[word_to_gloveid[keys]] = keys
     return gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word
 
+
 def to_bool(value):
     if str(value) == 'true' or str(value) == 'True':
         return True
     else:
         return False
+
 
 def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _pointwise,_device):
 

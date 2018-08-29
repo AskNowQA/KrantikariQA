@@ -8,16 +8,21 @@
 '''
 from __future__ import print_function
 
+# Torch imports
 import torch
 import torch.nn as nn
 from torch import optim
 from torch.utils.data import  DataLoader
 
+# Local imports
 import data_loader as dl
 import auxiliary as aux
 import network as net
-import argparse
+
+# Other libs
+from tqdm import tqdm
 import numpy as np
+import argparse
 import time
 
 from configs import config_loader as cl
@@ -39,6 +44,7 @@ _relations = aux.load_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
 gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
+
 
 def load_data(data,parameter_dict,pointwise,schema='default',shuffle = False):
     # Loading training data
@@ -86,8 +92,6 @@ def curatail_padding(data,parameter_dict):
     return data
 
 
-
-
 def training_loop(training_model, parameter_dict,modeler,train_loader,
                   optimizer,loss_func, data, dataset, device, test_every, validate_every , pointwise = False, problem='core_chain'):
 
@@ -126,6 +130,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
         epoch_time = time.time()
 
         # Loop for one batch
+        # tqdm_loop = tqdm(enumerate(train_loader))
         for i_batch, sample_batched in enumerate(train_loader):
 
             # Bookkeeping and data preparation
@@ -206,6 +211,8 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
             # Bookkeep the training loss
             epoch_loss.append(loss.item())
+
+            # tqdm_loop.desc("#"+str(i_batch)+"\tLoss:" + str(loss.item())[:min(5, len(str(loss.item())))])
 
             print("Batch:\t%d" % i_batch, "/%d\t: " % (parameter_dict['batch_size']),
                   "%s" % (time.time() - batch_time),

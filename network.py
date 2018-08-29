@@ -336,13 +336,13 @@ class BiLstmDot(Model):
 
 
 
-        self.encoder = com.ShitEncoder(max_length = self.parameter_dict['max_length'],
-                                       hidden_dim = self.parameter_dict['hidden_size'],
-                                       number_of_layer = self.parameter_dict['number_of_layer'],
-                                       embedding_dim = self.parameter_dict['embedding_dim'],
-                                       vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
-                                       dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
-                                       vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
+        self.encoder = com.NotSuchABetterEncoder(max_length = self.parameter_dict['max_length'],
+                                                 hidden_dim = self.parameter_dict['hidden_size'],
+                                                 number_of_layer = self.parameter_dict['number_of_layer'],
+                                                 embedding_dim = self.parameter_dict['embedding_dim'],
+                                                 vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
+                                                 dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
+                                                 vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
     #
@@ -666,13 +666,13 @@ class BiLstmDense(Model):
         if self.debug:
             print("Init Models")
 
-        self.encoder = com.ShitEncoder(max_length=self.parameter_dict['max_length'],
-                                       hidden_dim=self.parameter_dict['hidden_size'],
-                                       number_of_layer=self.parameter_dict['number_of_layer'],
-                                       embedding_dim=self.parameter_dict['embedding_dim'],
-                                       vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
-                                       dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
-                                       vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
+        self.encoder = com.NotSuchABetterEncoder(max_length=self.parameter_dict['max_length'],
+                                                 hidden_dim=self.parameter_dict['hidden_size'],
+                                                 number_of_layer=self.parameter_dict['number_of_layer'],
+                                                 embedding_dim=self.parameter_dict['embedding_dim'],
+                                                 vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
+                                                 dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
+                                                 vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
 
         self.dense = com.DenseClf(inputdim=self.hiddendim*2,        # *2 because we have two things concatinated here
                                   hiddendim=self.hiddendim/2,
@@ -802,13 +802,13 @@ class BiLstmDenseDot(Model):
 
         if self.debug:
             print("Init Models")
-        self.encoder = com.ShitEncoder(max_length=self.parameter_dict['max_length'],
-                                       hidden_dim=self.parameter_dict['hidden_size'],
-                                       number_of_layer=self.parameter_dict['number_of_layer'],
-                                       embedding_dim=self.parameter_dict['embedding_dim'],
-                                       vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
-                                       dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
-                                       vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
+        self.encoder = com.NotSuchABetterEncoder(max_length=self.parameter_dict['max_length'],
+                                                 hidden_dim=self.parameter_dict['hidden_size'],
+                                                 number_of_layer=self.parameter_dict['number_of_layer'],
+                                                 embedding_dim=self.parameter_dict['embedding_dim'],
+                                                 vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
+                                                 dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
+                                                 vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
 
         self.dense = com.DenseClf(inputdim=self.hiddendim,
                                   hiddendim=self.hiddendim/2,
@@ -988,13 +988,13 @@ class DecomposableAttention(Model):
         #                            bidirectional=self.parameter_dict['bidirectional'],
         #                            vectors=self.parameter_dict['vectors']).to(self.device)
 
-        self.encoder = com.ShitEncoder(max_length = self.parameter_dict['max_length'],
-                                       hidden_dim = self.parameter_dict['hidden_size'],
-                                       number_of_layer = self.parameter_dict['number_of_layer'],
-                                       embedding_dim = self.parameter_dict['embedding_dim'],
-                                       vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
-                                       dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
-                                       vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
+        self.encoder = com.NotSuchABetterEncoder(max_length = self.parameter_dict['max_length'],
+                                                 hidden_dim = self.parameter_dict['hidden_size'],
+                                                 number_of_layer = self.parameter_dict['number_of_layer'],
+                                                 embedding_dim = self.parameter_dict['embedding_dim'],
+                                                 vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
+                                                 dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
+                                                 vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
 
         self.scorer = com.BetterAttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug).to(self.device)
 
@@ -1208,10 +1208,10 @@ class SlotPointerModel(Model):
         if self.debug:
             print("Init Models")
 
-        self.encoder_q = com.ShitEncoder(
+        self.encoder_q = com.NotSuchABetterEncoder(
             number_of_layer=self.parameter_dict['number_of_layer'],
             embedding_dim=self.parameter_dict['embedding_dim'],
-            hidden_dim=self.parameter_dict['hidden_size'],
+            hidden_dim=self.parameter_dict['embedding_dim']/2,
             vocab_size=self.parameter_dict['vocab_size'],
             max_length=self.parameter_dict['max_length'],
             dropout=self.parameter_dict['dropout'],
@@ -1222,10 +1222,10 @@ class SlotPointerModel(Model):
             mode = 'LSTM',
             debug = self.debug).to(self.device)
 
-        self.encoder_p = com.ShitEncoder(
+        self.encoder_p = com.NotSuchABetterEncoder(
             number_of_layer=self.parameter_dict['number_of_layer'],
             embedding_dim=self.parameter_dict['embedding_dim'],
-            hidden_dim=self.parameter_dict['hidden_size'],
+            hidden_dim=self.parameter_dict['embedding_dim']/2,
             vocab_size=self.parameter_dict['vocab_size'],
             max_length=self.parameter_dict['max_length'],
             dropout=self.parameter_dict['dropout'],
@@ -1239,7 +1239,7 @@ class SlotPointerModel(Model):
         self.comparer = com.SlotPointer(
             embedding_dim=self.parameter_dict['embedding_dim'],
             max_len_ques=self.parameter_dict['max_length'],
-            hidden_dim=self.parameter_dict['hidden_size'],
+            hidden_dim=self.parameter_dict['embedding_dim']/2,
             max_len_path=self.parameter_dict['relsp_pad'],
             vocab_size=self.parameter_dict['vocab_size'],
             debug=self.debug).to(self.device)
@@ -1266,10 +1266,10 @@ class SlotPointerModel(Model):
 
         # Encoding all the data
         ques_batch_encoded, _, _, ques_mask, ques_batch_embedded, _ = self.encoder_q(tu.trim(ques_batch),hidden)
-        _, pos_1_encoded, _, _, _, pos_1_embedded = self.encoder_p(pos_1_batch, hidden)
-        _, pos_2_encoded, _, _, _, pos_2_embedded = self.encoder_p(pos_2_batch, hidden)
-        _, neg_1_encoded, _, _, _, neg_1_embedded = self.encoder_p(neg_1_batch, hidden)
-        _, neg_2_encoded, _, _, _, neg_2_embedded = self.encoder_p(neg_2_batch, hidden)
+        _, pos_1_encoded, _, pos_1_mask, pos_1_embedded, _ = self.encoder_p(pos_1_batch, hidden)
+        _, pos_2_encoded, _, pos_2_mask , pos_2_embedded, _ = self.encoder_p(pos_2_batch, hidden)
+        _, neg_1_encoded, _, neg_1_mask , neg_1_embedded, _ = self.encoder_p(neg_1_batch, hidden)
+        _, neg_2_encoded, _, neg_2_mask , neg_2_embedded, _ = self.encoder_p(neg_2_batch, hidden)
 
         # Pass them to the comparison module
         pos_scores = self.comparer(ques_enc=ques_batch_encoded,
@@ -1277,8 +1277,10 @@ class SlotPointerModel(Model):
                                    ques_mask=ques_mask,
                                    path_1_enc=pos_1_encoded,
                                    path_1_emb=pos_1_embedded,
+                                   path_1_mask = pos_1_mask,
                                    path_2_enc=pos_2_encoded,
-                                   path_2_emb=pos_2_embedded)
+                                   path_2_emb=pos_2_embedded,
+                                   path_2_mask = pos_2_mask)
 
         # Pass them to the comparison module
         neg_scores = self.comparer(ques_enc=ques_batch_encoded,
@@ -1286,8 +1288,10 @@ class SlotPointerModel(Model):
                                    ques_mask=ques_mask,
                                    path_1_enc=neg_1_encoded,
                                    path_1_emb=neg_1_embedded,
+                                   path_1_mask = neg_1_mask,
                                    path_2_enc=neg_2_encoded,
-                                   path_2_emb=neg_2_embedded)
+                                   path_2_emb=neg_2_embedded,
+                                   path_2_mask = neg_2_mask)
 
         '''
             If `y == 1` then it assumed the first input should be ranked higher
@@ -1346,16 +1350,18 @@ class SlotPointerModel(Model):
 
             # Encoding all the data
             ques_batch_encoded, _, _, ques_mask, ques_batch_embedded, _ = self.encoder_q(tu.trim(ques), hidden)
-            _, pos_1_encoded, _, _, _, pos_1_embedded = self.encoder_p(paths_rel1, hidden)
-            _, pos_2_encoded, _, _, _, pos_2_embedded = self.encoder_p(paths_rel2, hidden)
+            _, pos_1_encoded, _, pos_1_mask,  pos_1_embedded, _ = self.encoder_p(paths_rel1, hidden)
+            _, pos_2_encoded, _, pos_2_mask,  pos_2_embedded, _ = self.encoder_p(paths_rel2, hidden)
 
             score = self.comparer(ques_enc=ques_batch_encoded,
                                   ques_emb=ques_batch_embedded,
                                   ques_mask=ques_mask,
                                   path_1_enc=pos_1_encoded,
                                   path_1_emb=pos_1_embedded,
+                                  path_1_mask=pos_1_mask,
                                   path_2_enc=pos_2_encoded,
-                                  path_2_emb=pos_2_embedded).squeeze()
+                                  path_2_emb=pos_2_embedded,
+                                  path_2_mask=pos_2_mask).squeeze()
 
             self.encoder_q.train()
             self.encoder_p.train()

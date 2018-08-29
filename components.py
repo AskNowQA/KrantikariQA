@@ -457,21 +457,27 @@ class SlotPointer(nn.Module):
         super(SlotPointer, self).__init__()
 
         # Save the parameters locally
-        self.embedding_dim = embedding_dim
-        self.max_len_ques = max_len_ques
-        self.max_len_path = max_len_path
-        self.hidden_dim = hidden_dim
-        self.vocab_size = vocab_size
+        self.embedding_dim = int(embedding_dim)
+        self.max_len_ques = int(max_len_ques)
+        self.max_len_path = int(max_len_path)
+        self.hidden_dim = int(hidden_dim)
+        self.vocab_size = int(vocab_size)
         self.debug = debug
 
         # A dense layer to normalize dimensions
-        self.normalize = nn.Linear(self.embedding_dim, self.hidden_dim * 2)
+        # self.normalize = nn.Linear(self.embedding_dim, self.hidden_dim * 2, bias=False)
 
         # Attention parameters
         self.k1 = nn.Parameter(torch.randn((self.hidden_dim * 2,), dtype=torch.float))
         self.k2 = nn.Parameter(torch.randn((self.hidden_dim * 2,), dtype=torch.float))
 
-    def forward(self, ques_enc, ques_emb, ques_mask, path_1_enc, path_1_emb, path_2_enc, path_2_emb):
+    @staticmethod
+    def compute_emb_mean(emb_path, emb_mask):
+        emb_sum = torch.sum(emb_path.transpose(1, 0), dim=1)
+        mask_sum = torch.sum(emb_mask, dim=1)
+        return emb_sum / mask_sum.unsqueeze(1).repeat(1, emb_sum.shape[1])
+
+    def forward(self, ques_enc, ques_emb, ques_mask, path_1_enc, path_1_emb, path_1_mask, path_2_enc, path_2_emb, path_2_mask):
         """
         :params
             :ques: torch.tensor (batch, seq)
@@ -515,10 +521,10 @@ class SlotPointer(nn.Module):
             print('sum_input_2:\t', self.normalize(ques_emb.transpose(1, 0)).shape)
 
         # For q, first prepare (q + _q)
-        sum_q = ques_enc.transpose(1, 0) # + self.normalize(ques_emb.transpose(1, 0))
+        sum_q = ques_enc.transpose(1, 0) + ques_emb.transpose(1, 0)
         q1 = torch.sum(alpha_1.unsqueeze(2).repeat(1, 1, sum_q.shape[2]) * sum_q, dim=1)
         q2 = torch.sum(alpha_2.unsqueeze(2).repeat(1, 1, sum_q.shape[2]) * sum_q, dim=1)
-        q = torch.stack((q1, q2), dim=1)
+        # q = torch.stack((q1, q2), dim=1)
 
         if self.debug:
             print('\nsum_q:\t\t', sum_q.shape)
@@ -526,12 +532,13 @@ class SlotPointer(nn.Module):
             print('q2:\t\t', q2.shape)
             # print('q:\t\t', q.shape)
             print('p_ input_a:\t', path_1_enc.shape)
-            print('p_ input_b:\t', self.normalize(torch.mean(path_1_emb.transpose(1, 0), dim=1)).shape)
+            # print('p_ input_b:\t', self.normalize(torch.mean(path_1_emb.transpose(1, 0), dim=1)).shape)
 
         # for p, we need the last state of encoders, and summed up embeddings.
-        p1 = path_1_enc #+ self.normalize(torch.mean(path_1_emb.transpose(1, 0), dim=1))
-        p2 = path_2_enc #+ self.normalize(torch.mean(path_2_emb.transpose(1, 0), dim=1))
-        p = torch.stack((p1, p2), dim=1)
+
+        p1 = path_1_enc +  self.compute_emb_mean(path_1_emb,path_1_mask)
+        p2 = path_2_enc + self.compute_emb_mean(path_2_emb,path_2_mask)
+        # p = torch.stack((p1, p2), dim=1)
 
         if self.debug:
             print('\np1:\t\t', p1.shape)
@@ -544,15 +551,15 @@ class SlotPointer(nn.Module):
 
         # Get the dot of p and q, and add it for both path 1 & 2
         # # Cross check the dot.
-        # res1 = torch.sum(q1*p1, dim=1)
-        # res2 = torch.sum(q2*p2, dim=1)
-        # res = res1 + res2
-        res = torch.sum(torch.sum(q.view(-1, q.shape[-1]) * p.view(-1, p.shape[-1]), dim=1).view(batch_size, -1), dim=1)
+        res1 = torch.sum(q1*p1, dim=1)
+        res2 = torch.sum(q2*p2, dim=1)
+        res = res1 + res2
+        # res = torch.sum(torch.sum(q.view(-1, q.shape[-1]) * p.view(-1, p.shape[-1]), dim=1).view(batch_size, -1), dim=1)
 
         return res
 
 
-class ShitEncoder(nn.Module):
+class NotSuchABetterEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
                  embedding_dim, vocab_size, bidirectional,
                  dropout=0.0, mode='LSTM', enable_layer_norm=False,
@@ -572,9 +579,9 @@ class ShitEncoder(nn.Module):
 
         TODO: Implement multilayered shit someday.
         '''
-        super(ShitEncoder, self).__init__()
+        super(NotSuchABetterEncoder, self).__init__()
 
-        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = max_length, hidden_dim, embedding_dim, vocab_size
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)
         self.enable_layer_norm = enable_layer_norm
         self.number_of_layer = number_of_layer
         self.bidirectional = bidirectional
@@ -728,6 +735,9 @@ class ShitEncoder(nn.Module):
             return o_unsort, o_last, h_unsort, mask
 
 
+class QelosSlotPointer(nn.Module): pass
+
+
 if __name__ == "__main__":
     max_length = 25
     hidden_dim = 30
@@ -743,8 +753,8 @@ if __name__ == "__main__":
     question = question[:,:(question.shape[1] - torch.min(torch.sum(question.eq(0).long(), dim=1))).item()]
     vectors = torch.randn((1000, embedding_dim))
 
-    encoder = ShitEncoder(max_length, hidden_dim, 1,
-                          embedding_dim, vocab_size, bidirectional, vectors=vectors).to(device)
+    encoder = NotSuchABetterEncoder(max_length, hidden_dim, 1,
+                                    embedding_dim, vocab_size, bidirectional, vectors=vectors).to(device)
 
     hidden_0 = encoder.init_hidden(question.shape[0], device)
     # hidden_0 = (torch.zeros((2 * 1, question.shape[0], hidden_dim), device=device),

@@ -336,13 +336,18 @@ class BiLstmDot(Model):
 
 
 
-        self.encoder = com.NotSuchABetterEncoder(max_length = self.parameter_dict['max_length'],
-                                                 hidden_dim = self.parameter_dict['hidden_size'],
-                                                 number_of_layer = self.parameter_dict['number_of_layer'],
-                                                 embedding_dim = self.parameter_dict['embedding_dim'],
-                                                 vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
-                                                 dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
-                                                 vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
+        self.encoder = com.NotSuchABetterEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            max_length = self.parameter_dict['max_length'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            mode = 'LSTM',
+            debug = self.debug).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
     #
@@ -503,7 +508,7 @@ class BiLstmDot_ULMFiT(Model):
         if self.debug:
             print("Init Models")
 
-        self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
+        self.encoder = com.FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
                                    dims=[self.parameter_dict['hidden_size']],
                                    word_dic=self.word_to_id,
                                    bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
@@ -1192,6 +1197,148 @@ class RelDetection(Model):
         return [('model',self.encoder)]
 
 
+class QelosSlotPointerModel(Model):
+
+    """
+        Eating Denis's shit
+    """
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder_q = com.QelosSlotPtrQuestionEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            device=_device,
+            residual=True,
+            mode = 'LSTM',
+            dropout_in=self.parameter_dict['dropout_in'],
+            dropout_rec=self.parameter_dict['dropout_rec'],
+            debug = self.debug).to(self.device)
+
+        self.encoder_p = com.QelosSlotPtrChainEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            device=_device,
+            residual=True,
+            mode = 'LSTM',
+            dropout_in=self.parameter_dict['dropout_in'],
+            dropout_rec=self.parameter_dict['dropout_rec'],
+            debug = self.debug).to(self.device)
+
+
+    def train(self, data, optimizer, loss_fn, device):
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, pos_1_batch, pos_2_batch, neg_1_batch, neg_2_batch, y_label = \
+            data['ques_batch'], data['pos_rel1_batch'], data['pos_rel2_batch'], \
+            data['neg_rel1_batch'], data['neg_rel2_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Have to manually check if the 2nd paths holds anything in this batch.
+        # If not, we have to pad everything up with zeros, or even call a limited part of the comparison module.
+        pos_2_batch = tu.no_one_left_behind(pos_2_batch)
+        neg_2_batch = tu.no_one_left_behind(neg_2_batch)
+
+
+        # assert torch.mean((torch.sum(pos_2_batch, dim=-1) != 0).float()) == 1
+        # assert torch.mean((torch.sum(pos_1_batch, dim=-1) != 0).float()) == 1
+
+        # Encoding all the data
+        ques_encoded = self.encoder_q(ques_batch)
+        pos_encoded = self.encoder_p(pos_1_batch, pos_2_batch)
+        neg_encoded = self.encoder_p(neg_1_batch, neg_2_batch)
+
+        # Pass them to the comparison module
+        pos_scores = torch.sum(ques_encoded * pos_encoded, dim=-1)
+        neg_scores = torch.sum(ques_encoded * neg_encoded, dim=-1)
+
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def _train_pointwise(self, data, optimizer, loss_fn, device):
+        ques_batch, path_1_batch, path_2_batch, y_label = \
+            data['ques_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
+
+        path_2_batch = tu.no_one_left_behind(path_2_batch)
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        ques_encoded = self.encoder_q(tu.trim(ques_batch))
+        pos_encoded = self.encoder_p(path_1_batch, path_2_batch)
+
+        score = torch.sum(ques_encoded * pos_encoded, dim=-1)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, paths_rel1,paths_rel2, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+            self.encoder_q.eval()
+            self.encoder_p.eval()
+
+            # Have to manually check if the 2nd paths holds anything in this batch.
+            # If not, we have to pad everything up with zeros, or even call a limited part of the comparison module.
+            paths_rel2 = tu.no_one_left_behind(paths_rel2)
+
+            # Encoding all the data
+            ques_encoded = self.encoder_q(tu.trim(ques))
+            path_encoded = self.encoder_p(paths_rel1, paths_rel2)
+
+            # Pass them to the comparison module
+            score = torch.sum(ques_encoded * path_encoded, dim=-1)
+
+            self.encoder_q.train()
+            self.encoder_p.train()
+            return score
+
+    def prepare_save(self):
+        return [('encoder_q', self.encoder_q), ('encoder_p', self.encoder_p)]
+
+
 class SlotPointerModel(Model):
 
     """
@@ -1211,13 +1358,13 @@ class SlotPointerModel(Model):
         self.encoder_q = com.NotSuchABetterEncoder(
             number_of_layer=self.parameter_dict['number_of_layer'],
             embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
             hidden_dim=self.parameter_dict['embedding_dim']/2,
             vocab_size=self.parameter_dict['vocab_size'],
             max_length=self.parameter_dict['max_length'],
             dropout=self.parameter_dict['dropout'],
             vectors=self.parameter_dict['vectors'],
             enable_layer_norm=False,
-            bidirectional=True,
             residual=True,
             mode = 'LSTM',
             debug = self.debug).to(self.device)
@@ -1225,13 +1372,13 @@ class SlotPointerModel(Model):
         self.encoder_p = com.NotSuchABetterEncoder(
             number_of_layer=self.parameter_dict['number_of_layer'],
             embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
             hidden_dim=self.parameter_dict['embedding_dim']/2,
             vocab_size=self.parameter_dict['vocab_size'],
             max_length=self.parameter_dict['max_length'],
             dropout=self.parameter_dict['dropout'],
             vectors=self.parameter_dict['vectors'],
             enable_layer_norm=False,
-            bidirectional=True,
             residual=True,
             mode = 'LSTM',
             debug = self.debug).to(self.device)

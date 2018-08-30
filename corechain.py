@@ -386,13 +386,18 @@ if __name__ == "__main__":
         modeler = net.RelDetection(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                             _device=device, _pointwise=pointwise, _debug=False)
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
-    if training_model == 'slotptr':
+    if False:
+    # if training_model == 'slotptr':
         modeler = net.SlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                             _device=device, _pointwise=pointwise, _debug=False)
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
                                list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())) +
                                list(filter(lambda p: p.requires_grad, modeler.comparer.parameters())))
-
+    if training_model == 'slotptr':
+        modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                            _device=device, _pointwise=pointwise, _debug=False)
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())))
 
 
     if not pointwise:

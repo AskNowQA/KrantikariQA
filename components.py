@@ -10,6 +10,8 @@ import torch.nn.functional as F
 
 from utils import tensor_utils as tu
 
+import qelos_core as q
+
 class Encoder(nn.Module):
 
     """LSTM encoder."""
@@ -590,6 +592,7 @@ class NotSuchABetterEncoder(nn.Module):
         self.mode = mode
         self.residual = residual
 
+
         assert self.mode in ['LSTM', 'GRU']
 
         if vectors is not None:
@@ -621,10 +624,10 @@ class NotSuchABetterEncoder(nn.Module):
         :return:
         """
         if self.mode == 'LSTM':
-            return (torch.ones((2 * 1, batch_size, self.hidden_dim), device=device),
-                    torch.ones((2 * 1, batch_size, self.hidden_dim), device=device))
+            return (torch.ones((1+self.bidirectional , batch_size, self.hidden_dim), device=device),
+                    torch.ones((1+self.bidirectional, batch_size, self.hidden_dim), device=device))
         else:
-            return torch.ones((2 * 1, batch_size, self.hidden_dim), device=device)
+            return torch.ones((1+self.bidirectional, batch_size, self.hidden_dim), device=device)
 
     def reset_parameters(self):
         """
@@ -715,14 +718,10 @@ class NotSuchABetterEncoder(nn.Module):
             else:
                 print("h_unsort\t\t", h_unsort.shape)
 
-        # get the last time state
         len_idx = (lengths - 1).view(-1, 1).expand(-1, o_unsort.size(2)).unsqueeze(0)
-        o_last = o_unsort.gather(0, len_idx)
-        o_last = o_last.squeeze(0)
 
         if self.debug:
             print("len_idx:\t", len_idx.shape)
-            print("o_last:\t", o_last.shape)
 
         # Need to also return the last embedded state. Wtf. How?
 
@@ -730,12 +729,187 @@ class NotSuchABetterEncoder(nn.Module):
             len_idx = (lengths - 1).view(-1, 1).expand(-1, x.size(2)).unsqueeze(0)
             x_last = x.gather(0, len_idx)
             x_last = x_last.squeeze(0)
-            return o_unsort, o_last, h_unsort, mask, x, x_last
+            return o_unsort, h_unsort[0].transpose(1,0).contiguous().view(h_unsort[0].shape[1], -1) , h_unsort, mask, x, x_last
         else:
-            return o_unsort, o_last, h_unsort, mask
+            return o_unsort, h_unsort[0].transpose(1,0).contiguous().view(h_unsort[0].shape[1], -1) , h_unsort, masksads
 
 
-class QelosSlotPointer(nn.Module): pass
+class QelosFlatEncoder(nn.Module):
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, residual=False, dropout_in=0., dropout_rec=0, debug=False):
+        '''
+               :param max_length: Max length of the sequence.
+               :param hidden_dim: dimension of the output of the LSTM.
+               :param number_of_layer: Number of LSTM to be stacked.
+               :param embedding_dim: The output dimension of the embedding layer/ important only if vectors=none
+               :param vocab_size: Size of vocab / number of rows in embedding matrix
+               :param bidirectional: boolean - if true creates BIdir LStm
+               :param vectors: embedding matrix
+               :param debug: Bool/ prints shapes and some other meta data.
+               :param enable_layer_norm: Bool/ layer normalization.
+               :param mode: LSTM/GRU.
+               :param residual: Bool/ return embedded state of the input.
+
+           TODO: Implement multilayered shit someday.
+        '''
+        super(QelosFlatEncoder, self).__init__()
+
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = \
+            int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)
+        self.enable_layer_norm = enable_layer_norm
+        self.number_of_layer = number_of_layer
+        self.bidirectional = bidirectional
+        self.dropout = dropout
+        self.dropout_in, self.dropout_rec = dropout_in, dropout_rec
+        self.debug = debug
+        self.mode = mode
+        self.residual = residual
+
+
+        if vectors is not None:
+            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
+            self.embedding_layer.weight.requires_grad = True
+        else:
+            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
+
+        self.lstm = q.FastestLSTMEncoder(self.embedding_dim, self.hidden_dim, bidir=self.bidirectional,
+                                         dropout_in=self.dropout_in, dropout_rec=self.dropout_rec)
+
+
+        self.adapt_lin = None   # Make layer if dims mismatch
+        if residual and self.hidden_dim*2 != self.embedding_dim:
+            self.adapt_lin = torch.nn.Linear(self.embedding_dim, self.hidden_dim*2, bias=False)
+
+    def forward(self, x):
+        embs = self.embedding_layer(x)
+        mask = tu.compute_mask(x)
+
+        _ = self.lstm(embs, mask=mask)
+        final_state = self.lstm.y_n[-1]
+        final_state = final_state.contiguous().view(x.size(0), -1)
+
+        if self.residual:
+            if self.adapt_lin is not None:
+                embs = self.adapt_lin(embs)
+            meanpool = embs.sum(1)
+            masksum = mask.float().sum(1).unsqueeze(1)
+            meanpool = meanpool / masksum
+            final_state = final_state + meanpool
+        return final_state
+
+
+class QelosSlotPtrChainEncoder(nn.Module):
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional, device,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, residual=False, dropout_in=0., dropout_rec=0,debug=False):
+        '''
+               :param max_length: Max length of the sequence.
+               :param hidden_dim: dimension of the output of the LSTM.
+               :param number_of_layer: Number of LSTM to be stacked.
+               :param embedding_dim: The output dimension of the embedding layer/ important only if vectors=none
+               :param vocab_size: Size of vocab / number of rows in embedding matrix
+               :param bidirectional: boolean - if true creates BIdir LStm
+               :param vectors: embedding matrix
+               :param debug: Bool/ prints shapes and some other meta data.
+               :param enable_layer_norm: Bool/ layer normalization.
+               :param mode: LSTM/GRU.
+               :param residual: Bool/ return embedded state of the input.
+
+           TODO: Implement multilayered shit someday.
+        '''
+        super(QelosSlotPtrChainEncoder, self).__init__()
+
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = \
+            int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)
+        self.enable_layer_norm = enable_layer_norm
+        self.number_of_layer = number_of_layer
+        self.bidirectional = bidirectional
+        self.dropout = dropout
+        self.dropout_in, self.dropout_rec = dropout_in, dropout_rec
+        self.debug = debug
+        self.mode = mode
+        self.residual = residual
+
+        self.enc = QelosFlatEncoder(max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional, dropout=0.0, mode='LSTM',
+                 enable_layer_norm=False, vectors=vectors, residual=False,
+                 dropout_in=self.dropout_in, dropout_rec=self.dropout_rec, debug=False)#.to(device)
+
+    def forward(self, firstrels, secondrels):
+        firstrels_enc = self.enc(firstrels)
+        secondrels_enc = self.enc(secondrels)
+        # cat???? # TODO
+        enc = torch.cat([firstrels_enc, secondrels_enc], 1)
+        return enc
+
+
+class QelosSlotPtrQuestionEncoder(nn.Module):
+    # TODO: (1) skip connection, (2) two outputs (summaries weighted by forwards)
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional, device,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, residual=False, dropout_in=0., dropout_rec=0, debug=False):
+
+        super(QelosSlotPtrQuestionEncoder, self).__init__()
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = \
+            int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)
+        self.enable_layer_norm = enable_layer_norm
+        self.number_of_layer = number_of_layer
+        self.bidirectional = bidirectional
+        self.dropout = dropout
+        self.dropout_in, self.dropout_rec = dropout_in, dropout_rec
+        self.debug = debug
+        self.mode = mode
+        self.residual = residual
+
+        if vectors is not None:
+            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
+            self.embedding_layer.weight.requires_grad = True
+        else:
+            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
+
+        self.lstm = q.FastestLSTMEncoder(self.embedding_dim, self.hidden_dim, bidir=self.bidirectional,
+                                         dropout_in=self.dropout_in, dropout_rec=self.dropout_rec)
+
+
+        dims = [self.hidden_dim]
+        self.linear = torch.nn.Linear(dims[-1] * 2, 2)
+        self.sm = torch.nn.Softmax(1)
+        # for adapter
+        outdim = dims[-1] * 2
+        self.adapt_lin = None
+
+        if outdim != self.embedding_dim:
+            self.adapt_lin = torch.nn.Linear(self.embedding_dim, outdim, bias=False)
+
+    def forward(self, x):
+        embs = self.embedding_layer(x)
+        mask = tu.compute_mask(x)
+
+        ys = self.lstm(embs, mask=mask)
+        final_state = self.lstm.y_n[-1]
+        final_state = final_state.contiguous().view(x.size(0), -1)
+        # get attention scores
+        scores = self.linear(ys)
+        scores = scores + torch.log(mask[:, :ys.size(1)].float().unsqueeze(2))
+        scores = self.sm(scores)  # (batsize, seqlen, 2)
+        # get summaries
+        # region skipper
+        skipadd = embs[:, :ys.size(1), :]
+        if self.adapt_lin is not None:
+            skipadd = self.adapt_lin(skipadd)
+        if not self.residual:
+            ys = ys + skipadd
+        # endregion
+        ys = ys.unsqueeze(2)  # (batsize, seqlen, 1, dim)
+        scores = scores.unsqueeze(3)  # (batsize, seqlen, 2, 1)
+        b = ys * scores  # (batsize, seqlen, 2, dim)
+        summaries = b.sum(1)  # (batsize, 2, dim)
+        ret = torch.cat([summaries[:, 0, :], summaries[:, 1, :]], 1)
+        return ret
 
 
 if __name__ == "__main__":

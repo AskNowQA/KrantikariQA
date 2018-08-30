@@ -1,6 +1,7 @@
 '''
 	This file adds rdf-type constraints over the id_big_data file.
 '''
+from __future__ import print_function
 import os
 import numpy as np
 import pickle, json
@@ -64,10 +65,10 @@ else:
 	rdf_type_lookup = []
 
 if os.path.isfile(COMMON_DIR+'relations.pickle'):
-	relations_dict = pickle.load(open(COMMON_DIR+'relations.pickle'))
+	relations_dict = pickle.load(open(COMMON_DIR+'relations.pickle', 'rb'), encoding='latin1')
 else:
-	print "error. The relation file should have existed"
-	raw_input("check and continue")
+	print("error. The relation file should have existed")
+	input("check and continue")
 	relations_dict = {}
 
 
@@ -290,13 +291,13 @@ def run():
 		Main script which calls and does everything.
 	:return: nothing
 	"""
-	raw_data = json.load(open(LCQUAD_DIR+LCQUAD_FILE_NAME))
+	raw_data = json.load(open(LCQUAD_DIR+LCQUAD_FILE_NAME,'r'))
 
 	for i in range(0,len(raw_data)):
 		x,uri = generate_candidates(raw_data[i])
 		type_x_candidates, type_uri_candidates = create_valid_paths(x,uri)
 		raw_data[i]['rdf-type-constraints'] = type_x_candidates + type_uri_candidates
-		print i
+		print(i)
 
 	for i in range(0,len(raw_data)):
 		for j in range(0,len(raw_data[i]['rdf-type-constraints'])):
@@ -316,9 +317,9 @@ def qald_run(test = True):
 	'''
 
 	if test:
-		raw_data = json.load(open(QALD_DIR+QALD_FILE_NAME_TEST))
+		raw_data = json.load(open(QALD_DIR+QALD_FILE_NAME_TEST,'r'))
 	else:
-		raw_data = json.load(open(QALD_DIR+QALD_FILE_NAME_TRAIN))
+		raw_data = json.load(open(QALD_DIR+QALD_FILE_NAME_TRAIN,'r'))
 
 
 	'''
@@ -341,7 +342,7 @@ def qald_run(test = True):
 			x, uri = generate_candidates(raw_data[i])
 			type_x_candidates, type_uri_candidates = create_valid_paths(x, uri)
 			raw_data[i]['rdf-type-constraints'] = type_x_candidates + type_uri_candidates
-			print i
+			print(i)
 
 	for i in range(0,len(raw_data)):
 		for j in range(0,len(raw_data[i]['rdf-type-constraints'])):

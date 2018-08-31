@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 from utils import tensor_utils as tu
 
-import qelos_core as q
+# import qelos_core as q
 
 class Encoder(nn.Module):
 
@@ -731,12 +731,12 @@ class NotSuchABetterEncoder(nn.Module):
             x_last = x_last.squeeze(0)
             return o_unsort, h_unsort[0].transpose(1,0).contiguous().view(h_unsort[0].shape[1], -1) , h_unsort, mask, x, x_last
         else:
-            return o_unsort, h_unsort[0].transpose(1,0).contiguous().view(h_unsort[0].shape[1], -1) , h_unsort, masksads
+            return o_unsort, h_unsort[0].transpose(1,0).contiguous().view(h_unsort[0].shape[1], -1) , h_unsort, mask
 
 
 class QelosFlatEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
-                 embedding_dim, vocab_size, bidirectional,
+                 embedding_dim, vocab_size, bidirectional, device,
                  dropout=0.0, mode='LSTM', enable_layer_norm=False,
                  vectors=None, residual=False, dropout_in=0., dropout_rec=0, debug=False):
         '''
@@ -766,28 +766,44 @@ class QelosFlatEncoder(nn.Module):
         self.debug = debug
         self.mode = mode
         self.residual = residual
+        self.device = device
 
 
-        if vectors is not None:
-            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
-            self.embedding_layer.weight.requires_grad = True
-        else:
-            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
+        # if vectors is not None:
+        #     self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
+        #     self.embedding_layer.weight.requires_grad = True
+        # else:
+        #     self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
 
-        self.lstm = q.FastestLSTMEncoder(self.embedding_dim, self.hidden_dim, bidir=self.bidirectional,
-                                         dropout_in=self.dropout_in, dropout_rec=self.dropout_rec)
-
+        self.lstm = NotSuchABetterEncoder(
+            number_of_layer=self.number_of_layer,
+            bidirectional=self.bidirectional,
+            embedding_dim=self.embedding_dim,
+            max_length = self.max_length,
+            hidden_dim=self.hidden_dim,
+            vocab_size=self.vocab_size,
+            dropout=self.dropout,
+            vectors=vectors,
+            enable_layer_norm=False,
+            mode = 'LSTM',
+            debug = self.debug,
+            residual=self.residual)
 
         self.adapt_lin = None   # Make layer if dims mismatch
         if residual and self.hidden_dim*2 != self.embedding_dim:
             self.adapt_lin = torch.nn.Linear(self.embedding_dim, self.hidden_dim*2, bias=False)
 
     def forward(self, x):
-        embs = self.embedding_layer(x)
-        mask = tu.compute_mask(x)
+        # embs = self.embedding_layer(x)
+        # mask = tu.compute_mask(x)
 
-        _ = self.lstm(embs, mask=mask)
-        final_state = self.lstm.y_n[-1]
+        h = self.lstm.init_hidden(x.shape[0],self.device)
+
+        if self.residual:
+            _, final_state, _, mask, embs, _ = self.lstm(x, h)
+        else:
+            _, final_state, _, mask = self.lstm(x, h)
+        # final_state = self.lstm.y_n[-1]
         final_state = final_state.contiguous().view(x.size(0), -1)
 
         if self.residual:
@@ -832,9 +848,10 @@ class QelosSlotPtrChainEncoder(nn.Module):
         self.debug = debug
         self.mode = mode
         self.residual = residual
+        self.device = device
 
         self.enc = QelosFlatEncoder(max_length, hidden_dim, number_of_layer,
-                 embedding_dim, vocab_size, bidirectional, dropout=0.0, mode='LSTM',
+                 embedding_dim, vocab_size, bidirectional, device, dropout=0.0, mode='LSTM',
                  enable_layer_norm=False, vectors=vectors, residual=False,
                  dropout_in=self.dropout_in, dropout_rec=self.dropout_rec, debug=False)#.to(device)
 
@@ -851,7 +868,7 @@ class QelosSlotPtrQuestionEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
                  embedding_dim, vocab_size, bidirectional, device,
                  dropout=0.0, mode='LSTM', enable_layer_norm=False,
-                 vectors=None, residual=False, dropout_in=0., dropout_rec=0, debug=False):
+                 vectors=None, residual=True, dropout_in=0., dropout_rec=0, debug=False):
 
         super(QelosSlotPtrQuestionEncoder, self).__init__()
         self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = \
@@ -864,6 +881,7 @@ class QelosSlotPtrQuestionEncoder(nn.Module):
         self.debug = debug
         self.mode = mode
         self.residual = residual
+        self.device = device
 
         if vectors is not None:
             self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
@@ -871,8 +889,22 @@ class QelosSlotPtrQuestionEncoder(nn.Module):
         else:
             self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
 
-        self.lstm = q.FastestLSTMEncoder(self.embedding_dim, self.hidden_dim, bidir=self.bidirectional,
-                                         dropout_in=self.dropout_in, dropout_rec=self.dropout_rec)
+        #self.lstm = q.FastestLSTMEncoder(self.embedding_dim, self.hidden_dim, bidir=self.bidirectional,
+        #                                  dropout_in=self.dropout_in, dropout_rec=self.dropout_rec)
+
+        self.lstm = NotSuchABetterEncoder(
+            number_of_layer=self.number_of_layer,
+            bidirectional=self.bidirectional,
+            embedding_dim=self.embedding_dim,
+            max_length=self.max_length,
+            hidden_dim=self.hidden_dim,
+            vocab_size=self.vocab_size,
+            dropout=self.dropout,
+            vectors=vectors,
+            enable_layer_norm=False,
+            mode='LSTM',
+            debug=self.debug,
+            residual=self.residual)
 
 
         dims = [self.hidden_dim]
@@ -886,12 +918,22 @@ class QelosSlotPtrQuestionEncoder(nn.Module):
             self.adapt_lin = torch.nn.Linear(self.embedding_dim, outdim, bias=False)
 
     def forward(self, x):
-        embs = self.embedding_layer(x)
-        mask = tu.compute_mask(x)
+        # embs = self.embedding_layer(x)
+        # mask = tu.compute_mask(x)
 
-        ys = self.lstm(embs, mask=mask)
-        final_state = self.lstm.y_n[-1]
-        final_state = final_state.contiguous().view(x.size(0), -1)
+        h = self.lstm.init_hidden(x.shape[0], self.device)
+
+        if self.residual:
+            ys, final_state, _, mask, embs, _ = self.lstm(x, h)
+        else:
+            ys, final_state, _, mask = self.lstm(x, h)
+
+        ys = ys.transpose(1,0)
+        # ys = self.lstm(embs, mask=mask)
+
+        # final_state = final_state.contiguous().view(x.size(0), -1)
+
+
         # get attention scores
         scores = self.linear(ys)
         scores = scores + torch.log(mask[:, :ys.size(1)].float().unsqueeze(2))

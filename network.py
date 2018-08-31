@@ -1289,7 +1289,7 @@ class QelosSlotPointerModel(Model):
 
         return loss
 
-    def _train_pointwise(self, data, optimizer, loss_fn, device):
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
         ques_batch, path_1_batch, path_2_batch, y_label = \
             data['ques_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
 
@@ -1298,7 +1298,7 @@ class QelosSlotPointerModel(Model):
         optimizer.zero_grad()
 
         # Encoding all the data
-        ques_encoded = self.encoder_q(tu.trim(ques_batch))
+        ques_encoded = self.encoder_q(ques_batch)
         pos_encoded = self.encoder_p(path_1_batch, path_2_batch)
 
         score = torch.sum(ques_encoded * pos_encoded, dim=-1)

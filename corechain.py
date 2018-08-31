@@ -184,9 +184,9 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
 
                 if parameter_dict['schema'] != 'default':
-                    path_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
+                    path_rel1_batch = torch.tensor(np.reshape(sample_batched[0][2], (-1, parameter_dict['max_length'])),
                                                   dtype=torch.long, device=device)
-                    path_rel2_batch = torch.tensor(np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
+                    path_rel2_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
                                                   dtype=torch.long, device=device)
 
                     data_batch = {

@@ -38,7 +38,10 @@ from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.regularizers import L1L2
 
 sys.path.append('/data/priyansh/conda/fastai')
-from fastai.text import *
+import os
+os.environ['QT_QPA_PLATFORM']='offscreen'
+
+# from fastai.text import *
 
 device = torch.device('cuda')
 np.random.seed(42)

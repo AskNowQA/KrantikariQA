@@ -84,16 +84,18 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
             if np.array_equal(pos_paths[i], neg_paths[i][j]):
                 if j == 0:
                     neg_paths[i][j] = neg_paths[i][j + 10]
-                    neg_paths_rel1_sp[i][j] = neg_paths_rel1_sp[i][j + 10]
-                    neg_paths_rel2_sp[i][j] = neg_paths_rel2_sp[i][j + 10]
-                    neg_paths_rel1_rd[i][j] = neg_paths_rel1_rd[i][j + 10]
-                    neg_paths_rel2_rd[i][j] = neg_paths_rel2_rd[i][j + 10]
+                    if not _rdf:
+                        neg_paths_rel1_sp[i][j] = neg_paths_rel1_sp[i][j + 10]
+                        neg_paths_rel2_sp[i][j] = neg_paths_rel2_sp[i][j + 10]
+                        neg_paths_rel1_rd[i][j] = neg_paths_rel1_rd[i][j + 10]
+                        neg_paths_rel2_rd[i][j] = neg_paths_rel2_rd[i][j + 10]
                 else:
                     neg_paths[i][j] = neg_paths[i][0]
-                    neg_paths_rel1_sp[i][j] = neg_paths_rel1_sp[i][0]
-                    neg_paths_rel2_sp[i][j] = neg_paths_rel2_sp[i][0]
-                    neg_paths_rel1_rd[i][j] = neg_paths_rel1_rd[i][0]
-                    neg_paths_rel2_rd[i][j] = neg_paths_rel2_rd[i][0]
+                    if not _rdf:
+                        neg_paths_rel1_sp[i][j] = neg_paths_rel1_sp[i][0]
+                        neg_paths_rel2_sp[i][j] = neg_paths_rel2_sp[i][0]
+                        neg_paths_rel1_rd[i][j] = neg_paths_rel1_rd[i][0]
+                        neg_paths_rel2_rd[i][j] = neg_paths_rel2_rd[i][0]
     if counter > 0:
         print(counter)
         print("Critical condition needs to be entered")
@@ -123,47 +125,53 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
         return x[int(_validation_split * len(x)):]
 
     data['train_pos_paths'] = training_split(pos_paths)
-    data['train_pos_paths_rel1_sp'] = training_split(pos_paths_rel1_sp)
-    data['train_pos_paths_rel2_sp'] = training_split(pos_paths_rel2_sp)
-    data['train_pos_paths_rel1_rd'] = training_split(pos_paths_rel1_rd)
-    data['train_pos_paths_rel2_rd'] = training_split(pos_paths_rel2_rd)
+    if not _rdf:
+        data['train_pos_paths_rel1_sp'] = training_split(pos_paths_rel1_sp)
+        data['train_pos_paths_rel2_sp'] = training_split(pos_paths_rel2_sp)
+        data['train_pos_paths_rel1_rd'] = training_split(pos_paths_rel1_rd)
+        data['train_pos_paths_rel2_rd'] = training_split(pos_paths_rel2_rd)
 
     data['train_neg_paths'] = training_split(neg_paths)
-    data['train_neg_paths_rel1_sp'] = training_split(neg_paths_rel1_sp)
-    data['train_neg_paths_rel2_sp']= training_split(neg_paths_rel2_sp)
-    data['train_neg_paths_rel1_rd'] = training_split(neg_paths_rel1_rd)
-    data['train_neg_paths_rel2_rd'] = training_split(neg_paths_rel2_rd)
+    if not _rdf:
+        data['train_neg_paths_rel1_sp'] = training_split(neg_paths_rel1_sp)
+        data['train_neg_paths_rel2_sp']= training_split(neg_paths_rel2_sp)
+        data['train_neg_paths_rel1_rd'] = training_split(neg_paths_rel1_rd)
+        data['train_neg_paths_rel2_rd'] = training_split(neg_paths_rel2_rd)
 
     data['train_questions'] = training_split(questions)
 
     data['valid_pos_paths'] = validation_split(pos_paths)
-    data['valid_pos_paths_rel1_sp'] = validation_split(pos_paths_rel1_sp)
-    data['valid_pos_paths_rel2_sp'] = validation_split(pos_paths_rel2_sp)
-    data['valid_pos_paths_rel1_rd'] = validation_split(pos_paths_rel1_rd)
-    data['valid_pos_paths_rel2_rd'] = validation_split(pos_paths_rel2_rd)
+    if not _rdf:
+        data['valid_pos_paths_rel1_sp'] = validation_split(pos_paths_rel1_sp)
+        data['valid_pos_paths_rel2_sp'] = validation_split(pos_paths_rel2_sp)
+        data['valid_pos_paths_rel1_rd'] = validation_split(pos_paths_rel1_rd)
+        data['valid_pos_paths_rel2_rd'] = validation_split(pos_paths_rel2_rd)
 
     data['valid_neg_paths'] = validation_split(neg_paths)
-    data['valid_neg_paths_rel1_sp'] = validation_split(neg_paths_rel1_sp)
-    data['valid_neg_paths_rel2_sp'] = validation_split(neg_paths_rel2_sp)
-    data['valid_neg_paths_rel1_rd'] = validation_split(neg_paths_rel1_rd)
-    data['valid_neg_paths_rel2_rd'] = validation_split(neg_paths_rel2_rd)
+    if not _rdf:
+        data['valid_neg_paths_rel1_sp'] = validation_split(neg_paths_rel1_sp)
+        data['valid_neg_paths_rel2_sp'] = validation_split(neg_paths_rel2_sp)
+        data['valid_neg_paths_rel1_rd'] = validation_split(neg_paths_rel1_rd)
+        data['valid_neg_paths_rel2_rd'] = validation_split(neg_paths_rel2_rd)
 
 
     data['valid_questions'] = validation_split(questions)
 
     if not _index:
         data['test_pos_paths'] = testing_split(pos_paths)
-        data['test_pos_paths_rel1_sp'] = testing_split(pos_paths_rel1_sp)
-        data['test_pos_paths_rel2_sp'] = testing_split(pos_paths_rel2_sp)
-        data['test_pos_paths_rel1_rd'] = testing_split(pos_paths_rel1_rd)
-        data['test_pos_paths_rel2_rd'] = testing_split(pos_paths_rel2_rd)
+        if not _rdf:
+            data['test_pos_paths_rel1_sp'] = testing_split(pos_paths_rel1_sp)
+            data['test_pos_paths_rel2_sp'] = testing_split(pos_paths_rel2_sp)
+            data['test_pos_paths_rel1_rd'] = testing_split(pos_paths_rel1_rd)
+            data['test_pos_paths_rel2_rd'] = testing_split(pos_paths_rel2_rd)
 
 
         data['test_neg_paths'] = testing_split(neg_paths)
-        data['test_neg_paths_rel1_sp'] = testing_split(neg_paths_rel1_sp)
-        data['test_neg_paths_rel2_sp'] = testing_split(neg_paths_rel2_sp)
-        data['test_neg_paths_rel1_rd'] = testing_split(neg_paths_rel1_rd)
-        data['test_neg_paths_rel2_rd'] = testing_split(neg_paths_rel2_rd)
+        if not _rdf:
+            data['test_neg_paths_rel1_sp'] = testing_split(neg_paths_rel1_sp)
+            data['test_neg_paths_rel2_sp'] = testing_split(neg_paths_rel2_sp)
+            data['test_neg_paths_rel1_rd'] = testing_split(neg_paths_rel1_rd)
+            data['test_neg_paths_rel2_rd'] = testing_split(neg_paths_rel2_rd)
 
         data['test_questions'] = testing_split(questions)
 
@@ -740,11 +748,27 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
 
         vocab, vectors = vocab_master.load()
 
+        exception_counter = 0
         # Map everything
         for i in range(len(questions)):
             questions[i] = np.asarray([vocab[key] for key in questions[i]])
-            pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
 
+            # pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+            for t in range(len(pos_paths[i])):
+                try:
+                    pos_paths[i][t] = vocab[pos_paths[i][t]]
+                except KeyError:
+                    print("key error")
+            #     try:
+            #         if pos_paths[i][t] == 36418:
+            #             print ("ola")
+            #         pos_paths[i][t] = vocab[pos_paths[i][t]]
+            #     except KeyError:
+            #         exception_counter = exception_counter + 1
+            #         print(exception_counter)
+            # print(exception_counter)
+            # raise Exception
+            # pos_paths[i] = np.asarray(pos_paths[i])
             for j in range(len(neg_paths[i])):
                 neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
@@ -827,7 +851,7 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
         positive_path = np.asarray([gloveid_to_embeddingid[key] for key in positive_path])
     for i in range(0, len(negative_paths)):
         # temp = []
-        for j in xrange(0, len(negative_paths[i])):
+        for j in range(0, len(negative_paths[i])):
             try:
                 negative_paths[i][j] = gloveid_to_embeddingid[negative_paths[i][j]]
             except:

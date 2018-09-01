@@ -70,16 +70,16 @@ parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
 parameter_dict['_model_dir'] = './data/models/'
 
 parameter_dict['corechainmodel'] = 'bilstm_dot'
-parameter_dict['corechainmodelnumber'] = '1'
+parameter_dict['corechainmodelnumber'] = '20'
 
 parameter_dict['intentmodel'] = 'bilstm_dense'
-parameter_dict['intentmodelnumber'] = '0'
+parameter_dict['intentmodelnumber'] = '5'
 
 parameter_dict['rdftypemodel'] = 'bilstm_dense'
-parameter_dict['rdftypemodelnumber'] = '0'
+parameter_dict['rdftypemodelnumber'] = '6'
 
 parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-parameter_dict['rdfclassmodelnumber'] = '0'
+parameter_dict['rdfclassmodelnumber'] = '9'
 
 
 class QuestionAnswering:
@@ -236,7 +236,7 @@ class QuestionAnswering:
 
         # We then pass them through a predict function and get a score array.
 
-        score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
+        score = self.rdfclass_model.predict(ques=Q, paths=P, device=self.device)
 
         return score.detach().cpu().numpy()
 
@@ -760,7 +760,7 @@ if __name__ == "__main__":
     Logging = parameter_dict.copy()
     Logging['runtime'] = []
 
-    qa = QuestionAnswering(parameter_dict, pointwise, _word_to_id, device, True)
+    qa = QuestionAnswering(parameter_dict, pointwise, _word_to_id, device, False)
 
     # Some logs which run during runtime, not after.
     core_chain_acc_log = []

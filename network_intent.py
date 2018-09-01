@@ -16,7 +16,7 @@ from torch import optim
 from torch.utils.data import  DataLoader
 
 # Other libs
-from qelos_core.scripts.lcquad.corerank import FlatEncoder
+# from qelos_core.scripts.lcquad.corerank import FlatEncoder
 
 import os
 import sys
@@ -193,10 +193,20 @@ class IntentClassifier(net.Model):
         if self.debug:
             print("Init Models")
 
-        self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
-                                   dims=[self.parameter_dict['hidden_size']],
-                                   word_dic=self.word_to_id,
-                                   bidir=True).to(self.device)
+        self.encoder = com.QelosFlatEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=0,
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            residual=False,
+            mode = 'LSTM',
+            debug = self.debug,
+            device = self.device).to(self.device)
 
         self.dense = com.DenseClf(inputdim=self.hiddendim,  # *2 because we have two things concatinated here
                                   hiddendim=self.hiddendim / 2,
@@ -238,6 +248,8 @@ class IntentClassifier(net.Model):
 
     def predict(self, data, device):
         with torch.no_grad():
+            self.encoder.eval()
+            self.dense.eval()
             ques_batch = data['ques_batch']
 
             ques_batch = torch.tensor(ques_batch, dtype=torch.long, device=device)
@@ -247,6 +259,9 @@ class IntentClassifier(net.Model):
 
             # Calculating dot score
             out = self.dense(ques_batch)
+
+            self.encoder.train()
+            self.dense.train()
 
             return out
 
@@ -271,7 +286,7 @@ def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, devic
         epoch_loss = []
         epoch_train_acc = []
 
-        for b in range(dataset['len'] / int(parameter_dict['batch_size'])):
+        for b in range(int(dataset['len'] / int(parameter_dict['batch_size']))):
             batch_time = time.time()
 
             # Sample new data
@@ -366,7 +381,7 @@ if __name__ == "__main__":
     # Pull raw data from disk
 
     dataset = json.load(open(os.path.join(_dataset_specific_data_dir, _file)))
-    vocab, _ = vocab_master.load()
+    vocab, parameter_dict['vectors'] = vocab_master.load()
 
     _dataset = preprocess_data(dataset, vocab, parameter_dict)
     _dataset['len'] = len(_dataset['train_X'])

@@ -2,7 +2,7 @@
     Bunch of functions that can convert a query graph to SPARQL
 
 """
-
+import sys
 import json
 import warnings
 import numpy as np
@@ -214,7 +214,8 @@ def id_to_path(path_id, relations, embeddingid_to_gloveid, core_chain = True):
 
 
 def load_reverse_rdf_type(embeddings_interface):
-    rdf_type = json.load(open(RDF_TYPE_LOOKUP_LOC))
+    if sys.version_info[0] == 3:
+        rdf_type = json.load(open(RDF_TYPE_LOOKUP_LOC,'rb'))
     rdf = {}
     for classes in rdf_type:
         rdf[classes] = embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(classes)))

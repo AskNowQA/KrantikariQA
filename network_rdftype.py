@@ -3,8 +3,7 @@ from __future__ import print_function
 
 # In-repo files
 from utils import prepare_vocab_continous as vocab_master
-from utils import embeddings_interface as ei
-import data_loader as dl
+
 import components as com
 import auxiliary as aux
 import network as net
@@ -13,14 +12,11 @@ import network as net
 import torch
 import torch.nn as nn
 from torch import optim
-from torch.utils.data import  DataLoader
+
 
 # Other libs
-# from qelos_core.scripts.lcquad.corerank import FlatEncoder
-from sklearn.metrics import confusion_matrix
-# import matplotlib.pyplot as plt
+
 import numpy as np
-# import pylab
 import time
 import json
 import sys
@@ -263,8 +259,8 @@ class RdfTypeClassifier(net.Model):
             return out
 
     def eval(self, y_true, y_pred, cm=False):
-        if cm:
-            print(confusion_matrix(np.argmax(y_true, axis=1), np.argmax(y_pred.detach().cpu().numpy(), axis=1)))
+        # if cm:
+        #     print(confusion_matrix(np.argmax(y_true, axis=1), np.argmax(y_pred.detach().cpu().numpy(), axis=1)))
         return np.mean(np.argmax(y_true, axis=1) == np.argmax(y_pred.detach().cpu().numpy(), axis=1))
 
     def prepare_save(self):

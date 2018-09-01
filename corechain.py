@@ -93,7 +93,7 @@ def curatail_padding(data,parameter_dict):
 
 
 def training_loop(training_model, parameter_dict,modeler,train_loader,
-                  optimizer,loss_func, data, dataset, device, test_every, validate_every , pointwise = False, problem='core_chain'):
+                  optimizer,loss_func, data, dataset, device, test_every, validate_every , pointwise = False, problem='core_chain',curtail_padding_rel=True):
 
     model_save_location = aux.save_location(problem, training_model, dataset)
     aux_save_information = {
@@ -119,7 +119,9 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
 
     #Makes test data of appropriate shape
-    data = curatail_padding(data, parameter_dict)
+    if curtail_padding_rel:
+        data = curatail_padding(data, parameter_dict)
+
     for epoch in range(parameter_dict['epochs']):
 
         # Epoch start print

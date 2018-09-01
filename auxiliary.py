@@ -17,7 +17,7 @@ def load_relation(COMMON_DATA_DIR):
     """
 
     if sys.version_info[0] == 3:
-        relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle'), 'rb'), encoding='bytes')
+        relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle'), 'rb'), encoding='latin1')
     else:
         relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle'),'rb'))
     inverse_relations = {}
@@ -220,7 +220,7 @@ def load_embeddingid_gloveid():
         embeddingid_to_gloveid[gloveid_to_embeddingid[keys]] = keys
 
     if sys.version_info[0] == 3:
-        word_to_gloveid = pickle.load(open('./resources/glove_vocab.pickle','rb'),encoding='bytes')
+        word_to_gloveid = pickle.load(open('./resources/glove_vocab.pickle','rb'),encoding='latin1')
     else:
         word_to_gloveid = pickle.load(open('./resources/glove_vocab.pickle', 'rb'))
 

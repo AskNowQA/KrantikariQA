@@ -23,7 +23,7 @@ if sys.version_info[0] == 3: import configparser as ConfigParser
 else: import ConfigParser
 
 
-device = torch.device("cuda")
+device = torch.device("cpu")
 np.random.seed(42)
 torch.manual_seed(42)
 
@@ -62,6 +62,7 @@ if __name__ == "__main__":
     parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
     parameter_dict['dropout_rec'] = float(config.get(training_model,'dropout_rec'))
     parameter_dict['dropout_in'] = float(config.get(training_model,'dropout_in'))
+    parameter_dict['rel_pad'] = int(config.get(training_model, 'rel_pad'))
 
     _dataset_specific_data_dir,\
         _model_specific_data_dir,\
@@ -77,37 +78,37 @@ if __name__ == "__main__":
     parameter_dict['training_split'] = _training_split
     parameter_dict['validation_split'] = _validation_split
     parameter_dict['dataset'] = _dataset
+    parameter_dict['schema'] = 'default'
 
     # DBP instance is used just to get labels
     dbp = db_interface.DBPedia(_verbose=True, caching=False)
 
-    _a = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
+    data = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
                       _neg_paths_per_epoch_train,
                       _neg_paths_per_epoch_validation, _relations,
                       _index, _training_split, _validation_split,
                       _model='rdf_class_pairwise',_pairwise=not pointwise, _debug=True, _rdf=True)
 
-    if _dataset == 'lcquad':
-        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, \
-            valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
-    else:
-        print("warning: Test accuracy would not be calculated as the data has not been prepared.")
-        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, \
-            valid_neg_paths, dummy_y_valid, vectors = _a
-        test_questions,test_neg_paths,test_pos_paths = None,None,None
+    # if _dataset == 'lcquad':
+    #     train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, \
+    #         valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
+    # else:
+    #     print("warning: Test accuracy would not be calculated as the data has not been prepared.")
+    #     train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, \
+    #         valid_neg_paths, dummy_y_valid, vectors = _a
+    #     test_questions,test_neg_paths,test_pos_paths = None,None,None
 
 
-    data = {}
-    data['train_questions'] = train_questions
-    data['train_pos_paths'] = train_pos_paths
-    data['train_neg_paths'] = train_neg_paths
-    data['valid_questions'] = valid_questions
-    data['valid_pos_paths'] = valid_pos_paths
-    data['valid_neg_paths'] = valid_neg_paths
-    data['test_pos_paths'] = test_pos_paths
-    data['test_neg_paths'] = test_neg_paths
-    data['test_questions'] = test_questions
-    data['vectors'] = vectors
+    # data['train_questions'] = train_questions
+    # data['train_pos_paths'] = train_pos_paths
+    # data['train_neg_paths'] = train_neg_paths
+    # data['valid_questions'] = valid_questions
+    # data['valid_pos_paths'] = valid_pos_paths
+    # data['valid_neg_paths'] = valid_neg_paths
+    # data['test_pos_paths'] = test_pos_paths
+    # data['test_neg_paths'] = test_neg_paths
+    # data['test_questions'] = test_questions
+    # data['vectors'] = vectors
     data['dummy_y'] = torch.ones(parameter_dict['batch_size'],device=device)
 
 
@@ -162,7 +163,8 @@ if __name__ == "__main__":
                                                                                test_every=5,
                                                                                validate_every=5,
                                                                                 pointwise=pointwise,
-                                                                               problem='rdf_class')
+                                                                               problem='rdf_class',
+                                                                                curtail_padding_rel=False)
 
     print(valid_accuracy)
     print(test_accuracy)

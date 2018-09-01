@@ -40,7 +40,7 @@ config.readfp(open('configs/macros.cfg'))
 #setting up device,model name and loss types.
 training_model = 'bilstm_dot'
 _dataset = 'lcquad'
-pointwise = False
+pointwise = True
 _debug = False
 
 #Loading relations file.
@@ -51,6 +51,7 @@ RDFTYPES = ['x', 'uri', 'none']
 _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 _relations = aux.load_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
+glove_id_sf_to_glove_id_rel = dl.create_relation_lookup_table(COMMON_DATA_DIR)
 
 # Model specific paramters
     # #Model specific paramters
@@ -69,8 +70,8 @@ if training_model == 'cnn_dot':
 parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
 parameter_dict['_model_dir'] = './data/models/'
 
-parameter_dict['corechainmodel'] = 'bilstm_dot'
-parameter_dict['corechainmodelnumber'] = '20'
+parameter_dict['corechainmodel'] = training_model
+parameter_dict['corechainmodelnumber'] = '19'
 
 parameter_dict['intentmodel'] = 'bilstm_dense'
 parameter_dict['intentmodelnumber'] = '5'
@@ -115,7 +116,17 @@ class QuestionAnswering:
         if self.parameters['corechainmodel'] == 'bilstm_dot':
             self.corechain_model = net.BiLstmDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
                                                  _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+        if self.parameters['corechainmodel'] == 'slotptr':
+            self.corechain_model = net.QelosSlotPointerModel(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
 
+        if self.parameters['corechainmodel'] == 'reldet':
+            self.corechain_model = net.RelDetection(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+
+        if self.parameters['corechainmodel'] == 'decomposable_attention':
+            self.corechain_model = net.DecomposableAttention(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
         # Make the model path
         model_path = os.path.join(self.parameters['_model_dir'], 'core_chain')
         model_path = os.path.join(model_path, self.parameters['corechainmodel'])
@@ -174,7 +185,7 @@ class QuestionAnswering:
 
         self.intent_model.load_from(model_path)
 
-    def _predict_corechain(self, _q, _p):
+    def _predict_corechain(self, _q, _p, _p1 = None , _p2 = None):
         """
             Given a datapoint (question, paths) encoded in  embedding_vocab,
                 run the model's predict and find the best corechain.
@@ -192,20 +203,40 @@ class QuestionAnswering:
 
         # Pad paths
         P = np.zeros((len(_p), self.parameters['max_length']))
+        if _p1:
+            P1 = np.zeros((len(_p), self.parameters['max_length']))
+            P2 = np.zeros((len(_p), self.parameters['max_length']))
         for i in range(len(_p)):
-            P[i, :min(len(_p[i]), self.parameters['max_length'])] = \
-                _p[i][:min(len(_p[i]), self.parameters['max_length'])]
+            P[i, :min(len(_p[i]), self.parameters['max_length'])] = _p[i][:min(len(_p[i]), self.parameters['max_length'])]
 
+        if _p1:
+            for i in range(len(_p)):
+                P1[i, :min(len(_p1[i]), self.parameters['max_length'])] = _p1[i][
+                                                                        :min(len(_p1[i]), self.parameters['max_length'])]
+                P2[i, :min(len(_p2[i]), self.parameters['max_length'])] = _p2[i][
+                                                                          :min(len(_p2[i]),
+                                                                                   self.parameters['max_length'])]
+            P1 = torch.tensor(P1, dtype=torch.long, device=self.device)
+            P2 = torch.tensor(P2, dtype=torch.long, device=self.device)
+
+            if self.parameters['corechainmodel'] == 'slotptr':
+                P1 = P1[:,:self.parameters['relsp_pad']]
+                P2 = P2[:,:self.parameters['relsp_pad']]
+            else:
+                P1 = P1[:, :self.parameters['relrd_pad']]
+                P2 = P2[:, :self.parameters['relrd_pad']]
         # Convert np to torch stuff
         Q = torch.tensor(Q, dtype=torch.long, device=self.device)
         P = torch.tensor(P, dtype=torch.long, device=self.device)
-
+        P = P[:, :self.parameters['rel_pad']]
         if self.debug:
             print("Q: ", Q.shape, " P: ", P.shape)
 
             # We then pass them through a predict function and get a score array.
-        score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
-
+        if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'reldet':
+            score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel2=P2, device=self.device)
+        else:
+            score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
         return score.detach().cpu().numpy()
 
     def _predict_rdfclass(self, _q, _p):
@@ -389,7 +420,33 @@ def create_sparql(log, data, embeddings_interface, embeddingid_to_gloveid, relat
                                         embeddingid_to_gloveid=embeddingid_to_gloveid)
 
 
-def corechain_prediction(question, paths, positive_path, negative_paths, no_positive_path):
+def create_rd_sp_paths(paths):
+    special_char = [embeddings_interface.vocabularize(['+']), embeddings_interface.vocabularize(['-'])]
+    dummy_path = [0]
+    paths_rel1_sp = []
+    paths_rel2_sp = []
+    paths_rel1_rd = []
+    paths_rel2_rd = []
+    for p in paths:
+        p1, p2 = dl.break_path(p, special_char)
+        paths_rel1_sp.append(p1)
+        paths_rel1_rd.append(dl.relation_table_lookup_reverse(p1,glove_id_sf_to_glove_id_rel,embeddingid_to_gloveid,gloveid_to_embeddingid))
+        if p2 is not None:
+            paths_rel2_sp.append(p2)
+            paths_rel2_rd.append(dl.relation_table_lookup_reverse(p2,glove_id_sf_to_glove_id_rel,embeddingid_to_gloveid,gloveid_to_embeddingid))
+        else:
+            paths_rel2_sp.append(dummy_path)
+            paths_rel2_rd.append(dummy_path)
+    paths_rel1_sp = [np.asarray(o) for o in paths_rel1_sp]
+    paths_rel2_sp = [np.asarray(o) for o in paths_rel2_sp]
+    paths_rel1_rd = [np.asarray(o) for o in paths_rel1_rd]
+    paths_rel2_rd = [np.asarray(o) for o in paths_rel2_rd]
+    return paths_rel1_sp,paths_rel2_sp,paths_rel1_rd,paths_rel2_rd
+
+
+
+
+def corechain_prediction(question, paths, positive_path, negative_paths, no_positive_path,model):
     '''
         Why is path needed ?
     '''
@@ -422,7 +479,14 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         '''
             There exists no correct/true path and there are few negative paths.
         '''
-        output = qa._predict_corechain(question, paths)
+        if model == 'reldet':
+            _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
+            output = qa._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
+        elif model == 'slotptr':
+            paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
+            output = qa._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
+        else:
+            output = qa._predict_corechain(question, paths)
         best_path_index = np.argmax(output)
         best_path = paths[best_path_index]
 
@@ -431,7 +495,14 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
             There exists positive path and also negative paths
             path = positive_path + negative_paths    
         '''
-        output = qa._predict_corechain(question, paths)
+        if model == 'reldet':
+            _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
+            output = qa._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
+        elif model == 'slotptr':
+            paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
+            output = qa._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
+        else:
+            output = qa._predict_corechain(question, paths)
         best_path_index = np.argmax(output)
         best_path = paths[best_path_index]
 
@@ -531,7 +602,7 @@ def answer_question(qa, index, data, gloveid_to_embeddingid, embeddingid_to_glov
 
     cc_mrr, best_path, cc_acc = corechain_prediction(question,
                                                      paths, positive_path,
-                                                     negative_paths, no_positive_path)
+                                                     negative_paths, no_positive_path,parameter_dict['corechainmodel'])
 
     log['pred_path'] = best_path
     metrics['core_chain_accuracy_counter'] = cc_acc
@@ -712,6 +783,16 @@ def evaluate(_logging):
     print("Overall Recall:\t", np.mean(overall_r))
     print("Overall F1Score:\t", np.mean(overall_f))
 
+    _logging['corechain_accuracy'] = np.mean(corechain_acc)
+    _logging['corechain_mean_rr'] = np.mean(corechain_mrr)
+    _logging['intent_accuracy'] = np.mean(intent_acc)
+    _logging['rdf_type_accuracy'] = np.mean(rdf_type_acc)
+    _logging['precision'] = np.mean(overall_p)
+    _logging['recall'] = np.mean(overall_r)
+    _logging['f1'] = ((2.0*_logging['precision']*_logging['recall'])/(_logging['precision']+_logging['recall']))
+    return _logging
+
+
 
 if __name__ == "__main__":
     TEMP = aux.data_loading_parameters(_dataset, parameter_dict, runtime=True)
@@ -768,6 +849,7 @@ if __name__ == "__main__":
 
     startindex = 0
     for index, data in enumerate(_data[startindex:]):
+        print(data.keys())
         index += startindex
 
         log, metrics = answer_question(qa=qa,
@@ -826,4 +908,11 @@ if __name__ == "__main__":
         #     print("\n",sparql)
         print("\n################################\n")
 
-    evaluate(Logging)
+    Logging = evaluate(Logging)
+
+    model_path = os.path.join(parameter_dict['_model_dir'], 'core_chain')
+    model_path = os.path.join(model_path, parameter_dict['corechainmodel'])
+    model_path = os.path.join(model_path, parameter_dict['dataset'])
+    model_path = os.path.join(model_path, parameter_dict['corechainmodelnumber'])
+    pickle.dump(Logging,open(model_path+'result.pickle','wb+'))
+

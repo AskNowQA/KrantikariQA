@@ -21,6 +21,11 @@ from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
 import auxiliary as aux
 
+
+sys.path.append('/data/priyansh/conda/fastai')
+import os
+os.environ['QT_QPA_PLATFORM']='offscreen'
+
 config = ConfigParser.RawConfigParser()
 config.read('configs/macros.cfg')
 
@@ -249,6 +254,20 @@ def relation_table_lookup(lookup_str,glove_id_sf_to_glove_id_rel):
 
     key = str(list(lookup_str)[1:]) # 1 ownwards because first is the sign
     return glove_id_sf_to_glove_id_rel[key]
+
+
+def relation_table_lookup_reverse(lookup_str,glove_id_sf_to_glove_id_rel,embeddingid_to_gloveid,gloveid_to_embeddingid):
+    '''
+        given an np array of durface form of relation it gives a glove id for the whole relation string(list)
+    '''
+    if list(lookup_str)[0] == 0:
+        print(lookup_str)
+        return None
+
+    lookup_str = [embeddingid_to_gloveid[i] for i in lookup_str]
+    key = str(list(lookup_str)[1:]) # 1 ownwards because first is the sign
+    a = glove_id_sf_to_glove_id_rel[key]
+    return [gloveid_to_embeddingid[a[0]]]
 
 def create_relation_lookup_table(COMMON_DATA_DIR):
     '''

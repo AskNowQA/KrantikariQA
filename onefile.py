@@ -38,9 +38,9 @@ config = ConfigParser.ConfigParser()
 config.readfp(open('configs/macros.cfg'))
 
 #setting up device,model name and loss types.
-training_model = 'bilstm_dot'
+training_model = 'slotptr'
 _dataset = 'lcquad'
-pointwise = True
+pointwise = False
 _debug = False
 
 #Loading relations file.
@@ -71,10 +71,10 @@ parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
 parameter_dict['_model_dir'] = './data/models/'
 
 parameter_dict['corechainmodel'] = training_model
-parameter_dict['corechainmodelnumber'] = '19'
+parameter_dict['corechainmodelnumber'] = '71'
 
 parameter_dict['intentmodel'] = 'bilstm_dense'
-parameter_dict['intentmodelnumber'] = '5'
+parameter_dict['intentmodelnumber'] = '10'
 
 parameter_dict['rdftypemodel'] = 'bilstm_dense'
 parameter_dict['rdftypemodelnumber'] = '6'
@@ -105,10 +105,12 @@ class QuestionAnswering:
         self._word_to_id = word_to_id
 
         # Load models
+        self.parameters['dataset'] = 'lcquad'
         self._load_corechain_model()
         self._load_rdftype_model()
         self._load_rdfclass_model()
         self._load_intentmodel()
+        self.parameters['dataset'] = _dataset
 
     def _load_corechain_model(self):
 
@@ -129,7 +131,10 @@ class QuestionAnswering:
                                                  _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
         # Make the model path
         model_path = os.path.join(self.parameters['_model_dir'], 'core_chain')
-        model_path = os.path.join(model_path, self.parameters['corechainmodel'])
+        if self.pointwise:
+            model_path = os.path.join(model_path, self.parameters['corechainmodel']+'_pointwise')
+        else:
+            model_path = os.path.join(model_path, self.parameters['corechainmodel'])
         model_path = os.path.join(model_path, self.parameters['dataset'])
         model_path = os.path.join(model_path, self.parameters['corechainmodelnumber'])
         model_path = os.path.join(model_path, 'model.torch')
@@ -141,7 +146,7 @@ class QuestionAnswering:
         # Initialize the model
         if self.parameters['rdfclassmodel'] == 'bilstm_dot':
             self.rdfclass_model = net.BiLstmDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
-                                                _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+                                                _device=self.device, _pointwise=False, _debug=self.debug)
 
         # Make the model path
         model_path = os.path.join(self.parameters['_model_dir'], 'rdf_class')
@@ -171,6 +176,7 @@ class QuestionAnswering:
     def _load_intentmodel(self):
 
         # Initialize the model
+
         self.intent_model = net_intent.IntentClassifier(_parameter_dict=self.parameters,
                                                         _word_to_id=self._word_to_id,
                                                         _device=self.device)
@@ -465,7 +471,7 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
                     > Probably in qald
         '''
         print("The code should not have been herr. There is no warning. RUN!!!!!!!!")
-        raise ValueError
+        # raise ValueError
 
     elif not no_positive_path and len(negative_paths) == 0:
         '''
@@ -766,10 +772,13 @@ def evaluate(_logging):
             rdf_class_acc.append(log['metrics']['rdfclass_accuracy_counter'])
 
         # Get f p r
-        f, p, r = _evaluate_sparqls_(test_sparql=log['pred_sparql'],
-                                     true_sparql=log['true_sparql'],
-                                     type=log['log']['pred_intent'],
-                                     ground_type=log['log']['true_intent'])
+        try:
+            f, p, r = _evaluate_sparqls_(test_sparql=log['pred_sparql'],
+                                         true_sparql=log['true_sparql'],
+                                         type=log['log']['pred_intent'],
+                                         ground_type=log['log']['true_intent'])
+        except:
+            f,p,r = 0.0,0.0,0.0
         overall_p.append(p)
         overall_r.append(r)
         overall_f.append(f)
@@ -849,6 +858,9 @@ if __name__ == "__main__":
 
     startindex = 0
     for index, data in enumerate(_data[startindex:]):
+        print (index)
+        if index == 16 or index == 25:
+            continue
         print(data.keys())
         index += startindex
 
@@ -914,5 +926,5 @@ if __name__ == "__main__":
     model_path = os.path.join(model_path, parameter_dict['corechainmodel'])
     model_path = os.path.join(model_path, parameter_dict['dataset'])
     model_path = os.path.join(model_path, parameter_dict['corechainmodelnumber'])
-    pickle.dump(Logging,open(model_path+'result.pickle','wb+'))
+    pickle.dump(Logging,open(model_path+'/result.pickle','wb+'))
 

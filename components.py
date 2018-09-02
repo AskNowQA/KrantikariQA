@@ -809,7 +809,7 @@ class QelosFlatEncoder(nn.Module):
         if self.residual:
             if self.adapt_lin is not None:
                 embs = self.adapt_lin(embs)
-            meanpool = embs.sum(1)
+            meanpool = embs.sum(0)
             masksum = mask.float().sum(1).unsqueeze(1)
             meanpool = meanpool / masksum
             final_state = final_state + meanpool
@@ -851,7 +851,7 @@ class QelosSlotPtrChainEncoder(nn.Module):
         self.device = device
 
         self.enc = QelosFlatEncoder(max_length, hidden_dim, number_of_layer,
-                 embedding_dim, vocab_size, bidirectional, device, dropout=0.0, mode='LSTM',
+                 embedding_dim, vocab_size, bidirectional, device, dropout=0.5, mode='LSTM',
                  enable_layer_norm=False, vectors=vectors, residual=False,
                  dropout_in=self.dropout_in, dropout_rec=self.dropout_rec, debug=False)#.to(device)
 
@@ -982,3 +982,7 @@ if __name__ == "__main__":
     out0 = encoder.forward(question, hidden_0, device)
     # out1 = encoder.forward(question, hidden_1, device)[0]
     # outr = encoder.forward(question, hidden_r, device)[0]
+
+
+# def file_reader(file_number):
+#     return pickle.load(open(str(file_number) + '/model_info.pickle','rb'),encoding='bytes')

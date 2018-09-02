@@ -119,7 +119,8 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
 
     #Makes test data of appropriate shape
-    if curtail_padding_rel:
+    print("the dataset is ", dataset)
+    if curtail_padding_rel and dataset == 'lcquad':
         data = curatail_padding(data, parameter_dict)
 
     for epoch in range(parameter_dict['epochs']):
@@ -400,6 +401,18 @@ if __name__ == "__main__":
                                             _device=device, _pointwise=pointwise, _debug=False)
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
                                list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())))
+    if training_model == 'bilstm_dot_skip':
+        modeler = net.BiLstmDot_skip( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                             _device=device,_pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+
+    if training_model == 'bilstm_dot_multiencoder':
+        modeler = net.BiLstmDot_multiencoder( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                             _device=device,_pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())) +
+                               list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())))
 
 
     if not pointwise:

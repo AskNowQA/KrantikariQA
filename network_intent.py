@@ -3,6 +3,7 @@ from __future__ import print_function
 
 # In-repo files
 from utils import prepare_vocab_continous as vocab_master
+from utils import tensor_utils as tu
 from utils import embeddings_interface as ei
 import data_loader as dl
 import components as com
@@ -188,10 +189,12 @@ class IntentClassifier(net.Model):
         self.device = _device
         self.pointwise = _pointwise
         self.word_to_id = _word_to_id
+        self.parameter_dict['hidden_size'] = 150
         self.hiddendim = self.parameter_dict['hidden_size'] * (2 * int(self.parameter_dict['bidirectional']))
 
         if self.debug:
             print("Init Models")
+
 
         self.encoder = com.QelosFlatEncoder(
             number_of_layer=self.parameter_dict['number_of_layer'],
@@ -200,7 +203,7 @@ class IntentClassifier(net.Model):
             hidden_dim=self.parameter_dict['hidden_size'],
             vocab_size=self.parameter_dict['vocab_size'],
             max_length=self.parameter_dict['max_length'],
-            dropout=0,
+            dropout=0.3,
             vectors=self.parameter_dict['vectors'],
             enable_layer_norm=False,
             residual=False,
@@ -231,7 +234,7 @@ class IntentClassifier(net.Model):
         y_label = torch.tensor(y_label, dtype=torch.float, device=device)
 
         # Encoding all the data
-        ques_batch = self.encoder(ques_batch)
+        ques_batch = self.encoder(tu.trim(ques_batch))
 
         # Calculating dot score
         out = self.dense(ques_batch)
@@ -255,7 +258,7 @@ class IntentClassifier(net.Model):
             ques_batch = torch.tensor(ques_batch, dtype=torch.long, device=device)
 
             # Encoding all the data
-            ques_batch = self.encoder(ques_batch)
+            ques_batch = self.encoder(tu.trim(ques_batch))
 
             # Calculating dot score
             out = self.dense(ques_batch)

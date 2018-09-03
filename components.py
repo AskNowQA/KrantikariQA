@@ -108,99 +108,101 @@ class DenseClf(nn.Module):
             return F.relu(self.output(_x))
 
 
-class CNN(nn.Module):
-
-    def __init__(self, _vectors, _vocab_size, _embedding_dim, _output_dim,_debug):
-        super(CNN, self).__init__()
-
-        self.vectors = _vectors
-        self.vocab_size = _vocab_size
-        self.output_dim = _output_dim
-        self.debug = _debug
-
-
-        if self.vectors is not None:
-            self.embedding_dim = self.vectors.shape[1]
-        else:
-            self.embedding_dim = _embedding_dim
-
-
-        self.out_channels = int(self.embedding_dim / 2.0)
-
-        if self.vectors is not None:
-            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(self.vectors))
-            self.embedding_layer.weight.requires_grad = True
-        else:
-            # Embedding layer
-            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
-
-
-        self.kernel_size_conv1 = 5
-        self.kernel_size_max1 = 2
-
-
-        self.conv1 = nn.Sequential(
-            nn.Conv1d(
-                in_channels=self.embedding_dim,
-                out_channels=self.out_channels,
-                kernel_size=self.kernel_size_conv1,
-            ),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=self.kernel_size_max1),
-        )
-
-
-        self.conv2 = nn.Sequential(
-            nn.Conv1d(
-                in_channels=self.embedding_dim,
-                out_channels=self.out_channels,
-                kernel_size=self.kernel_size_conv1,
-            ),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=self.kernel_size_max1),
-        )
-
-
-        self.conv3 = nn.Sequential(
-            nn.Conv1d(
-                in_channels=self.embedding_dim,
-                out_channels=self.out_channels,
-                kernel_size=self.kernel_size_conv1,
-            ),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=self.kernel_size_max1),
-        )
-
-
-        self.output = nn.Linear(self.out_channels * 3 * self.kernel_size_conv1 * self.kernel_size_max1, self.output_dim)
-
-    def forward(self, x):
-
-        x_embedded = self.embedding_layer(x)
-        if self.debug : print("embedded shape is ", x_embedded.shape)
-
-        x_embedded = x_embedded.transpose(2, 1)
-        if self.debug : print("transposed shape is ", x_embedded.shape )
-
-        x_conv1 = self.conv1(x_embedded)
-        if self.debug: print("x_conv1 shape is ,", x_conv1.shape)
-
-        x_conv2 = self.conv2(x_embedded)
-        if self.debug: print("x_conv2 shape is ,", x_conv2.shape)
-
-        x_conv3 = self.conv3(x_embedded)
-        if self.debug: print("x_conv1 shape is ,", x_conv3.shape)
-
-        x_cat = torch.cat((x_conv1, x_conv2, x_conv3), 1)
-        if self.debug: print("concated x shape is ,", x_cat.shape)
-
-        x_flat = x_cat.view(x_cat.size(0), -1)
-        if self.debug: print("flattened x shape is , ", x_flat.shape)
-
-        output = self.output(x_flat)
-        if self.debug: print("final output shape is ,", output.shape)
-
-        return output
+# class CNN(nn.Module):
+#
+#     def __init__(self, _vectors, _vocab_size, _embedding_dim, _output_dim,_debug):
+#         super(CNN, self).__init__()
+#
+#         self.vectors = _vectors
+#         self.vocab_size = _vocab_size
+#         self.output_dim = _output_dim
+#         self.debug = _debug
+#
+#
+#         if self.vectors is not None:
+#             self.embedding_dim = self.vectors.shape[1]
+#         else:
+#             self.embedding_dim = _embedding_dim
+#
+#
+#         self.out_channels = int(self.embedding_dim / 2.0)
+#
+#         if self.vectors is not None:
+#             self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(self.vectors))
+#             self.embedding_layer.weight.requires_grad = True
+#         else:
+#             # Embedding layer
+#             self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
+#
+#
+#         self.kernel_size_conv1 = [3,4,5]
+#         self.kernel_size_max1 = 2
+#
+#
+#         self.conv1 = nn.Sequential(
+#             nn.Conv1d(
+#                 in_channels=self.embedding_dim,
+#                 out_channels=self.out_channels,
+#                 kernel_size=self.kernel_size_conv1[0],
+#             ),
+#             nn.ReLU(),
+#             nn.MaxPool1d(kernel_size=self.kernel_size_max1),
+#         )
+#
+#
+#         self.conv2 = nn.Sequential(
+#             nn.Conv1d(
+#                 in_channels=self.embedding_dim,
+#                 out_channels=self.out_channels,
+#                 kernel_size=self.kernel_size_conv1[1],
+#             ),
+#             nn.ReLU(),
+#             nn.MaxPool1d(kernel_size=self.kernel_size_max1),
+#         )
+#
+#
+#         self.conv3 = nn.Sequential(
+#             nn.Conv1d(
+#                 in_channels=self.embedding_dim,
+#                 out_channels=self.out_channels,
+#                 kernel_size=self.kernel_size_conv1[2],
+#             ),
+#             nn.ReLU(),
+#             nn.MaxPool1d(kernel_size=self.kernel_size_max1),
+#         )
+#
+#         # self.dropout = nn.Dropout(0.1)
+#         # self.output = nn.Linear(self.out_channels * 3 * self.kernel_size_conv1 * self.kernel_size_max1, self.output_dim)
+#
+#     def forward(self, x):
+#
+#         x_embedded = self.embedding_layer(x)
+#         if self.debug : print("embedded shape is ", x_embedded.shape)
+#
+#         x_embedded = x_embedded.transpose(2, 1)
+#         if self.debug : print("transposed shape is ", x_embedded.shape )
+#
+#         x_conv1 = self.conv1(x_embedded)
+#         if self.debug: print("x_conv1 shape is ,", x_conv1.shape)
+#
+#         x_conv2 = self.conv2(x_embedded)
+#         if self.debug: print("x_conv2 shape is ,", x_conv2.shape)
+#
+#         x_conv3 = self.conv3(x_embedded)
+#         if self.debug: print("x_conv1 shape is ,", x_conv3.shape)
+#
+#         x_cat = torch.cat((x_conv1, x_conv2, x_conv3), 1)
+#         if self.debug: print("concated x shape is ,", x_cat.shape)
+#
+#         x_flat = x_cat.view(x_cat.size(0), -1)
+#         if self.debug: print("flattened x shape is , ", x_flat.shape)
+#
+#         # output = self.output(x_flat)
+#         # if self.debug: print("final output shape is ,", output.shape)
+#
+#         # x_flat = self.dropout(x_flat)
+#
+#         return x_flat
 
 
 class BetterAttendCompareAggregate(nn.Module):
@@ -936,6 +938,7 @@ class QelosSlotPtrQuestionEncoder(nn.Module):
 
         # get attention scores
         scores = self.linear(ys)
+        # s1 = scores
         scores = scores + torch.log(mask[:, :ys.size(1)].float().unsqueeze(2))
         scores = self.sm(scores)  # (batsize, seqlen, 2)
         # get summaries
@@ -951,8 +954,81 @@ class QelosSlotPtrQuestionEncoder(nn.Module):
         b = ys * scores  # (batsize, seqlen, 2, dim)
         summaries = b.sum(1)  # (batsize, 2, dim)
         ret = torch.cat([summaries[:, 0, :], summaries[:, 1, :]], 1)
-        return ret
+        return ret,scores
 
+class CNN(nn.Module):
+
+    def __init__(self, _vectors, _vocab_size, _embedding_dim, _output_dim,_debug):
+        super(CNN, self).__init__()
+
+        self.vectors = _vectors
+        self.vocab_size = _vocab_size
+        self.output_dim = _output_dim
+        self.debug = _debug
+
+
+        if self.vectors is not None:
+            self.embedding_dim = self.vectors.shape[1]
+        else:
+            self.embedding_dim = _embedding_dim
+
+
+        self.out_channels = int(self.embedding_dim / 2.0)
+
+        if self.vectors is not None:
+            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(self.vectors))
+            self.embedding_layer.weight.requires_grad = True
+        else:
+            # Embedding layer
+            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
+
+
+        self.kernel_size_conv1 = [3,4,5]
+        self.kernel_size_max1 = 2
+
+        Ci = 1
+        Co = 50
+        Ks = [3,4,5]
+        D = 300
+        C = self.output_dim
+        self.convs1 = nn.ModuleList([nn.Conv2d(Ci, Co, (K, D)) for K in Ks])
+        '''
+        self.conv13 = nn.Conv2d(Ci, Co, (3, D))
+        self.conv14 = nn.Conv2d(Ci, Co, (4, D))
+        self.conv15 = nn.Conv2d(Ci, Co, (5, D))
+        '''
+        self.dropout = nn.Dropout(0.3)
+
+        self.fc1 = nn.Linear(len(Ks) * Co, C)
+
+        # self.dropout = nn.Dropout(0.1)
+        # self.output = nn.Linear(self.out_channels * 3 * self.kernel_size_conv1 * self.kernel_size_max1, self.output_dim)
+
+        def conv_and_pool(self, x, conv):
+            x = F.relu(conv(x)).squeeze(3)  # (N, Co, W)
+            x = F.max_pool1d(x, x.size(2)).squeeze(2)
+            return x
+
+    def forward(self, x):
+
+        x_embedded = self.embedding_layer(x)
+        if self.debug : print("embedded shape is ", x_embedded.shape)
+
+        x_embedded = x_embedded.unsqueeze(1)
+        if self.debug : print("transposed shape is ", x_embedded.shape )
+
+        x_embedded = [F.relu(conv(x_embedded)).squeeze(3) for conv in self.convs1]  # [(N, Co, W), ...]*len(Ks)
+
+        x_embedded = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in x_embedded]  # [(N, Co), ...]*len(Ks)
+
+        x_embedded = torch.cat(x_embedded, 1)
+
+        x_embedded = self.dropout(x_embedded)
+
+        # logit = self.fc1(x_embedded)  # (N, C)
+        logit = self.fc1(x_embedded)  # (N, C)
+
+        return logit
 
 if __name__ == "__main__":
     max_length = 25

@@ -1383,7 +1383,7 @@ class QelosSlotPointerModel(Model):
         # assert torch.mean((torch.sum(pos_1_batch, dim=-1) != 0).float()) == 1
 
         # Encoding all the data
-        ques_encoded = self.encoder_q(tu.trim(ques_batch))
+        ques_encoded,_ = self.encoder_q(tu.trim(ques_batch))
         pos_encoded = self.encoder_p(tu.trim(pos_1_batch), tu.trim(pos_2_batch))
         neg_encoded = self.encoder_p(tu.trim(neg_1_batch), tu.trim(neg_2_batch))
 
@@ -1410,7 +1410,7 @@ class QelosSlotPointerModel(Model):
         optimizer.zero_grad()
 
         # Encoding all the data
-        ques_encoded = self.encoder_q(tu.trim(ques_batch))
+        ques_encoded,_ = self.encoder_q(tu.trim(ques_batch))
         pos_encoded = self.encoder_p(tu.trim(path_1_batch), tu.trim(path_2_batch))
 
         score = torch.sum(ques_encoded * pos_encoded, dim=-1)
@@ -1424,7 +1424,7 @@ class QelosSlotPointerModel(Model):
 
         return loss
 
-    def predict(self, ques, paths, paths_rel1,paths_rel2, device):
+    def predict(self, ques, paths, paths_rel1,paths_rel2, device,attention_value=False):
         """
             Same code works for both pairwise or pointwise
         """
@@ -1437,7 +1437,7 @@ class QelosSlotPointerModel(Model):
             paths_rel2 = tu.no_one_left_behind(paths_rel2)
 
             # Encoding all the data
-            ques_encoded = self.encoder_q(tu.trim(ques))
+            ques_encoded,attention_score = self.encoder_q(tu.trim(ques))
             path_encoded = self.encoder_p(tu.trim(paths_rel1), tu.trim(paths_rel2))
 
             # Pass them to the comparison module
@@ -1445,7 +1445,10 @@ class QelosSlotPointerModel(Model):
 
             self.encoder_q.train()
             self.encoder_p.train()
-            return score
+            if attention_value:
+                return score,attention_score
+            else:
+                return score
 
     def prepare_save(self):
         return [('encoder_q', self.encoder_q), ('encoder_p', self.encoder_p)]

@@ -27,6 +27,8 @@ import time
 
 from configs import config_loader as cl
 
+from utils import prepare_vocab_continous as vocab_master
+
 
 
 #setting up device,model name and loss types.
@@ -311,6 +313,12 @@ if __name__ == "__main__":
     parser.add_argument('-device', action='store', dest='device',
                         help='cuda for gpu else cpu', default='cpu')
 
+    parser.add_argument('-finetune', action='store', dest='finetune',
+                        help='train over validation', default=False)
+
+    parser.add_argument('-bidirectional', action='store', dest='bidirectional',
+                        help='train over validation', default=True)
+
     args = parser.parse_args()
 
     # setting up device,model name and loss types.
@@ -319,6 +327,8 @@ if __name__ == "__main__":
     _dataset = args.dataset
     pointwise = aux.to_bool(args.pointwise)
     _train_over_validation = aux.to_bool(args.train_over_validation)
+    finetune = aux.to_bool(args.finetune)
+    bidirectional = aux.to_bool(args.bidirectional)
 
 
     # #Model specific paramters
@@ -343,21 +353,38 @@ if __name__ == "__main__":
 
     if training_model == 'reldet':
         schema = 'reldet'
-    elif training_model == 'slotptr':
+    elif training_model == 'slotptr' or training_model == 'slotptr_common_encoder':
         schema = 'slotptr'
+    elif training_model == 'bilstm_dot_multiencoder':
+        schema = 'default'
     else:
         schema = 'default'
 
     train_loader = load_data(data, parameter_dict, pointwise, schema=schema)
+    # if training_model == 'bilstm_dot_ulmfit':
+    #     _, data['vectors'] = vocab_master.load_ulmfit()
     parameter_dict['vectors'] = data['vectors']
     parameter_dict['schema'] = schema
+    if not bidirectional:
+        parameter_dict['bidirectional'] = False
 
 
     if training_model == 'bilstm_dot':
-        modeler = net.BiLstmDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
-                                             _device=device,_pointwise=pointwise, _debug=False)
+        if not finetune:
+            modeler = net.BiLstmDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                                 _device=device,_pointwise=pointwise, _debug=False)
 
-        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+        else:
+            if pointwise:
+                model_path = 'data/models/core_chain/bilstm_dot_pointwise/lcquad/19/model.torch'
+            else:
+                model_path = 'data/models/core_chain/bilstm_dot/lcquad/30/model.torch'
+            modeler = net.BiLstmDot(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                    _device=device, _pointwise=pointwise, _debug=False)
+
+            modeler.load_from(model_path)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
 
     if training_model == 'bilstm_dense':
         modeler = net.BiLstmDense( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
@@ -380,11 +407,25 @@ if __name__ == "__main__":
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
 
     if training_model == 'decomposable_attention':
-        modeler = net.DecomposableAttention(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
-                                            _device=device, _pointwise=pointwise, _debug=False)
+        if not finetune:
+            modeler = net.DecomposableAttention(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                _device=device, _pointwise=pointwise, _debug=False)
 
-        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
-                               list(filter(lambda p: p.requires_grad, modeler.scorer.parameters())))
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.scorer.parameters())))
+        else:
+            if not pointwise:
+                model_path = 'data/models/core_chain/decomposable_attention/lcquad/71/model.torch'
+            else:
+                model_path = 'data/models/core_chain/decomposable_attention_pointwise/lcquad/8/model.torch'
+
+            modeler = net.DecomposableAttention(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                _device=device, _pointwise=pointwise, _debug=False)
+
+            modeler.load_from(model_path)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.scorer.parameters())))
+
     if training_model == 'reldet':
         modeler = net.RelDetection(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                             _device=device, _pointwise=pointwise, _debug=False)
@@ -400,7 +441,7 @@ if __name__ == "__main__":
         modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                             _device=device, _pointwise=pointwise, _debug=False)
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
-                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())))
+                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001)
     if training_model == 'bilstm_dot_skip':
         modeler = net.BiLstmDot_skip( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
                                              _device=device,_pointwise=pointwise, _debug=False)
@@ -408,11 +449,24 @@ if __name__ == "__main__":
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
 
     if training_model == 'bilstm_dot_multiencoder':
+        print(schema)
         modeler = net.BiLstmDot_multiencoder( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
                                              _device=device,_pointwise=pointwise, _debug=False)
 
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())) +
                                list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())))
+
+    if training_model == 'bilstm_dot_ulmfit':
+        modeler = net.BiLstmDot_ulmfit( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                             _device=device,_pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+    if training_model == 'slotptr_common_encoder':
+        print("*************",parameter_dict['bidirectional'])
+        modeler = net.QelosSlotPointerModel_common_encoder(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                            _device=device, _pointwise=pointwise, _debug=False)
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001)
 
 
     if not pointwise:

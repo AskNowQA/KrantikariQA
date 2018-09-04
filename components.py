@@ -348,25 +348,33 @@ class HRBiLSTM(nn.Module):
     """
 
     def __init__(self, hidden_dim,
-                 max_len_ques,
-                 max_len_path,
+                 max_length,
                  embedding_dim,
                  vocab_size,
-                 dropout=0.0,
+                 dropout=0.5,
                  vectors=None,
-                 debug=False):
+                 debug=False,
+                 bidirectional=True,
+                 number_of_layer=1,
+                 mode='LSTM',
+                 enable_layer_norm=False,
+                 residual=False,
+                ):
 
         super(HRBiLSTM, self).__init__()
 
         # Save the parameters locally
-        self.max_len_ques = max_len_ques
-        self.max_len_path = max_len_path
+        self.max_length = max_length
         self.hidden_dim = hidden_dim
         self.embedding_dim = embedding_dim
         self.vocab_size = vocab_size
         self.dropout = dropout
         self.debug = debug
-
+        self.bidirectional = bidirectional
+        self.mode = mode
+        self.enable_layer_norm = enable_layer_norm
+        self.residual = residual
+        self.number_of_layer = number_of_layer
         if vectors is not None:
             self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
             self.embedding_layer.weight.requires_grad = True
@@ -374,8 +382,36 @@ class HRBiLSTM(nn.Module):
             # Embedding layer
             self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
 
-        self.layer1 = nn.LSTM(self.embedding_dim, self.hidden_dim, bidirectional=True, dropout=self.dropout)
-        self.layer2 = nn.LSTM(self.hidden_dim * 2, self.hidden_dim, bidirectional=True, dropout=self.dropout)
+        self.layer1 = NotSuchABetterEncoder(
+            number_of_layer=self.number_of_layer,
+            bidirectional=self.bidirectional,
+            embedding_dim=self.embedding_dim,
+            max_length=self.max_length,
+            hidden_dim=self.hidden_dim,
+            vocab_size=self.vocab_size,
+            dropout=self.dropout,
+            vectors=vectors,
+            enable_layer_norm=False,
+            mode='LSTM',
+            debug=False,
+            residual=self.residual)
+
+        self.layer2 = NotSuchABetterEncoder_v2(
+            number_of_layer=self.number_of_layer,
+            bidirectional=self.bidirectional,
+            embedding_dim=self.hidden_dim * 2,
+            max_length=self.max_length,
+            hidden_dim=self.hidden_dim,
+            vocab_size=self.vocab_size,
+            dropout=self.dropout,
+            vectors=vectors,
+            enable_layer_norm=False,
+            mode='LSTM',
+            debug=self.debug,
+            residual=self.residual)
+
+    #         self.layer1 = nn.LSTM(self.embedding_dim, self.hidden_dim, bidirectional=True, dropout=self.dropout)
+    #         self.layer2 = nn.LSTM(self.hidden_dim * 2, self.hidden_dim, bidirectional=True, dropout=self.dropout)
 
     def init_hidden(self, batch_size, device):
 
@@ -386,9 +422,9 @@ class HRBiLSTM(nn.Module):
         """
         :params
             :ques: torch.tensor (batch, seq)
-            :path_word: torch tensor (batch, seq)
+            :path_word: torch tenquessor (batch, seq)
             :path_rel_1: torch.tensor (batch, 1)
-            :path_rel_2: torch.tensor (batch, 1)
+            :path_rel_2: torch.tensor (batch, 1)_q
         """
         batch_size = ques.shape[0]
 
@@ -401,39 +437,43 @@ class HRBiLSTM(nn.Module):
             print("path_rel:\t", path_rel.shape)
             print("hidden_l1:\t", _h[0].shape)
 
-        # Embed all the things!
-        q = self.embedding_layer(ques)
-        pw = self.embedding_layer(path_word)
-        pr = self.embedding_layer(path_rel)
+        _q, _, hidden_ques, ques_mask = self.layer1(tu.trim(ques), _h)
+        _, _pw, hidden_word, pw_mask = self.layer1(tu.trim(path_word), _h)
+        _, _pr, _, pr_mask = self.layer1(tu.trim(path_rel), hidden_word)
+
+        # Need to transpose the question befor giving it to
 
         if self.debug:
-            print("\nembedded_q:\t", q.shape)
-            print("embedded_pw:\t", pw.shape)
-            print("embedded_pr:\t", pr.shape)
+            print("\nembedded_and_encoded_q:\t", _q.shape)
+            print("eembedded_and_encoded_pw:\t", _pw.shape)
+            print("embedded_and_encoded_pr:\t", _pr.shape)
+            print("hidden h[0] shape is :\t", hidden_ques[0].shape)_pw
+            print("hidden 1 shape is:\t", hidden_ques[1].shape)
 
-        _q, _h2 = self.layer1(q.transpose(1, 0), _h)
-        _pw, _ = self.layer1(pw.transpose(1, 0), _h)
-        _pr, _ = self.layer1(pr.transpose(1, 0), _h)
+        #         _q, _h2 = self.layer1(q.transpose(1, 0), _h)
+        #         _pw, _ = self.layer1(pw.transpose(1, 0), _h)
+        #         _pr, _ = self.layer1(pr.transpose(1, 0), _h)
 
-        if self.debug:
-            print("\nencode_pw:\t", _pw.shape)
-            print("encode_pr:\t", _pr.shape)
-            print("encode_q:\t", _q.shape)
+        #         if self.debug:
+        #             print("\nencode_pw:\t", _pw.shape)
+        #             print("encode_pr:\t", _pr.shape)
+        #             print("encode_q:\t", _q.shape)
 
-            # Pass encoded question through another layer
-        __q, _ = self.layer2(_q, _h2)
+        # Pass encoded question through another layer
+        # hidden_ques = self.layer2.init_hidden(_q.shape[0])
+        __q, _, _, _ = self.layer2(_q, _h, ques_mask)
         if self.debug: print("\nencoded__q:\t", __q.shape)
 
         # Pointwise sum both question representations
         sum_q = _q + __q
         if self.debug: print("\nsum_q:\t\t", sum_q.shape)
 
-        # Pool it along the sequence
+        # Pool it along the se        quence
         h_q, _ = torch.max(sum_q, dim=0)
         if self.debug: print("\npooled_q:\t", h_q.shape)
 
         # Now, we pool the last hidden states of _pw and _pr to get h_r
-        h_r, _ = torch.max(torch.stack((_pw[-1], _pr[-1]), dim=1), dim=1)
+        h_r,_ = torch.max(torch.stack((_pw, _pr), dim=1), dim=1)
         if self.debug: print("\npooled_p:\t", h_r.shape)
 
         score = F.cosine_similarity(h_q, h_r)
@@ -1034,6 +1074,182 @@ class CNN(nn.Module):
         logit = self.fc1(x_embedded)  # (N, C)
 
         return logit
+
+
+class NotSuchABetterEncoder_v2(nn.Module):
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, debug=False, residual=False):
+        '''
+            :param max_length: Max length of the sequence.
+            :param hidden_dim: dimension of the output of the LSTM.
+            :param number_of_layer: Number of LSTM to be stacked.
+            :param embedding_dim: The output dimension of the embedding layer/ important only if vectors=none
+            :param vocab_size: Size of vocab / number of rows in embedding matrix
+            :param bidirectional: boolean - if true creates BIdir LStm
+            :param vectors: embedding matrix
+            :param debug: Bool/ prints shapes and some other meta data.
+            :param enable_layer_norm: Bool/ layer normalization.
+            :param mode: LSTM/GRU.
+            :param residual: Bool/ return embedded state of the input.
+
+        TODO: Implement multilayered shit someday.
+        '''
+        super(NotSuchABetterEncoder_v2, self).__init__()
+
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)
+        self.enable_layer_norm = enable_layer_norm
+        self.number_of_layer = number_of_layer
+        self.bidirectional = bidirectional
+        self.dropout = dropout
+        self.debug = debug
+        self.mode = mode
+        self.residual = residual
+
+
+        assert self.mode in ['LSTM', 'GRU']
+
+        if vectors is not None:
+            self.embedding_layer = nn.Embedding.from_pretrained(torch.FloatTensor(vectors))
+            self.embedding_layer.weight.requires_grad = True
+        else:
+            # Embedding layer
+            self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
+
+        # Mode
+        if self.mode == 'LSTM':
+            self.rnn = torch.nn.LSTM(input_size=self.embedding_dim,
+                                     hidden_size=self.hidden_dim,
+                                     num_layers=1,
+                                     bidirectional=self.bidirectional)
+        elif self.mode == 'GRU':
+            self.rnn = torch.nn.GRU(input_size=self.embedding_dim,
+                                    hidden_size=self.hidden_dim,
+                                    num_layers=1,
+                                    bidirectional=self.bidirectional)
+        self.dropout = torch.nn.Dropout(p=self.dropout)
+        self.reset_parameters()
+
+    def init_hidden(self, batch_size, device):
+        """
+            Hidden states to be put in the model as needed.
+        :param batch_size: desired batchsize for the hidden
+        :param device: torch device
+        :return:
+        """
+        if self.mode == 'LSTM':
+            return (torch.ones((1+self.bidirectional , batch_size, self.hidden_dim), device=device),
+                    torch.ones((1+self.bidirectional, batch_size, self.hidden_dim), device=device))
+        else:
+            return torch.ones((1+self.bidirectional, batch_size, self.hidden_dim), device=device)
+
+    def reset_parameters(self):
+        """
+        Here we reproduce Keras default initialization weights to initialize Embeddings/LSTM weights
+        """
+        ih = (param for name, param in self.named_parameters() if 'weight_ih' in name)
+        hh = (param for name, param in self.named_parameters() if 'weight_hh' in name)
+        b = (param for name, param in self.named_parameters() if 'bias' in name)
+        for t in ih:
+            torch.nn.init.xavier_uniform_(t)
+        for t in hh:
+            torch.nn.init.orthogonal_(t)
+        for t in b:
+            torch.nn.init.constant_(t, 0)
+
+    def forward(self, x, h,mask):
+        """
+
+        :param x: input (batch, seq)
+        :param h: hiddenstate (depends on mode. see init hidden)
+        :param device: torch device
+        :return: depends on booleans passed @ init.
+        """
+
+        if self.debug:
+            print ("\tx:\t", x.shape)
+            if self.mode is "LSTM":
+                print ("\th[0]:\t", h[0].shape)
+            else:
+                print ("\th:\t", h.shape)
+
+#         mask = tu.compute_mask(x)
+
+#         x = self.embedding_layer(x).transpose(0, 1)
+
+        if self.debug: print ("x_emb:\t\t", x.shape)
+
+        if self.enable_layer_norm:
+            seq_len, batch, input_size = x.shape
+            x = x.view(-1, input_size)
+            x = self.layer_norm(x)
+            x = x.view(seq_len, batch, input_size)
+
+        if self.debug: print("x_emb bn:\t", x.shape)
+
+        # get sorted v
+        lengths = mask.eq(1).long().sum(1)
+        lengths_sort, idx_sort = torch.sort(lengths, dim=0, descending=True)
+        _, idx_unsort = torch.sort(idx_sort, dim=0)
+
+        x_sort = x.index_select(1, idx_sort)
+        h_sort = (h[0].index_select(1, idx_sort), h[1].index_select(1, idx_sort)) \
+            if self.mode is "LSTM" else h.index_select(1, idx_sort)
+
+        x_pack = torch.nn.utils.rnn.pack_padded_sequence(x_sort, lengths_sort)
+        x_dropout = self.dropout.forward(x_pack.data)
+        x_pack_dropout = torch.nn.utils.rnn.PackedSequence(x_dropout, x_pack.batch_sizes)
+
+        if self.debug:
+            print("\nidx_sort:", idx_sort.shape)
+            print("idx_unsort:", idx_unsort.shape)
+            print("x_sort:", x_sort.shape)
+            if self.mode is "LSTM":
+                print ("h_sort[0]:\t\t", h_sort[0].shape)
+            else:
+                print ("h_sort:\t\t", h_sort.shape)
+
+#         print("YABADABADOOO")
+#         print(x_pack_dropout.shape, h_sort[0].shape)
+        o_pack_dropout, h_sort = self.rnn.forward(x_pack_dropout, h_sort)
+        o, _ = torch.nn.utils.rnn.pad_packed_sequence(o_pack_dropout)
+
+        # Unsort o based ont the unsort index we made
+        o_unsort = o.index_select(1, idx_unsort)  # Note that here first dim is seq_len
+        h_unsort = (h_sort[0].index_select(1, idx_unsort), h_sort[1].index_select(1, idx_unsort)) \
+            if self.mode is "LSTM" else h_sort.index_select(1, idx_unsort)
+
+
+        # @TODO: Do we also unsort h? Does h not change based on the sort?
+
+        if self.debug:
+            if self.mode is "LSTM":
+                print("h_sort\t\t", h_sort[0].shape)
+            else:
+                print("h_sort\t\t", h_sort.shape)
+            print("o_unsort\t\t", o_unsort.shape)
+            if self.mode is "LSTM":
+                print("h_unsort\t\t", h_unsort[0].shape)
+            else:
+                print("h_unsort\t\t", h_unsort.shape)
+
+        len_idx = (lengths - 1).view(-1, 1).expand(-1, o_unsort.size(2)).unsqueeze(0)
+
+        if self.debug:
+            print("len_idx:\t", len_idx.shape)
+
+        # Need to also return the last embedded state. Wtf. How?
+
+        if self.residual:
+            len_idx = (lengths - 1).view(-1, 1).expand(-1, x.size(2)).unsqueeze(0)
+            x_last = x.gather(0, len_idx)
+            x_last = x_last.squeeze(0)
+            return o_unsort, h_unsort[0].transpose(1,0).contiguous().view(h_unsort[0].shape[1], -1) , h_unsort, mask, x, x_last
+        else:
+            return o_unsort, h_unsort[0].transpose(1,0).contiguous().view(h_unsort[0].shape[1], -1) , h_unsort, mask
+
+
 
 if __name__ == "__main__":
     max_length = 25

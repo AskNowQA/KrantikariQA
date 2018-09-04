@@ -3,9 +3,16 @@
 '''
 import numpy as np
 
+import os, sys
+os.environ['QT_QPA_PLATFORM']='offscreen'
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+sys.path.append('/data/priyansh/conda/fastai')
+import fastai
+from fastai.text import *
 
 # from qelos_core.scripts.lcquad.corerank import FlatEncoder
 
@@ -392,6 +399,7 @@ class BiLstmDot(Model):
         except RuntimeError:
             print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
         optimizer.step()
         return loss
 
@@ -444,6 +452,7 @@ class BiLstmDot(Model):
         '''
         loss = loss_fn(score, y_label)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
         optimizer.step()
 
         return loss
@@ -490,167 +499,167 @@ class BiLstmDot(Model):
         if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
 
 
-class BiLstmDot_ULMFiT(Model):
-
-    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
-
-        self.debug = _debug
-        self.parameter_dict = _parameter_dict
-        self.device = _device
-        self.pointwise = _pointwise
-        self.word_to_id = _word_to_id
-
-        # Load the pre-trained model
-        pretrained_weights = torch.load('./ulmfit/wt103/fwd_wt103_enc.h5', map_location= lambda storage, loc: storage)
-        new_vectors = self.parameter_dict['vectors']
-
-
-        if self.debug:
-            print("Init Models")
-
-        self.encoder = com.FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
-                                   dims=[self.parameter_dict['hidden_size']],
-                                   word_dic=self.word_to_id,
-                                   bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
-                                   dropout_in=self.parameter_dict['dropout_in']).to(self.device)
-
-    def train(self, data, optimizer, loss_fn, device):
-    #
-        if self.pointwise:
-            return self._train_pointwise_(data, optimizer, loss_fn, device)
-        else:
-            return self._train_pairwise_(data, optimizer, loss_fn, device)
-
-    def _train_pairwise_(self, data, optimizer, loss_fn, device):
-        '''
-            Given data, passes it through model, inited in constructor, returns loss and updates the weight
-            :params data: {batch of question, pos paths, neg paths and dummy y labels}
-            :params optimizer: torch.optim object
-            :params loss fn: torch.nn loss object
-            :params device: torch.device object
-
-            returns loss
-        '''
-
-        # Unpacking the data and model from args
-        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
-
-        optimizer.zero_grad()
-        #Encoding all the data
-
-
-
-        ques_batch = self.encoder(ques_batch)
-        pos_batch = self.encoder(pos_batch)
-        neg_batch = self.encoder(neg_batch)
-
-
-
-        #Calculating dot score
-        pos_scores = torch.sum(ques_batch * pos_batch, -1)
-        neg_scores = torch.sum(ques_batch * neg_batch, -1)
-        '''
-            If `y == 1` then it assumed the first input should be ranked higher
-            (have a larger value) than the second input, and vice-versa for `y == -1`
-        '''
-        loss = loss_fn(pos_scores, neg_scores, y_label)
-        loss.backward()
-        optimizer.step()
-        return loss
-
-    def _train_pointwise_(self, data, optimizer, loss_fn, device):
-        '''
-            Given data, passes it through model, inited in constructor, returns loss and updates the weight
-            :params data: {batch of question, paths and y labels}
-            :params models list of [models]
-            :params optimizer: torch.optim object
-            :params loss fn: torch.nn loss object
-            :params device: torch.device object
-            returrns loss
-        '''
-        # Unpacking the data and model from args
-        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
-
-        optimizer.zero_grad()
-
-        # Encoding all the data
-        ques_batch = self.encoder(ques_batch)
-        pos_batch = self.encoder(path_batch)
-
-        #
-        # norm_ques_batch = torch.abs(torch.norm(ques_batch,dim=1,p=1))
-        # norm_pos_batch = torch.abs(torch.norm(pos_batch,dim=1,p=1))
-
-        # ques_batch = F.normalize(F.relu(ques_batch),p=1,dim=1)
-        # pos_batch = F.normalize(F.relu(pos_batch),p=1,dim=1)
-        # ques_batch =(F.normalize(ques_batch,p=1,dim=1)/2) + .5
-        # pos_batch =(F.normalize(pos_batch,p=1,dim=1)/2) + .5
-
-
-
-
-        # Calculating dot score
-        score = torch.sum(ques_batch * pos_batch, -1)
-        # score = score.div(norm_ques_batch*norm_pos_batch).div_(2.0).add_(0.5)
-            # print("shape of score is,", score.shape)
-            # print("score is , ", score)
-            #
-            #
-            # print("shape of y label is ", y_label.shape)
-            # print("value of y label is ", y_label)
-
-        # raise ValueError
-
-        '''
-            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
-        '''
-        loss = loss_fn(score, y_label)
-        loss.backward()
-        optimizer.step()
-
-        return loss
-
-    def predict(self, ques, paths, device):
-        """
-            Same code works for both pairwise or pointwise
-        """
-        with torch.no_grad():
-
-            self.encoder.eval()
-            question = self.encoder(ques.long())
-            paths = self.encoder(paths.long())
-            if self.pointwise:
-                # question = F.normalize(F.relu(question),p=1,dim=1)
-                # paths = F.normalize(F.relu(paths),p=1,dim=1)
-                # norm_ques_batch = torch.abs(torch.norm(question, dim=1, p=1))
-                # norm_pos_batch = torch.abs(torch.norm(paths, dim=1, p=1))
-                score = torch.sum(question * paths, -1)
-                # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
-            else:
-                score = torch.sum(question * paths, -1)
-
-            self.encoder.train()
-            return score
-
-    def prepare_save(self):
-        """
-
-            This function is called when someone wants to save the underlying models.
-            Returns a tuple of key:model pairs which is to be interpreted within save model.
-
-        :return: [(key, model)]
-        """
-        return [('encoder', self.encoder)]
-
-    def load_from(self, location):
-        # Pull the data from disk
-        if self.debug: print("loading Bilstmdot model from", location)
-        self.encoder.load_state_dict(torch.load(location)['encoder'])
-        if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
-
-        # # Load parameters
-        # for key in self.prepare_save():
-        #     key[1].load_state_dict(model_dump[key[0]])
+# class BiLstmDot_ULMFiT(Model):
+#
+#     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+#
+#         self.debug = _debug
+#         self.parameter_dict = _parameter_dict
+#         self.device = _device
+#         self.pointwise = _pointwise
+#         self.word_to_id = _word_to_id
+#
+#         # Load the pre-trained model
+#         pretrained_weights = torch.load('./ulmfit/wt103/fwd_wt103_enc.h5', map_location= lambda storage, loc: storage)
+#         new_vectors = self.parameter_dict['vectors']
+#
+#
+#         if self.debug:
+#             print("Init Models")
+#
+#         self.encoder = com.FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
+#                                    dims=[self.parameter_dict['hidden_size']],
+#                                    word_dic=self.word_to_id,
+#                                    bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
+#                                    dropout_in=self.parameter_dict['dropout_in']).to(self.device)
+#
+#     def train(self, data, optimizer, loss_fn, device):
+#     #
+#         if self.pointwise:
+#             return self._train_pointwise_(data, optimizer, loss_fn, device)
+#         else:
+#             return self._train_pairwise_(data, optimizer, loss_fn, device)
+#
+#     def _train_pairwise_(self, data, optimizer, loss_fn, device):
+#         '''
+#             Given data, passes it through model, inited in constructor, returns loss and updates the weight
+#             :params data: {batch of question, pos paths, neg paths and dummy y labels}
+#             :params optimizer: torch.optim object
+#             :params loss fn: torch.nn loss object
+#             :params device: torch.device object
+#
+#             returns loss
+#         '''
+#
+#         # Unpacking the data and model from args
+#         ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
+#
+#         optimizer.zero_grad()
+#         #Encoding all the data
+#
+#
+#
+#         ques_batch = self.encoder(ques_batch)
+#         pos_batch = self.encoder(pos_batch)
+#         neg_batch = self.encoder(neg_batch)
+#
+#
+#
+#         #Calculating dot score
+#         pos_scores = torch.sum(ques_batch * pos_batch, -1)
+#         neg_scores = torch.sum(ques_batch * neg_batch, -1)
+#         '''
+#             If `y == 1` then it assumed the first input should be ranked higher
+#             (have a larger value) than the second input, and vice-versa for `y == -1`
+#         '''
+#         loss = loss_fn(pos_scores, neg_scores, y_label)
+#         loss.backward()
+#         optimizer.step()
+#         return loss
+#
+#     def _train_pointwise_(self, data, optimizer, loss_fn, device):
+#         '''
+#             Given data, passes it through model, inited in constructor, returns loss and updates the weight
+#             :params data: {batch of question, paths and y labels}
+#             :params models list of [models]
+#             :params optimizer: torch.optim object
+#             :params loss fn: torch.nn loss object
+#             :params device: torch.device object
+#             returrns loss
+#         '''
+#         # Unpacking the data and model from args
+#         ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+#
+#         optimizer.zero_grad()
+#
+#         # Encoding all the data
+#         ques_batch = self.encoder(ques_batch)
+#         pos_batch = self.encoder(path_batch)
+#
+#         #
+#         # norm_ques_batch = torch.abs(torch.norm(ques_batch,dim=1,p=1))
+#         # norm_pos_batch = torch.abs(torch.norm(pos_batch,dim=1,p=1))
+#
+#         # ques_batch = F.normalize(F.relu(ques_batch),p=1,dim=1)
+#         # pos_batch = F.normalize(F.relu(pos_batch),p=1,dim=1)
+#         # ques_batch =(F.normalize(ques_batch,p=1,dim=1)/2) + .5
+#         # pos_batch =(F.normalize(pos_batch,p=1,dim=1)/2) + .5
+#
+#
+#
+#
+#         # Calculating dot score
+#         score = torch.sum(ques_batch * pos_batch, -1)
+#         # score = score.div(norm_ques_batch*norm_pos_batch).div_(2.0).add_(0.5)
+#             # print("shape of score is,", score.shape)
+#             # print("score is , ", score)
+#             #
+#             #
+#             # print("shape of y label is ", y_label.shape)
+#             # print("value of y label is ", y_label)
+#
+#         # raise ValueError
+#
+#         '''
+#             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+#         '''
+#         loss = loss_fn(score, y_label)
+#         loss.backward()
+#         optimizer.step()
+#
+#         return loss
+#
+#     def predict(self, ques, paths, device):
+#         """
+#             Same code works for both pairwise or pointwise
+#         """
+#         with torch.no_grad():
+#
+#             self.encoder.eval()
+#             question = self.encoder(ques.long())
+#             paths = self.encoder(paths.long())
+#             if self.pointwise:
+#                 # question = F.normalize(F.relu(question),p=1,dim=1)
+#                 # paths = F.normalize(F.relu(paths),p=1,dim=1)
+#                 # norm_ques_batch = torch.abs(torch.norm(question, dim=1, p=1))
+#                 # norm_pos_batch = torch.abs(torch.norm(paths, dim=1, p=1))
+#                 score = torch.sum(question * paths, -1)
+#                 # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
+#             else:
+#                 score = torch.sum(question * paths, -1)
+#
+#             self.encoder.train()
+#             return score
+#
+#     def prepare_save(self):
+#         """
+#
+#             This function is called when someone wants to save the underlying models.
+#             Returns a tuple of key:model pairs which is to be interpreted within save model.
+#
+#         :return: [(key, model)]
+#         """
+#         return [('encoder', self.encoder)]
+#
+#     def load_from(self, location):
+#         # Pull the data from disk
+#         if self.debug: print("loading Bilstmdot model from", location)
+#         self.encoder.load_state_dict(torch.load(location)['encoder'])
+#         if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
+#
+#         # # Load parameters
+#         # for key in self.prepare_save():
+#         #     key[1].load_state_dict(model_dump[key[0]])
 
 
 class BiLstmDense(Model):
@@ -723,6 +732,7 @@ class BiLstmDense(Model):
 
         loss = loss_fn(pos_scores, neg_scores, y_label)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters()+self.dense.parameters(), .5)
         optimizer.step()
 
         return loss
@@ -1076,6 +1086,7 @@ class CNNDot(Model):
     #     self.encoder.load_state_dict(torch.load(location)['encoder'])
     #     if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
 
+
 class DecomposableAttention(Model):
     """
         Implementation of https://arxiv.org/pdf/1606.01933.pdf.
@@ -1341,6 +1352,7 @@ class QelosSlotPointerModel(Model):
             dropout_in=self.parameter_dict['dropout_in'],
             dropout_rec=self.parameter_dict['dropout_rec'],
             debug = self.debug).to(self.device)
+
 
         self.encoder_p = com.QelosSlotPtrChainEncoder(
             number_of_layer=self.parameter_dict['number_of_layer'],
@@ -1633,6 +1645,7 @@ class SlotPointerModel(Model):
     def prepare_save(self):
         return [('model', self.encoder_q)]
 
+
 class BiLstmDot_skip(Model):
     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
 
@@ -1805,6 +1818,7 @@ class BiLstmDot_multiencoder(Model):
             vectors=self.parameter_dict['vectors'],
             enable_layer_norm=False,
             mode = 'LSTM',
+            residual=False,
             debug = self.debug).to(self.device)
 
         self.encoder_p = com.NotSuchABetterEncoder(
@@ -1818,6 +1832,7 @@ class BiLstmDot_multiencoder(Model):
             vectors=self.parameter_dict['vectors'],
             enable_layer_norm=False,
             mode='LSTM',
+            residual=False,
             debug=self.debug).to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
@@ -1863,6 +1878,7 @@ class BiLstmDot_multiencoder(Model):
         except RuntimeError:
             print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(list(self.encoder_q.parameters()) + list(self.encoder_p.parameters()), .5)
         optimizer.step()
         return loss
 
@@ -1915,6 +1931,7 @@ class BiLstmDot_multiencoder(Model):
         '''
         loss = loss_fn(score, y_label)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(list(self.encoder_q.parameters()) + list(self.encoder_p.parameters()), .5)
         optimizer.step()
 
         return loss
@@ -1955,6 +1972,230 @@ class BiLstmDot_multiencoder(Model):
         :return: [(key, model)]
         """
         return [('encoder_q', self.encoder_q),('encoder_p', self.encoder_p)]
+
+    def load_from(self, location):
+        # Pull the data from disk
+        if self.debug: print("loading Bilstmdot model from", location)
+        self.encoder.load_state_dict(torch.load(location)['encoder'])
+        if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
+
+
+class QelosSlotPointerModel_common_encoder(QelosSlotPointerModel):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder_q = com.QelosSlotPtrQuestionEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            device=_device,
+            residual=True,
+            mode='LSTM',
+            dropout_in=self.parameter_dict['dropout_in'],
+            dropout_rec=self.parameter_dict['dropout_rec'],
+            debug=self.debug).to(self.device)
+
+        enc = self.encoder_q.return_encoder()
+
+        self.encoder_p = com.QelosSlotPtrChainEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            device=_device,
+            residual=True,
+            mode='LSTM',
+            dropout_in=self.parameter_dict['dropout_in'],
+            dropout_rec=self.parameter_dict['dropout_rec'],
+            debug=self.debug,
+            encoder=enc).to(self.device)
+
+
+
+
+
+
+class BiLstmDot_ulmfit(Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        # Load the pre-trained model
+        pretrained_weights = torch.load('./ulmfit/wt103/fwd_wt103_enc.h5', map_location= lambda storage, loc: storage)
+        new_vectors = self.parameter_dict['vectors']
+        pretrained_weights['encoder.weight'] = T(new_vectors)
+        pretrained_weights['encoder_with_dropout.embed.weight'] = T(np.copy(new_vectors))
+
+        self.encoder = fastai.lm_rnn.RNN_Encoder(ntoken=new_vectors.shape[0], emb_sz=400, n_hid=1150, n_layers=3, pad_token=0).to(self.device)
+        self.encoder.load_state_dict(pretrained_weights)
+        # self.encoder = com.NotSuchABetterEncoder(
+        #     number_of_layer=self.parameter_dict['number_of_layer'],
+        #     bidirectional=self.parameter_dict['bidirectional'],
+        #     embedding_dim=self.parameter_dict['embedding_dim'],
+        #     max_length = self.parameter_dict['max_length'],
+        #     hidden_dim=self.parameter_dict['hidden_size'],
+        #     vocab_size=self.parameter_dict['vocab_size'],
+        #     dropout=self.parameter_dict['dropout'],
+        #     vectors=self.parameter_dict['vectors'],
+        #     enable_layer_norm=False,
+        #     mode = 'LSTM',
+        #     debug = self.debug).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+    #
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
+
+        optimizer.zero_grad()
+        #Encoding all the data
+
+        op_q = self.encoder(tu.trim(ques_batch))
+        op_p = self.encoder(tu.trim(pos_batch))
+        op_n = self.encoder(tu.trim(neg_batch))
+
+        ques_batch_encoded = op_q[1][0][:,-1]
+        pos_batch_encoded = op_p[1][0][:,-1]
+        neg_batch_encoded = op_n[1][0][:,-1]
+
+        #Calculating dot score
+        pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
+        neg_scores = torch.sum(ques_batch_encoded * neg_batch_encoded, -1)
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        try:
+            loss = loss_fn(pos_scores, neg_scores, y_label)
+        except RuntimeError:
+            print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        optimizer.step()
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        op_q = self.encoder(tu.trim(ques_batch))
+        op_p = self.encoder(tu.trim(path_batch))
+
+        ques_batch = op_q[1][0][:,-1]
+        pos_batch = op_p[1][0][:,-1]
+
+        # Calculating dot score
+        score = torch.sum(ques_batch * pos_batch, -1)
+        # score = score.div(norm_ques_batch*norm_pos_batch).div_(2.0).add_(0.5)
+            # print("shape of score is,", score.shape)
+            # print("score is , ", score)
+            #
+            #
+            # print("shape of y label is ", y_label.shape)
+            # print("value of y label is ", y_label)
+
+        # raise ValueError
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+
+            self.encoder.eval()
+            # Encoding all the data
+            op_q = self.encoder(tu.trim(ques))
+            op_p = self.encoder(tu.trim(paths))
+
+            question = op_q[0][0][:,-1]
+            paths = op_p[0][0][:,-1]
+
+            if self.pointwise:
+                # question = F.normalize(F.relu(question),p=1,dim=1)
+                # paths = F.normalize(F.relu(paths),p=1,dim=1)
+                # norm_ques_batch = torch.abs(torch.norm(question, dim=1, p=1))
+                # norm_pos_batch = torch.abs(torch.norm(paths, dim=1, p=1))
+                score = torch.sum(question * paths, -1)
+                # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
+            else:
+                score = torch.sum(question * paths, -1)
+
+            self.encoder.train()
+            return score
+
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder)]
 
     def load_from(self, location):
         # Pull the data from disk

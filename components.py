@@ -740,7 +740,7 @@ class QelosFlatEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
                  embedding_dim, vocab_size, bidirectional, device,
                  dropout=0.0, mode='LSTM', enable_layer_norm=False,
-                 vectors=None, residual=False, dropout_in=0., dropout_rec=0, debug=False):
+                 vectors=None, residual=False, dropout_in=0., dropout_rec=0, debug=False,encoder=False):
         '''
                :param max_length: Max length of the sequence.
                :param hidden_dim: dimension of the output of the LSTM.
@@ -777,19 +777,22 @@ class QelosFlatEncoder(nn.Module):
         # else:
         #     self.embedding_layer = nn.Embedding(self.vocab_size, self.embedding_dim)
 
-        self.lstm = NotSuchABetterEncoder(
-            number_of_layer=self.number_of_layer,
-            bidirectional=self.bidirectional,
-            embedding_dim=self.embedding_dim,
-            max_length = self.max_length,
-            hidden_dim=self.hidden_dim,
-            vocab_size=self.vocab_size,
-            dropout=self.dropout,
-            vectors=vectors,
-            enable_layer_norm=False,
-            mode = 'LSTM',
-            debug = self.debug,
-            residual=self.residual)
+        if encoder:
+            self.lstm = encoder
+        else:
+            self.lstm = NotSuchABetterEncoder(
+                number_of_layer=self.number_of_layer,
+                bidirectional=self.bidirectional,
+                embedding_dim=self.embedding_dim,
+                max_length = self.max_length,
+                hidden_dim=self.hidden_dim,
+                vocab_size=self.vocab_size,
+                dropout=self.dropout,
+                vectors=vectors,
+                enable_layer_norm=False,
+                mode = 'LSTM',
+                debug = self.debug,
+                residual=self.residual)
 
         self.adapt_lin = None   # Make layer if dims mismatch
         if residual and self.hidden_dim*2 != self.embedding_dim:
@@ -808,13 +811,13 @@ class QelosFlatEncoder(nn.Module):
         # final_state = self.lstm.y_n[-1]
         final_state = final_state.contiguous().view(x.size(0), -1)
 
-        if self.residual:
-            if self.adapt_lin is not None:
-                embs = self.adapt_lin(embs)
-            meanpool = embs.sum(0)
-            masksum = mask.float().sum(1).unsqueeze(1)
-            meanpool = meanpool / masksum
-            final_state = final_state + meanpool
+        # if self.residual:
+        #     if self.adapt_lin is not None:
+        #         embs = self.adapt_lin(embs)
+        #     meanpool = embs.sum(0)
+        #     masksum = mask.float().sum(1).unsqueeze(1)
+        #     meanpool = meanpool / masksum
+        #     final_state = final_state + meanpool
         return final_state
 
 
@@ -822,7 +825,7 @@ class QelosSlotPtrChainEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
                  embedding_dim, vocab_size, bidirectional, device,
                  dropout=0.0, mode='LSTM', enable_layer_norm=False,
-                 vectors=None, residual=False, dropout_in=0., dropout_rec=0,debug=False):
+                 vectors=None, residual=False, dropout_in=0., dropout_rec=0,debug=False,encoder=False):
         '''
                :param max_length: Max length of the sequence.
                :param hidden_dim: dimension of the output of the LSTM.
@@ -854,8 +857,8 @@ class QelosSlotPtrChainEncoder(nn.Module):
 
         self.enc = QelosFlatEncoder(max_length, hidden_dim, number_of_layer,
                  embedding_dim, vocab_size, bidirectional, device, dropout=0.5, mode='LSTM',
-                 enable_layer_norm=False, vectors=vectors, residual=False,
-                 dropout_in=self.dropout_in, dropout_rec=self.dropout_rec, debug=False)#.to(device)
+                 enable_layer_norm=False, vectors=vectors, residual=self.residual,
+                 dropout_in=self.dropout_in, dropout_rec=self.dropout_rec, debug=False,encoder=encoder)#.to(device)
 
     def forward(self, firstrels, secondrels):
         firstrels_enc = self.enc(firstrels)
@@ -910,15 +913,17 @@ class QelosSlotPtrQuestionEncoder(nn.Module):
 
 
         dims = [self.hidden_dim]
-        self.linear = torch.nn.Linear(dims[-1] * 2, 2)
+        self.linear = torch.nn.Linear(dims[-1] * (1+self.bidirectional), 2)
         self.sm = torch.nn.Softmax(1)
         # for adapter
-        outdim = dims[-1] * 2
+        outdim = dims[-1] * (1+self.bidirectional)
         self.adapt_lin = None
 
         if outdim != self.embedding_dim:
             self.adapt_lin = torch.nn.Linear(self.embedding_dim, outdim, bias=False)
 
+    def return_encoder(self):
+        return self.lstm
     def forward(self, x):
         # embs = self.embedding_layer(x)
         # mask = tu.compute_mask(x)

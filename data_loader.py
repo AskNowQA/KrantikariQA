@@ -328,6 +328,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
     """
 
     try:
+        # raise EOFError
         with open(os.path.join(_model_specific_data_dir % {'dataset': _dataset, 'model': _model},
                                file + ".mapped.npz"),'rb') as data:
             dataset = np.load(data)
@@ -339,6 +340,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
 
 
 
+            # vocab, vectors = vocab_master.load_ulmfit()
             vocab, vectors = vocab_master.load()
             #TODO: return everything.
             return vectors,questions, pos_paths, neg_paths, \
@@ -485,6 +487,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             pos_paths_rel2_rd = pad_sequences(pos_paths_rel2_rd, maxlen=max_sequence_length, padding='post')
 
 
+            # vocab, vectors = vocab_master.load_ulmfit()
             vocab, vectors = vocab_master.load()
 
             # Map everything
@@ -512,8 +515,11 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
                     neg_paths_rel2_rd[i][j] = np.asarray([vocab[key] for key in neg_paths_rel2_rd[i][j]])
 
             print("places where glove id exists and not in vecotrs ", unks_counter)
+            # return vectors, questions, pos_paths, neg_paths, pos_paths_rel1_sp, pos_paths_rel2_sp, neg_paths_rel1_sp, neg_paths_rel2_sp, \
+            #        pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd
+
             with open(os.path.join(_model_specific_data_dir % {'dataset': _dataset, 'model': _model},
-                                   file + ".mapped.npz"), "w+") as data:
+                                   file + ".mapped.npz"), "wb+") as data:
                 np.savez(data, questions, pos_paths, neg_paths,
                          pos_paths_rel1_sp, pos_paths_rel2_sp, neg_paths_rel1_sp, neg_paths_rel2_sp,
                          pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd

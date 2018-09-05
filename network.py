@@ -954,7 +954,7 @@ class RelDetection(Model):
 
         return loss
 
-    def _train_pointwise(self, data, optimizer, loss_fn, device):
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
         ques_batch, path_batch, path_rel1_batch, path_rel2_batch, y_label = \
             data['ques_batch'], data['path_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
 

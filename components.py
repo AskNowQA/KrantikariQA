@@ -438,8 +438,8 @@ class HRBiLSTM(nn.Module):
             print("hidden_l1:\t", _h[0].shape)
 
         _q, _, hidden_ques, ques_mask = self.layer1(tu.trim(ques), _h)
-        _, _pw, hidden_word, pw_mask = self.layer1(tu.trim(path_word), _h)
-        _, _pr, _, pr_mask = self.layer1(tu.trim(path_rel), hidden_word)
+        _pw, _, hidden_word, pw_mask = self.layer1(tu.trim(path_word), _h)
+        _pr, _, _, pr_mask = self.layer1(tu.trim(path_rel), hidden_word)
 
         # Need to transpose the question befor giving it to
 
@@ -447,7 +447,7 @@ class HRBiLSTM(nn.Module):
             print("\nembedded_and_encoded_q:\t", _q.shape)
             print("eembedded_and_encoded_pw:\t", _pw.shape)
             print("embedded_and_encoded_pr:\t", _pr.shape)
-            print("hidden h[0] shape is :\t", hidden_ques[0].shape)_pw
+            print("hidden h[0] shape is :\t", hidden_ques[0].shape)
             print("hidden 1 shape is:\t", hidden_ques[1].shape)
 
         #         _q, _h2 = self.layer1(q.transpose(1, 0), _h)
@@ -461,6 +461,8 @@ class HRBiLSTM(nn.Module):
 
         # Pass encoded question through another layer
         # hidden_ques = self.layer2.init_hidden(_q.shape[0])
+
+        #Multiply mask
         __q, _, _, _ = self.layer2(_q, _h, ques_mask)
         if self.debug: print("\nencoded__q:\t", __q.shape)
 
@@ -469,14 +471,19 @@ class HRBiLSTM(nn.Module):
         if self.debug: print("\nsum_q:\t\t", sum_q.shape)
 
         # Pool it along the se        quence
-        h_q, _ = torch.max(sum_q, dim=0)
+        h_q = torch.mean(sum_q, dim=0)
         if self.debug: print("\npooled_q:\t", h_q.shape)
 
+        # Now _pw_pw_pw_pw_pwwe pool the pw and pr across time
+        _pw, _ = torch.max(_pw, dim=0)
+        _pr, _ = torch.max(_pr, dim=0)
+
         # Now, we pool the last hidden states of _pw and _pr to get h_r
-        h_r,_ = torch.max(torch.stack((_pw, _pr), dim=1), dim=1)
+        h_r = torch.mean(torch.stack((_pw, _pr), dim=1), dim=1)
         if self.debug: print("\npooled_p:\t", h_r.shape)
 
-        score = F.cosine_similarity(h_q, h_r)
+        # score = F.cosine_similarity(h_q, h_r)
+        score = torch.sum(h_q *h_r, -1)
 
         return score
 

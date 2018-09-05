@@ -273,7 +273,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                 else:
                     valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
                                                                   data['valid_neg_paths'], modeler, device))
-                if valid_accuracy[-1] >= best_validation_accuracy:
+                if valid_accuracy[-1] > best_validation_accuracy:
                     print("MODEL WEIGHTS RIGHT NOW: ", modeler.get_parameter_sum())
                     best_validation_accuracy = valid_accuracy[-1]
                     aux_save_information['epoch'] = epoch
@@ -371,11 +371,13 @@ if __name__ == "__main__":
 
     if training_model == 'bilstm_dot':
         if not finetune:
+            print("********", parameter_dict['bidirectional'])
             modeler = net.BiLstmDot( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
                                                  _device=device,_pointwise=pointwise, _debug=False)
 
             optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
         else:
+            print("^^^^^^^^^^^^^^^^^^finetuning^^^^^^^^^^^^^^^^")
             if pointwise:
                 model_path = 'data/models/core_chain/bilstm_dot_pointwise/lcquad/19/model.torch'
             else:
@@ -384,7 +386,7 @@ if __name__ == "__main__":
                                     _device=device, _pointwise=pointwise, _debug=False)
 
             modeler.load_from(model_path)
-            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())),lr=0.0001)
 
     if training_model == 'bilstm_dense':
         modeler = net.BiLstmDense( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
@@ -431,17 +433,33 @@ if __name__ == "__main__":
                                             _device=device, _pointwise=pointwise, _debug=False)
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
     if False:
-    # if training_model == 'slotptr':
+    # if training_model == 'slotptr':00
         modeler = net.SlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                             _device=device, _pointwise=pointwise, _debug=False)
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
                                list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())) +
                                list(filter(lambda p: p.requires_grad, modeler.comparer.parameters())))
     if training_model == 'slotptr':
-        modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
-                                            _device=device, _pointwise=pointwise, _debug=False)
-        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
-                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001)
+
+        if not finetune:
+            modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                _device=device, _pointwise=pointwise, _debug=False)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001)
+        else:
+            print("^^^^^^^^^^^^finetuning^^^^^^^")
+            if pointwise:
+                model_path = 'data/models/core_chain/slotptr_pointwise/lcquad/8/model.torch'
+            else:
+                model_path = 'data/models/core_chain/slotptr/lcquad/71/model.torch'
+            modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                               _device=device, _pointwise=pointwise, _debug=False)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
+                                   weight_decay=0.0001,lr=0.0001)
+            modeler.load_from(model_path)
+
+
     if training_model == 'bilstm_dot_skip':
         modeler = net.BiLstmDot_skip( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
                                              _device=device,_pointwise=pointwise, _debug=False)
@@ -463,10 +481,25 @@ if __name__ == "__main__":
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
     if training_model == 'slotptr_common_encoder':
         print("*************",parameter_dict['bidirectional'])
-        modeler = net.QelosSlotPointerModel_common_encoder(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
-                                            _device=device, _pointwise=pointwise, _debug=False)
-        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
-                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001)
+
+
+        if not finetune:
+            modeler = net.QelosSlotPointerModel_common_encoder(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                _device=device, _pointwise=pointwise, _debug=False)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001)
+        else:
+            print("^^^^^^^^^^^^finetuning^^^^^^^")
+            if pointwise:
+                model_path = 'data/models/core_chain/slotptr_common_encoder_pointwise/lcquad/1/model.torch'
+            else:
+                model_path = 'data/models/core_chain/slotptr_common_encoder/lcquad/5/model.torch'
+            modeler = net.QelosSlotPointerModel_common_encoder(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                               _device=device, _pointwise=pointwise, _debug=False)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
+                                   weight_decay=0.0001)
+            modeler.load_from(model_path)
 
 
     if not pointwise:

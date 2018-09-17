@@ -890,7 +890,7 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
 
 
 class TrainingDataGenerator(Dataset):
-    def __init__(self, data, max_length, neg_paths_per_epoch, batch_size,total_negative_samples,pointwise=False,schema='default'):
+    def __init__(self, data, max_length, neg_paths_per_epoch, batch_size,total_negative_samples,pointwise=False,schema='default',snip=800):
         self.dummy_y = np.zeros(batch_size)
         self.firstDone = False
         self.max_length = max_length
@@ -922,7 +922,7 @@ class TrainingDataGenerator(Dataset):
         # self.temp = np.reshape(questions,
         #                   (questions.shape[0], 1, questions.shape[1]))
         # self.temp = np.repeat((self.temp), neg_paths_per_epoch, axis=1)
-
+        print(questions.shape)
         self.questions = np.reshape(np.repeat((np.reshape(questions,
                           (questions.shape[0], 1, questions.shape[1]))), neg_paths_per_epoch, axis=1), (-1, max_length))
 

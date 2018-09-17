@@ -38,7 +38,7 @@ config = ConfigParser.ConfigParser()
 config.readfp(open('configs/macros.cfg'))
 
 #setting up device,model name and loss types.
-training_model = 'slotptr'
+training_model = 'bilstm_densedot'
 _dataset = 'lcquad'
 pointwise = False
 _debug = False
@@ -64,14 +64,14 @@ parameter_dict = cl.runtime_parameters(dataset=_dataset,training_model=training_
                                          training_config=training_config,config_file='configs/macros.cfg')
 
 if training_model == 'cnn_dot':
-    parameter_dict['output_dim'] = int(config.get(training_model, 'output_dim'))
+    parameter_dict['output_dim'] = int(config.get(_dataset, 'output_dim'))
 
 # Update parameters
 parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
 parameter_dict['_model_dir'] = './data/models/'
 
 parameter_dict['corechainmodel'] = training_model
-parameter_dict['corechainmodelnumber'] = '71'
+parameter_dict['corechainmodelnumber'] = '11'
 
 parameter_dict['intentmodel'] = 'bilstm_dense'
 parameter_dict['intentmodelnumber'] = '10'
@@ -88,7 +88,7 @@ class QuestionAnswering:
         Usage:
 
             qa = QuestionAnswering(parameter_dict, False, _word_to_id, device, True)
-            q = np.random.randint(0, 1233, (542))
+            q = np.rancorechainmodeldom.randint(0, 1233, (542))
             p = np.random.randint(0, 123, (10, 55))
             print(qa._predict_corechain(q,p))
             print("intent: ", qa._predict_intent(q))
@@ -105,8 +105,9 @@ class QuestionAnswering:
         self._word_to_id = word_to_id
 
         # Load models
-        self.parameters['dataset'] = 'lcquad'
+        # self.parameters['dataset'] = 'transfer-b'
         self._load_corechain_model()
+        self.parameters['dataset'] = 'lcquad'
         self._load_rdftype_model()
         self._load_rdfclass_model()
         self._load_intentmodel()
@@ -115,12 +116,26 @@ class QuestionAnswering:
     def _load_corechain_model(self):
 
         # Initialize the model
+        m = self.parameters['corechainmodel']
+        # self.parameters['corechainmodel'] = 'slotptr_common_encoder'
+        # self.parameters['bidirectional'] = False
         if self.parameters['corechainmodel'] == 'bilstm_dot':
             self.corechain_model = net.BiLstmDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
                                                  _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+
+        if self.parameters['corechainmodel'] == 'bilstm_densedot':
+            self.corechain_model = net.BiLstmDenseDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+
         if self.parameters['corechainmodel'] == 'slotptr':
             self.corechain_model = net.QelosSlotPointerModel(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
                                                  _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+
+        if self.parameters['corechainmodel'] == 'slotptr_common_encoder':
+            self.corechain_model = net.QelosSlotPointerModel_common_encoder(_parameter_dict=self.parameters,
+                                                             _word_to_id=self._word_to_id,
+                                                             _device=self.device, _pointwise=self.pointwise,
+                                                             _debug=self.debug)
 
         if self.parameters['corechainmodel'] == 'reldet':
             self.corechain_model = net.RelDetection(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
@@ -129,17 +144,29 @@ class QuestionAnswering:
         if self.parameters['corechainmodel'] == 'decomposable_attention':
             self.corechain_model = net.DecomposableAttention(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
                                                  _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+        if self.parameters['corechainmodel'] == 'cnn_dot':
+            self.corechain_model = net.CNNDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+
+        if self.parameters['corechainmodel'] == 'bilstm_dot_multiencoder':
+            self.corechain_model = net.BiLstmDot_multiencoder(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
         # Make the model path
         model_path = os.path.join(self.parameters['_model_dir'], 'core_chain')
         if self.pointwise:
             model_path = os.path.join(model_path, self.parameters['corechainmodel']+'_pointwise')
         else:
             model_path = os.path.join(model_path, self.parameters['corechainmodel'])
+            # model_path = os.path.join(model_path, self.parameters['slotptr_common_encoder'])
         model_path = os.path.join(model_path, self.parameters['dataset'])
+        # model_path = os.path.join(model_path, "transfer-b")
         model_path = os.path.join(model_path, self.parameters['corechainmodelnumber'])
         model_path = os.path.join(model_path, 'model.torch')
 
         self.corechain_model.load_from(model_path)
+
+        self.parameters['corechainmodel'] = m
+        self.parameters['bidirectional'] = True
 
     def _load_rdfclass_model(self):
 
@@ -240,6 +267,11 @@ class QuestionAnswering:
 
             # We then pass them through a predict function and get a score array.
         if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'reldet':
+            print("path rel 1 main ", P1)
+            print("path rel 2 main ", P2)
+            print("path rel 2 main ", P1.shape)
+            print("path rel 2 main ", P2.shape)
+
             score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel2=P2, device=self.device)
         else:
             score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
@@ -487,6 +519,8 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         '''
         if model == 'reldet':
             _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
+            print("paths rel1 rd are loop1 ", paths_rel1_rd)
+            print("paths rel2 rd are loop1 ", paths_rel2_rd)
             output = qa._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
         elif model == 'slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
@@ -503,6 +537,8 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         '''
         if model == 'reldet':
             _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
+            print("paths rel1 rd are loop2 ", paths_rel1_rd)
+            print("paths rel2 rd are loop2 ", paths_rel2_rd)
             output = qa._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
         elif model == 'slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)

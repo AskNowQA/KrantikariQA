@@ -429,7 +429,8 @@ class HRBiLSTM(nn.Module):
         batch_size = ques.shape[0]
 
         # Join two paths into a path rel
-        path_rel = torch.cat((path_rel_1, path_rel_2), dim=-1).squeeze()
+        # print("***********" , torch.cat((path_rel_1, path_rel_2), dim=-1).shape)
+        path_rel = torch.cat((path_rel_1, path_rel_2), dim=-1)
 
         if self.debug:
             print("question:\t", ques.shape)
@@ -1081,7 +1082,6 @@ class CNN(nn.Module):
         logit = self.fc1(x_embedded)  # (N, C)
 
         return logit
-
 
 class NotSuchABetterEncoder_v2(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,

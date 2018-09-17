@@ -964,6 +964,7 @@ class RelDetection(Model):
         _h = self.encoder.init_hidden(ques_batch.shape[0], device=device)
 
         # Encoding all the data
+
         score = self.encoder(ques=ques_batch,
                              path_word=path_batch,
                              path_rel_1=path_rel1_batch,
@@ -987,7 +988,8 @@ class RelDetection(Model):
         with torch.no_grad():
             self.encoder.eval()
             _h = self.encoder.init_hidden(ques.shape[0], device=device)
-
+            paths_rel1 = tu.no_one_left_behind(paths_rel1)
+            paths_rel2 = tu.no_one_left_behind(paths_rel2)
             score = self.encoder(ques=ques,
                                  path_word=paths,
                                  path_rel_1=paths_rel1,

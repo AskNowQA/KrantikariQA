@@ -1,1264 +1,1883 @@
-"""
-    A file with MANY helper functions including losses etc which help with managing and implementing NNs.
-
-    Every other code must have its own load_data, and model, and train code, and use as much of this as possible.
-
-"""
-
-# Shared Feature Extraction Layer
-from __future__ import absolute_import
-import os
-import pickle
-import json
-import math
-import h5py
-import warnings
+'''
+    Calls various components files to create a models/network. Also provides various functionalities to train and predict.
+'''
 import numpy as np
-from sklearn.utils import shuffle
 
-import keras.backend.tensorflow_backend as K
-from keras.preprocessing.sequence import pad_sequences
-from keras.layers.merge import concatenate, dot
-from keras import optimizers, metrics, losses, Model
-from keras.utils import Sequence
-from keras.callbacks import Callback
-from keras.layers import InputSpec, Layer, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, TimeDistributed, Conv1D, MaxPooling1D, Embedding, Flatten, GlobalMaxPooling1D, Input
-from keras.layers import Bidirectional, LSTM, GRU
-from keras.models import Sequential
-from keras.regularizers import l2
-from keras.layers.pooling import GlobalAveragePooling1D
-from keras.regularizers import L1L2
-from keras.models import load_model
+import os, sys
+os.environ['QT_QPA_PLATFORM']='offscreen'
 
-# Custom imports
-from utils import embeddings_interface
-from utils import prepare_vocab_continous as vocab_master
-import prepare_transfer_learning as transfer_learning
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
+sys.path.append('/data/priyansh/conda/fastai')
+import fastai
+from fastai.text import *
 
-# Some Macros
-DEBUG = True
-MODEL = 'birnn_dot'
-DATASET = 'lcquad'
+# from qelos_core.scripts.lcquad.corerank import FlatEncoder
 
-# Data locations
-MODEL_DIR = './data/models/%(model)s/%(dataset)s/'
-MODEL_SPECIFIC_DATA_DIR = './data/data/%(model)s/%(dataset)s/'
-COMMON_DATA_DIR = './data/data/common/'
-DATASET_SPECIFIC_DATA_DIR = './data/data/%(dataset)s/'
+# Local imports
+import components as com
+from utils import tensor_utils as tu
 
-# Network Macros
-MAX_SEQ_LENGTH = 25
-EPOCHS = 300
-BATCH_SIZE = 880        # Around 11 splits for full training dataset
-LEARNING_RATE = 0.001
-LOSS = 'binary_crossentropy'
-NEGATIVE_SAMPLES = 1000
-OPTIMIZER = optimizers.Adam(LEARNING_RATE,beta_2 = 0.999)
-
-np.random.seed(42)
-
-
-# Better warning formatting. Ignore.
-def better_warning(message, category, filename, lineno, file=None, line=None):
-    return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
-
-
-"""
-    F1 measure functions
-"""
-def recall(y_true, y_pred):
-    """Recall metric.
-    Only computes a batch-wise average of recall.
-    Computes the recall, a metric for multi-label classification of
-    how many relevant items are selected.
+class Model(object):
     """
-    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
-    recall = true_positives / (possible_positives + K.epsilon())
-    return recall
+        Boilerplate class which helps others have some common functionality.
+        These are made with some debugging/loading and with corechains in mind
 
-
-def fbeta_score(y_true, y_pred, beta=1):
-    """Computes the F score.
-    The F score is the weighted harmonic mean of precision and recall.
-    Here it is only computed as a batch-wise average, not globally.
-    This is useful for multi-label classification, where input samples can be
-    classified as sets of labels. By only using accuracy (precision) a model
-    would achieve a perfect score by simply assigning every class to every
-    input. In order to avoid this, a metric should penalize incorrect class
-    assignments as well (recall). The F-beta score (ranged from 0.0 to 1.0)
-    computes this, as a weighted mean of the proportion of correct class
-    assignments vs. the proportion of incorrect class assignments.
-    With beta = 1, this is equivalent to a F-measure. With beta < 1, assigning
-    correct classes becomes more important, and with beta > 1 the metric is
-    instead weighted towards penalizing incorrect class assignments.
     """
-    if beta < 0:
-        raise ValueError('The lowest choosable beta is zero (only precision).')
 
-    # If there are no true positives, fix the F score at 0 like sklearn.
-    if K.sum(K.round(K.clip(y_true, 0, 1))) == 0:
-        return 0
-
-    p = precision(y_true, y_pred)
-    r = recall(y_true, y_pred)
-    bb = beta ** 2
-    fbeta_score = (1 + bb) * (p * r) / (bb * p + r + K.epsilon())
-    return fbeta_score
-
-
-def precision(y_true, y_pred):
-    """Precision metric.
-    Only computes a batch-wise average of precision.
-    Computes the precision, a metric for multi-label classification of
-    how many selected items are relevant.
-    """
-    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
-    precision = true_positives / (predicted_positives + K.epsilon())
-    return true_positives
-
-
-def true_positives(y_true, y_pred):
-    return K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-
-
-def predicted_positives(y_true, y_pred):
-    return K.sum(K.round(K.clip(y_pred, 0, 1)))
-
-
-def fmeasure(y_true, y_pred):
-    """Computes the f-measure, the harmonic mean of precision and recall.
-    Here it is only computed as a batch-wise average, not globally.
-    """
-    return fbeta_score(y_true, y_pred, beta=1)
-
-
-def get_smart_save_path(model):
-    desc = None
-    try:
-        # Get the model description
-        desc = model.to_json()
-    except TypeError:
-        warnings.warn("Could not get model json")
+    def prepare_save(self):
         pass
 
-    # Find the current model dirs in the data dir.
-    _, dirs, _ = os.walk(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}).next()
+    def load_from(self, location):
+        # Pull the data from disk
+        model_dump = torch.load(location)
 
-    # If no folder found in there, create a new one.
-    if len(dirs) == 0:
-        os.mkdir(os.path.join(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}, "model_00"))
-        dirs = ["model_00"]
+        # Load parameters
+        for key in self.prepare_save():
+            key[1].load_state_dict(model_dump[key[0]])
 
-    # Find the latest folder in here
-    dir_nums = sorted([ x[-2:] for x in dirs])
-    l_dir = os.path.join(MODEL_DIR  % {'model':MODEL, 'dataset':DATASET}, "model_" + dir_nums[-1])
+    def get_parameter_sum(self):
 
-    # Check if the latest dir has the same model as current
-    try:
-        if json.load(open(os.path.join(l_dir, 'model.json'))) != desc:
-            # Diff model. Make new folder and do stuff. @TODO this
-            new_num = int(dir_nums[-1]) + 1
-            if new_num < 10:
-                new_num = str('0') + str(new_num)
-            else:
-                new_num = str(new_num)
+        sum = 0
+        for model in self.prepare_save():
 
-            l_dir = os.path.join(MODEL_DIR % {'model':MODEL, 'dataset':DATASET}, "model_" + new_num)
-            os.mkdir(l_dir)
-    except:
-        # @TODO: Check which errors to catch.
-        pass
-    finally:
-        return desc, l_dir
+            model_sum = 0
+            for x in list(model[1].parameters()):
+
+                model_sum += np.sum(x.data.cpu().numpy().flatten())
+
+            sum += model_sum
+
+        return sum
 
 
-def smart_save_model(model):
-    """
-        Function to properly save the model to disk.
-            If the model config is the same as one already on disk, overwrite it.
-            Else make a new folder and write things there
+class BiLstmDotOld(Model):
 
-    :return: None
-    """
-    if DEBUG: print("@smart save model called")
-    json_desc, l_dir = get_smart_save_path(model)
-    path = os.path.join(l_dir, 'model.h5')
-    if DEBUG:
-        print("network.py:smart_save_model by calling smart save function: Saving model in %s" % path)
-    model.save(path)
-    json.dump(json_desc, open(os.path.join(l_dir, 'model.json'), 'w+'))
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
 
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
 
-def zeroloss(yt, yp):
-    return 0.0
+        if self.debug:
+            print("Init Models")
 
+        self.encoder = com.Encoder(self.parameter_dict['max_length'], self.parameter_dict['hidden_size']
+                                   , self.parameter_dict['number_of_layer'], self.parameter_dict['embedding_dim'],
+                                   self.parameter_dict['vocab_size'],
+                                   bidirectional=self.parameter_dict['bidirectional'],
+                                   vectors=self.parameter_dict['vectors']).cuda(self.device)
 
-def custom_loss(y_true, y_pred):
-    '''
-        max margin loss
-    '''
-    # y_pos = y_pred[0]
-    # y_neg= y_pred[1]
-    diff = y_pred[:,-1]
-    # return K.sum(K.maximum(1.0 - diff, 0.))
-    return K.sum(diff)
-
-
-
-def load_relation():
-    """
-        Function used once to load the relations dictionary
-        (which keeps the log of IDified relations, their uri and other things.)
-
-    :param relation_file: str
-    :return: dict
-    """
-
-    relations = pickle.load(open(os.path.join(COMMON_DATA_DIR, 'relations.pickle')))
-    inverse_relations = {}
-    for key in relations:
-        value = relations[key]
-        new_key = value[0]
-        value[0] = key
-        inverse_relations[new_key] = value
-
-    return inverse_relations
-
-
-def rank_precision(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
-    max_length = test_questions.shape[-1]
-    questions = np.reshape(np.repeat(np.reshape(test_questions,
-                                            (test_questions.shape[0], 1, test_questions.shape[1])),
-                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
-    pos_paths = np.reshape(test_pos_paths,
-                                    (test_pos_paths.shape[0], 1, test_pos_paths.shape[1]))
-    neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
-    all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
-
-    outputs = model.predict([questions, all_paths, np.zeros_like(all_paths)], batch_size=batch_size)[:,0]
-    outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch+1))
-
-    precision = float(len(np.where(np.argmax(outputs, axis=1) == 0)[0]))/outputs.shape[0]
-    return precision
-
-
-class CustomModelCheckpoint(Callback):
-    """Save the model after every epoch.
-    `filepath` can contain named formatting options,
-    which will be filled the value of `epoch` and
-    keys in `logs` (passed in `on_epoch_end`).
-    For example: if `filepath` is `weights.{epoch:02d}-{val_loss:.2f}.hdf5`,
-    then the model checkpoints will be saved with the epoch number and
-    the validation loss in the filename.
-    # Arguments
-        filepath: string, path to save the model file.
-        monitor: quantity to monitor.
-        verbose: verbosity mode, 0 or 1.
-        save_best_only: if `save_best_only=True`,
-            the latest best model according to
-            the quantity monitored will not be overwritten.
-        mode: one of {auto, min, max}.
-            If `save_best_only=True`, the decision
-            to overwrite the current save file is made
-            based on either the maximization or the
-            minimization of the monitored quantity. For `val_acc`,
-            this should be `max`, for `val_loss` this should
-            be `min`, etc. In `auto` mode, the direction is
-            automatically inferred from the name of the monitored quantity.
-        save_weights_only: if True, then only the model's weights will be
-            saved (`model.save_weights(filepath)`), else the full model
-            is saved (`model.save(filepath)`).
-        period: Interval (number of epochs) between checkpoints.
-    """
-
-    def __init__(self, filepath, test_questions, test_pos_paths, test_neg_paths, monitor='val_loss', verbose=0,
-                 save_best_only=False, save_weights_only=False,
-                 mode='auto', period=1):
-        super(CustomModelCheckpoint, self).__init__()
-        self.monitor = monitor
-        self.verbose = verbose
-        self.filepath = filepath
-        self.save_best_only = save_best_only
-        self.save_weights_only = save_weights_only
-        self.period = period
-        self.epochs_since_last_save = 0
-        self.test_questions = test_questions
-        self.test_pos_paths = test_pos_paths
-        self.test_neg_paths = test_neg_paths
-
-        if mode not in ['auto', 'min', 'max']:
-            warnings.warn('ModelCheckpoint mode %s is unknown, '
-                          'fallback to auto mode.' % (mode),
-                          RuntimeWarning)
-            mode = 'auto'
-
-        if mode == 'min':
-            self.monitor_op = np.less
-            self.best = np.Inf
-        elif mode == 'max':
-            self.monitor_op = np.greater
-            self.best = -np.Inf
+    def train(self, data, optimizer, loss_fn, device):
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
         else:
-            if 'acc' in self.monitor or self.monitor.startswith('fmeasure'):
-                self.monitor_op = np.greater
-                self.best = -np.Inf
-            else:
-                self.monitor_op = np.less
-                self.best = np.Inf
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
 
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        self.epochs_since_last_save += 1
-        if self.epochs_since_last_save >= self.period:
-            self.epochs_since_last_save = 0
-            filepath = self.filepath.format(epoch=epoch + 1, **logs)
-            if self.save_best_only:
-                current = rank_precision(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 1000, 10000)
-                print('\Validation recall@1: {}\n'.format(current))
-                if current is None:
-                    warnings.warn('Can save best model only with %s available, '
-                                  'skipping.' % (self.monitor), RuntimeWarning)
-                else:
-                    if self.monitor_op(current, self.best):
-                        if self.verbose > 0:
-                            print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
-                                  ' saving model'
-                                  % (epoch + 1, self.monitor, self.best,
-                                     current))
-                        self.best = current
-                        if self.save_weights_only:
-                            self.model.save_weights(filepath, overwrite=True)
-                        else:
-                            smart_save_model(self.model)
-                            # self.model.save(filepath, overwrite=True)
-                    else:
-                        if self.verbose > 0:
-                            print('\nEpoch %05d: %s did not improve' %
-                                  (epoch + 1, self.monitor))
-            else:
-                if self.verbose > 0:
-                    print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
-                if self.save_weights_only:
-                    self.model.save_weights(filepath, overwrite=True)
-                else:
-                    smart_save_model(self.model)
-                    # self.model.save(filepath, overwrite=True)
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], device)
 
 
-class TrainingDataGenerator(Sequence):
-    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
-        self.dummy_y = np.zeros(batch_size)
-        self.firstDone = False
-        self.max_length = max_length
-        self.neg_paths_per_epoch = neg_paths_per_epoch
+        optimizer.zero_grad()
+        #Encoding all the data
+        ques_batch, _ = self.encoder(ques_batch, hidden)
+        pos_batch, _ = self.encoder(pos_batch, hidden)
+        neg_batch, _ = self.encoder(neg_batch, hidden)
+        # Calculating dot score
+        pos_scores = torch.sum(ques_batch * pos_batch, -1)
+        neg_scores = torch.sum(ques_batch * neg_batch, -1)
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        optimizer.step()
+        return loss
 
-        self.questions = np.reshape(np.repeat(np.reshape(questions,
-                                            (questions.shape[0], 1, questions.shape[1])),
-                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
 
-        self.pos_paths = np.reshape(np.repeat(np.reshape(pos_paths,
-                                            (pos_paths.shape[0], 1, pos_paths.shape[1])),
-                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
 
-        self.neg_paths = neg_paths
+        optimizer.zero_grad()
 
-        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
-                                            (-1, self.max_length))
+        # Encoding all the data
+        ques_batch = self.encoder(ques_batch)
+        pos_batch = self.encoder(path_batch)
 
-        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
-            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+        # Calculating dot score
+        score = torch.sum(ques_batch* pos_batch, -1)
 
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+        return loss
 
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
 
-        self.batch_size = batch_size
+            self.encoder.eval()
 
-    def __len__(self):
-        return math.ceil(len(self.questions) / self.batch_size)
+            hidden = self.encoder.init_hidden(ques.shape[0], device)
+            question, _ = self.encoder(ques.long(), hidden)
+            paths, _ = self.encoder(paths.long(), hidden)
+            score = torch.sum(question[-1] * paths[-1], -1)
 
-    def __getitem__(self, idx):
-        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_questions = index(self.questions_shuffled)
-        batch_pos_paths = index(self.pos_paths_shuffled)
-        batch_neg_paths = index(self.neg_paths_shuffled)
+            self.encoder.train()
 
-        # if self.firstDone == False:
-        #     batch_neg_paths = index(self.neg_paths)
-        # else:
-        #     batch_neg_paths = neg_paths[np.random.randint(0, neg_paths.shape[0], BATCH_SIZE)]
+            return score
 
-        return ([batch_questions, batch_pos_paths, batch_neg_paths], self.dummy_y)
+    def prepare_save(self):
+        """
 
-    def on_epoch_end(self):
-        self.firstDone = not self.firstDone
-        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
-                                            (-1, self.max_length))
-        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
-            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
 
-
-class ValidationDataGenerator(Sequence):
-    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
-        self.dummy_y = np.zeros(batch_size)
-        self.firstDone = False
-        self.max_length = max_length
-        self.neg_paths_per_epoch = neg_paths_per_epoch
-
-        self.questions = np.reshape(np.repeat(np.reshape(questions,
-                                            (questions.shape[0], 1, questions.shape[1])),
-                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
-
-        self.pos_paths = np.reshape(pos_paths,
-                                            (pos_paths.shape[0], 1, pos_paths.shape[1]))
-        self.neg_paths = neg_paths
-        neg_paths_sampled = self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :]
-        self.all_paths = np.reshape(np.concatenate([self.pos_paths, neg_paths_sampled], axis=1), (-1, self.max_length))
-
-        self.batch_size = batch_size
-
-    def __len__(self):
-        return math.ceil(len(self.questions) / self.batch_size)
-
-    def __getitem__(self, idx):
-        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_questions = index(self.questions)
-        batch_all_paths = index(self.all_paths)
-
-        # if self.firstDone == False:
-        #     batch_neg_paths = index(self.neg_paths)
-        # else:
-        #     batch_neg_paths = neg_paths[np.random.randint(0, neg_paths.shape[0], BATCH_SIZE)]bay
-
-        return ([batch_questions, batch_all_paths, np.zeros_like(batch_all_paths)], self.dummy_y)
-
-    def on_epoch_end(self):
-        self.firstDone = not self.firstDone
-        neg_paths_sampled = self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :]
-        self.all_paths = np.reshape(np.concatenate([self.pos_paths, neg_paths_sampled], axis=1), (-1, self.max_length))
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder)]
 
 
-def rank_precision_metric(neg_paths_per_epoch):
-    def metric(y_true, y_pred):
-        scores = y_pred[:, 0]
-        scores = K.reshape(scores, (-1, neg_paths_per_epoch+1))
-        hits = K.cast(K.shape(K.tf.where(K.tf.equal(K.tf.argmax(scores, axis=1),0)))[0], 'float32')
-        precision = hits/K.cast(K.shape(scores)[0], 'float32')
-        # precision = float(len(np.where(np.argmax(all_outputs, axis=1)==0)[0]))/all_outputs.shape[0]
-        return precision
-    return metric
+class BiLstmDot(Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
 
 
-def rank_precision_pointwise(model, test_questions, test_pos_paths, test_neg_paths, neg_paths_per_epoch=100, batch_size=1000):
 
-    max_length = test_questions.shape[-1]
-    questions = np.reshape(np.repeat(np.reshape(test_questions,
-                                                (test_questions.shape[0], 1, test_questions.shape[1])),
-                                     neg_paths_per_epoch + 1, axis=1), (-1, max_length))
-    pos_paths = np.reshape(test_pos_paths,
-                           (test_pos_paths.shape[0], 1, test_pos_paths.shape[1]))
-    neg_paths = test_neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, neg_paths_per_epoch), :]
-    all_paths = np.reshape(np.concatenate([pos_paths, neg_paths], axis=1), (-1, max_length))
+        self.encoder = com.NotSuchABetterEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            max_length = self.parameter_dict['max_length'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            mode = 'LSTM',
+            debug = self.debug).to(self.device)
 
-    outputs = model.predict([questions, all_paths], batch_size=batch_size)[:, 0]
-    outputs = np.reshape(outputs, (test_questions.shape[0], neg_paths_per_epoch + 1))
-
-    precision = float(len(np.where(np.argmax(outputs, axis=1) == 0)[0])) / outputs.shape[0]
-    return precision
-
-class CustomPointWiseModelCheckpoint(Callback):
-    """Save the model after every epoch.
-    `filepath` can contain named formatting options,
-    which will be filled the value of `epoch` and
-    keys in `logs` (passed in `on_epoch_end`).
-    For example: if `filepath` is `weights.{epoch:02d}-{val_loss:.2f}.hdf5`,
-    then the model checkpoints will be saved with the epoch number and
-    the validation loss in the filename.
-    # Arguments
-        filepath: string, path to save the model file.
-        monitor: quantity to monitor.
-        verbose: verbosity mode, 0 or 1.
-        save_best_only: if `save_best_only=True`,
-            the latest best model according to
-            the quantity monitored will not be overwritten.
-        mode: one of {auto, min, max}.
-            If `save_best_only=True`, the decision
-            to overwrite the current save file is made
-            based on either the maximization or the
-            minimization of the monitored quantity. For `val_acc`,
-            this should be `max`, for `val_loss` this should
-            be `min`, etc. In `auto` mode, the direction is
-            automatically inferred from the name of the monitored quantity.
-        save_weights_only: if True, then only the model's weights will be
-            saved (`model.save_weights(filepath)`), else the full model
-            is saved (`model.save(filepath)`).
-        period: Interval (number of epochs) between checkpoints.
-    """
-
-    def __init__(self, filepath, test_questions, test_pos_paths, test_neg_paths, monitor='val_loss', verbose=0,
-                 save_best_only=False, save_weights_only=False,
-                 mode='auto', period=1):
-        super(CustomPointWiseModelCheckpoint, self).__init__()
-        self.monitor = monitor
-        self.verbose = verbose
-        self.filepath = filepath
-        self.save_best_only = save_best_only
-        self.save_weights_only = save_weights_only
-        self.period = period
-        self.epochs_since_last_save = 0
-        self.test_questions = test_questions
-        self.test_pos_paths = test_pos_paths
-        self.test_neg_paths = test_neg_paths
-
-        if mode not in ['auto', 'min', 'max']:
-            warnings.warn('ModelCheckpoint mode %s is unknown, '
-                          'fallback to auto mode.' % (mode),
-                          RuntimeWarning)
-            mode = 'auto'
-
-        if mode == 'min':
-            self.monitor_op = np.less
-            self.best = np.Inf
-        elif mode == 'max':
-            self.monitor_op = np.greater
-            self.best = -np.Inf
+    def train(self, data, optimizer, loss_fn, device):
+    #
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
         else:
-            if 'acc' in self.monitor or self.monitor.startswith('fmeasure'):
-                self.monitor_op = np.greater
-                self.best = -np.Inf
-            else:
-                self.monitor_op = np.less
-                self.best = np.Inf
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
 
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        self.epochs_since_last_save += 1
-        if self.epochs_since_last_save >= self.period:
-            self.epochs_since_last_save = 0
-            filepath = self.filepath.format(epoch=epoch + 1, **logs)
-            if self.save_best_only:
-                current = rank_precision_pointwise(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 100, 1000)
-                # current = rank_precision_pointwise(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 100, 1000)
-                print('\Validation recall@1: {}\n'.format(current))
-                if current is None:
-                    warnings.warn('Can save best model only with %s available, '
-                                  'skipping.' % (self.monitor), RuntimeWarning)
-                else:
-                    if self.monitor_op(current, self.best):
-                        if self.verbose > 0:
-                            print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
-                                  ' saving model to %s'
-                                  % (epoch + 1, self.monitor, self.best,
-                                     current, filepath))
-                        self.best = current
-                        if self.save_weights_only:
-                            self.model.save_weights(filepath, overwrite=True)
-                        else:
-                            smart_save_model(self.model)
-                            # self.model.save(filepath, overwrite=True)
-                    else:
-                        if self.verbose > 0:
-                            print('\nEpoch %05d: %s did not improve' %
-                                  (epoch + 1, self.monitor))
-            else:
-                if self.verbose > 0:
-                    print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
-                if self.save_weights_only:
-                    self.model.save_weights(filepath, overwrite=True)
-                else:
-                    smart_save_model(self.model)
-                    # self.model.save(filepath, overwrite=True)
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
 
-class PointWiseTrainingDataGenerator(Sequence):
-    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size):
-        self.firstDone = False
+            returns loss
+        '''
 
-        self.neg_paths_per_epoch = neg_paths_per_epoch
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
 
-        self.questions = np.reshape(np.repeat(np.reshape(questions,
-                                            (questions.shape[0], 1, questions.shape[1])),
-                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+        optimizer.zero_grad()
+        #Encoding all the data
 
-        self.pos_paths = np.reshape(np.repeat(np.reshape(pos_paths,
-                                            (pos_paths.shape[0], 1, pos_paths.shape[1])),
-                                 neg_paths_per_epoch, axis=1), (-1, max_length))
+        hidden = self.encoder.init_hidden(ques_batch.shape[0],self.device)
+        _, ques_batch_encoded, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch_encoded, _, _ = self.encoder(tu.trim(pos_batch), hidden)
+        _, neg_batch_encoded, _, _  = self.encoder(tu.trim(neg_batch), hidden)
 
-        self.neg_paths = neg_paths
-        self.max_length = max_length
 
-        self.neg_paths_sampled = np.reshape(self.neg_paths[:, np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
-                                            (-1, self.max_length))
 
-        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
-            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
+        #Calculating dot score
+        pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
+        neg_scores = torch.sum(ques_batch_encoded * neg_batch_encoded, -1)
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        try:
+            loss = loss_fn(pos_scores, neg_scores, y_label)
+        except RuntimeError:
+            print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        optimizer.step()
+        return loss
 
-        self.batch_size = batch_size
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch, _, _ = self.encoder(tu.trim(path_batch), hidden)
+
         #
-        # print("Questions:", self.questions_shuffled.shape)
-        # print("PosPaths:", self.pos_paths_shuffled.shape)
-        # print("NegPaths:", self.neg_paths_shuffled.shape)
-        # print("MaxLen:", self.max_length)
-        # print("BatchSize:", self.batch_size)
-        # print("len:", math.ceil(len(self.questions) / self.batch_size))
-        # raw_input("Check training data generator")
+        # norm_ques_batch = torch.abs(torch.norm(ques_batch,dim=1,p=1))
+        # norm_pos_batch = torch.abs(torch.norm(pos_batch,dim=1,p=1))
 
-    def __len__(self):
-        return math.ceil(len(self.questions) / self.batch_size)
+        # ques_batch = F.normalize(F.relu(ques_batch),p=1,dim=1)
+        # pos_batch = F.normalize(F.relu(pos_batch),p=1,dim=1)
+        # ques_batch =(F.normalize(ques_batch,p=1,dim=1)/2) + .5
+        # pos_batch =(F.normalize(pos_batch,p=1,dim=1)/2) + .5
 
-    def __getitem__(self, idx):
-        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_questions = index(self.questions_shuffled)
-        batch_pos_paths = index(self.pos_paths_shuffled)
-        batch_neg_paths = index(self.neg_paths_shuffled)
 
-        # Now, create a new array 2x the size of prev one
-        # where, each row either has a pos path and corresponding question. Or negative path and corresponding question.
-        batch_labels = np.concatenate([np.ones(batch_pos_paths.shape[0]), np.zeros(batch_neg_paths.shape[0])], axis=0)
-        batch_questions = np.concatenate([batch_questions, batch_questions], axis=0)
-        batch_paths = np.concatenate([batch_pos_paths, batch_neg_paths], axis=0)
 
-        # Now, create a mean index to shuffle.
-        index = np.arange(batch_questions.shape[0])
-        np.random.shuffle(index)
-        batch_labels = batch_labels[index]
-        batch_questions = batch_questions[index]
-        batch_paths = batch_paths[index]
 
-        # print batch_labels[:10]
-
-        return ([batch_questions, batch_paths], batch_labels)
-
-    def on_epoch_end(self):
-
-        self.firstDone = not self.firstDone
-        self.neg_paths_sampled = np.reshape(self.neg_paths[:,np.random.randint(0, NEGATIVE_SAMPLES, self.neg_paths_per_epoch), :],
-                                            (-1, self.max_length))
-        self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
-            shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
-
-class _Attention(object):
-    def __init__(self, max_length, nr_hidden, dropout=0.0, L2=0.0, activation='relu'):
-        self.max_length = max_length
-        self.model = Sequential()
-        self.model.add(Dropout(dropout, input_shape=(nr_hidden,)))
-        self.model.add(
-            Dense(nr_hidden, name='attend1',
-                init='he_normal', W_regularizer=l2(L2),
-                input_shape=(nr_hidden,), activation='relu'))
-        self.model.add(Dropout(dropout))
-        self.model.add(Dense(nr_hidden, name='attend2',
-            init='he_normal', W_regularizer=l2(L2), activation='relu'))
-        self.model = TimeDistributed(self.model)
-
-    def __call__(self, sent1, sent2):
-        def _outer(AB):
-            att_ji = K.batch_dot(AB[1], K.permute_dimensions(AB[0], (0, 2, 1)))
-            return K.permute_dimensions(att_ji,(0, 2, 1))
-        return merge(
-                [self.model(sent1), self.model(sent2)],
-                mode=_outer, output_shape=(self.max_length, self.max_length))
-
-
-class _SoftAlignment(object):
-    def __init__(self, max_length, nr_hidden):
-        self.max_length = max_length
-        self.nr_hidden = nr_hidden
-
-    def __call__(self, sentence, attention, transpose=False):
-        def _normalize_attention(attmat):
-            att = attmat[0]
-            mat = attmat[1]
-            if transpose:
-                att = K.permute_dimensions(att,(0, 2, 1))
-            # 3d softmax
-            e = K.exp(att - K.max(att, axis=-1, keepdims=True))
-            s = K.sum(e, axis=-1, keepdims=True)
-            sm_att = e / s
-            return K.batch_dot(sm_att, mat)
-        return merge([attention, sentence], mode=_normalize_attention,
-                     output_shape=(self.max_length, self.nr_hidden)) # Shape: (i, n)
-
-
-class _Comparison(object):
-    def __init__(self, words, nr_hidden, L2=0.0, dropout=0.0):
-        self.words = words
-        self.model = Sequential()
-        self.model.add(Dropout(dropout, input_shape=(nr_hidden*2,)))
-        self.model.add(Dense(nr_hidden, name='compare1', init='he_normal', W_regularizer=l2(L2),activation='relu'))
-        self.model.add(Activation('relu'))
-        self.model.add(Dropout(dropout))
-        self.model.add(Dense(nr_hidden, name='compare2', W_regularizer=l2(L2), init='he_normal',activation='relu'))
-        self.model.add(Activation('relu'))
-        self.model = TimeDistributed(self.model)
-
-    def __call__(self, sent, align, **kwargs):
-        result = self.model(merge([sent, align], mode='concat')) # Shape: (i, n)
-        avged = GlobalAveragePooling1D()(result)
-        # maxed = GlobalMaxPooling1D()(result)
-        # merged = merge([avged, maxed])
-        # result = BatchNormalization()(merged)
-        return avged
-
-
-class _Entailment(object):
-    def __init__(self, nr_hidden, nr_out, dropout=0.0, L2=0.0):
-        self.model = Sequential()
-        self.model.add(Dropout(dropout, input_shape=(nr_hidden*2,)))
-        self.model.add(Dense(nr_hidden, name='entail1',
-            init='he_normal', W_regularizer=l2(L2),activation='relu'))
-        self.model.add(Activation('relu'))
-        # self.model.add(Dropout(dropout))
-        self.model.add(Dense(nr_out, name='entail_out',
-            init='he_normal', W_regularizer=l2(L2),activation='relu'))
-        # self.model.add(Activation('relu'))
-        # self.model.add(Dense(nr_out, name='entail_out', activation='softmax',
-        #                 W_regularizer=l2(L2), init='zero'))
-
-    def __call__(self, feats1, feats2):
-        features = merge([feats1, feats2], mode='concat')
-        return self.model(features)
-
-
-class _GlobalSumPooling1D(Layer):
-    """
-        Global sum pooling operation for temporal data.
-        # Input shape
-            3D tensor with shape: `(samples, steps, features)`.
-        # Output shape
-            2D tensor with shape: `(samples, features)`.
-    """
-    def __init__(self, **kwargs):
-        super(_GlobalSumPooling1D, self).__init__(**kwargs)
-        self.input_spec = [InputSpec(ndim=3)]
-
-    def get_output_shape_for(self, input_shape):
-        return (input_shape[0], input_shape[2])
-
-    def call(self, x, mask=None):
-        if mask is not None:
-            return K.sum(x * K.clip(mask, 0, 1), axis=1)
-        else:
-            return K.sum(x, axis=1)
-
-
-class _BiRNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0):
-        self.model = Sequential()
-        self.model.add(Bidirectional(LSTM(units, return_sequences=True,
-                                          dropout_W=dropout, dropout_U=dropout),
-                                     input_shape=(max_length, embedding_dims)))
-        #self.model.add(LSTM(units, return_sequences=False,
-        #                                 dropout_W=dropout, dropout_U=dropout))
-        self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
-        self.model.add(TimeDistributed(Dropout(0.2)))
-
-    def __call__(self, sentence):
-        return self.model(sentence)
-
-
-class _simple_BiRNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False, _name="encoder"):
-        self.model = Sequential(name=_name)
-        # reg = L1L2(l1=0.0, l2=0.01)
-        self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
-                                          dropout_W=dropout,
-                                          dropout_U=dropout, name="encoder_lstm"),
-                                     input_shape=(max_length, embedding_dims), name="encoder_bidirectional"))
-        # self.model.regularizers = [l2(0.01)]
-        #self.model.add(LSTM(units, return_sequences=False,
-        #                                 dropout_W=dropout, dropout_U=dropout))
-        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
-        # self.model.add(TimeDistributed(Dropout(0.2)))
-
-    def __call__(self, sentence):
-        return self.model(sentence)
-
-
-class _double_BiRNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False, _name="doubleencoder"):
-        self.model = Sequential(name=_name)
-        reg = L1L2(l1=0.0, l2=0.01)
-        self.model.add(Bidirectional(LSTM(units, return_sequences=return_sequences,
-                                          dropout_W=dropout,
-                                          dropout_U=dropout, kernel_regularizer=reg),
-                                     input_shape=(max_length, embedding_dims)))
-        self.model.add(Bidirectional(LSTM(units,dropout_W=dropout,
-                                          dropout_U=dropout, kernel_regularizer=reg)))
-        # self.model.regularizers = [l2(0.01)]
-        #self.model.add(LSTM(units, return_sequences=False,
-        #                                 dropout_W=dropout, dropout_U=dropout))
-        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
-        # self.model.add(TimeDistributed(Dropout(0.2)))
-
-    def __call__(self, sentence):
-        return self.model(sentence)
-
-
-class _simple_CNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False):
-        self.model = Sequential()
-        self.model.add(Conv1D(units,5,
-                                     input_shape=(max_length, embedding_dims)))
-        self.model.add(MaxPooling1D(2))
-        self.model.add(Conv1D(units, 5))
-        self.model.add(MaxPooling1D(2))
-        self.model.add(GlobalMaxPooling1D())
-        # self.model.add(Flatten())
-        self.model.add(Dense(128,activation='relu'))
-        #self.model.add(LSTM(units, return_sequences=False,
-        #                                 dropout_W=dropout, dropout_U=dropout))
-        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
-        # self.model.add(TimeDistributed(Dropout(0.2)))
-
-    def __call__(self, sentence):
-        return self.model(sentence)
-
-class _simpler_CNNEncoding(object):
-    def __init__(self, max_length, embedding_dims, units, dropout=0.0, return_sequences = False,dense=True):
-        input_shape = Input(shape=(max_length, embedding_dims))
-        a = Conv1D(units,5)(input_shape)
-        a_pool = MaxPooling1D(2)(a)
-        b = Conv1D(units,5)(input_shape)
-        b_pool = MaxPooling1D(2)(b)
-        c = Conv1D(units,5)(input_shape)
-        c_pool = MaxPooling1D(2)(c)
-        merged = concatenate([a_pool,b_pool,c_pool],axis=1)
-        global_max_pool = GlobalMaxPooling1D()(merged)
-        if dense:
-            denser = Dense(128, activation='relu')(global_max_pool)
-            self.model = Model(input_shape, denser)
-        else:
-            self.model = Model(input_shape, global_max_pool)
-
-
-
-    def __call__(self, sentence):
-        return self.model(sentence)
-
-class flatten_simple(object):
-    def __init__(self):
-        self.model = Sequential()
-        self.model.add(Flatten())
-        # self.model.add(Conv1D(units, 5))
-        # self.model.add(MaxPooling1D(2))
-        # self.model.add(GlobalMaxPooling1D())
-        # self.model.add(Flatten())
-        # self.model.add(Dense(128,activation='relu'))
-        #self.model.add(LSTM(units, return_sequences=False,
-        #                                 dropout_W=dropout, dropout_U=dropout))
-        # self.model.add(TimeDistributed(Dense(units, activation='relu', init='he_normal')))
-        # self.model.add(TimeDistributed(Dropout(0.2)))
-
-    def __call__(self, sentence):
-        return self.model(sentence)
-
-class _simpleDense(object):
-    def __init__(self, l, w):
-        self.model = Sequential()
-        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.01),activation='relu'))
-
-    def __call__(self, sentence_1):
-        return self.model(sentence_1)
-
-class _simpleDense_with_units(object):
-    def __init__(self, l, w):
-        self.model = Sequential()
-        self.model.add(Dense(l, input_shape=(w*2,),kernel_regularizer= l2(0.01),activation='relu'))
-
-    def __call__(self, sentence_1):
-        return self.model(sentence_1)
-
-class _simpleTimeDistributedDense(object):
-    def __init__(self, l, w):
-        self.model = Sequential()
-        self.model.add(TimeDistributed(Dense(w/2,kernel_regularizer= l2(0.1)), input_shape=(w*2,)))
-
-    def __call__(self, sentence_1):
-        return self.model(sentence_1)
-
-class _parikhDense(object):
-    def __init__(self, l, w):
-        self.model = Sequential()
-        self.model.add(Dense(w/2, input_shape=(w*2,),kernel_regularizer= l2(0.1)))
-
-    def __call__(self, sentence_1):
-        return self.model(sentence_1)
-
-class _StaticEmbedding(object):
-    def __init__(self, vectors, max_length, nr_out, nr_tune=5000, dropout=0.0):
-        self.nr_out = nr_out
-        self.max_length = max_length
-        self.embed = Embedding(
-                        vectors.shape[0],
-                        vectors.shape[1],
-                        input_length=max_length,
-                        weights=[vectors],
-                        name='embed',
-                        trainable=True,)
-        self.tune = Embedding(
-                        nr_tune,
-                        nr_out,
-                        input_length=max_length,
-                        weights=None,
-                        name='tune',
-                        trainable=True,
-                        dropout=dropout)
-        self.mod_ids = Lambda(lambda sent: sent % (nr_tune-1)+1,
-                              output_shape=(self.max_length,))
-
-        self.project = TimeDistributed(
-                            Dense(
-                                nr_out,
-                                activation=None,
-                                bias=False,
-                                name='project'))
-
-    def __call__(self, sentence):
-        mod_sent = self.mod_ids(sentence)
-        tuning = self.tune(mod_sent)
-        # tuning = merge([tuning, mod_sent],
-        #    mode=lambda AB: AB[0] * (K.clip(K.cast(AB[1], 'float32'), 0, 1)),
-        #    output_shape=(self.max_length, self.nr_out))
-        pretrained = self.project(self.embed(sentence))
-        vectors = merge([pretrained, tuning], mode='sum')
-        return vectors
-
-def get_glove_embeddings():
-    from utils.embeddings_interface import __check_prepared__
-    __check_prepared__('glove')
-
-    from utils.embeddings_interface import glove_embeddings
-    return glove_embeddings
-
-class ValidationCallback(Callback):
-    def __init__(self, test_data, test_questions, test_pos_paths, test_neg_paths):
-        self.test_data = test_data
-        self.test_questions = test_questions
-        self.test_pos_paths = test_pos_paths
-        self.test_neg_paths = test_neg_paths
-
-    def on_epoch_end(self, epoch, logs={}):
-        if epoch % 20 == 0:
-            recall = rank_precision(self.model, self.test_questions, self.test_pos_paths, self.test_neg_paths, 1000, 10000)
-            print('\Validation recall@1: {}\n'.format(recall))
-
-def cross_correlation(x):
-    a, b = x
-    tf = K.tf
-    a_fft = tf.fft(tf.complex(a, 0.0))
-    b_fft = tf.fft(tf.complex(b, 0.0))
-    ifft = tf.ifft(tf.conj(a_fft) * b_fft)
-    return tf.cast(tf.real(ifft), 'float32')
-
-def load_pretrained_weights(_new_model, _trained_model_path):
-    """
-        Function used to put in weights of a pretrained in the layers of this new model.
-        Algo:
-            Try to see if we have weights of that previous model.
-            If not, load model, save weights.
-            Then load weights, get its layers' name.
-            Get layer names of this new model.
-            Put in weights of the old to new.
-            Return new.
-
-    :param _new_model: keras model.
-    :param _trained_model_path: str: path of the model (only the dict)
-    :return: keras model
-    """
-
-    if DEBUG: print("Trying to put the values from %s to this new model" % _trained_model_path)
-
-    _new_model.load_weights(os.path.join(_trained_model_path, 'model.h5'), by_name=True)
-
-    # layers_config = None
-    #
-    # try:
-    #     assert os.path.isfile(os.path.join(_trained_model_path, 'weights.h5'))
-    # except (IOError, AssertionError) as e:
-    #
-    #     # The weights file doesn't exist yet. Gotta load the model
-    #     metric = rank_precision_metric(10)
-    #     old_model = load_model(os.path.join(_trained_model_path, 'model.h5'), {'custom_loss':custom_loss, 'metric':metric})
-    #     layers_config = json.loads(json.load(open(os.path.join(_trained_model_path, 'model.json'))))['config']['layers']
-    #
-    #     # Save weights
-    #     old_model.save_weights(os.path.join(_trained_model_path, 'weights.h5'), {'custom_loss':custom_loss, 'metric':metric})
-    #
-    # finally:
-    #     weights = h5py.File(os.path.join(_trained_model_path, 'weights.h5'))
-    #
-    # # ################################
-    # # We have the weights in our hands
-    # # ################################
-    #
-    # # Prepare the dict of 'name':'layerobj' for the new model
-    # # layers_dict = dict([(layer.name, layer) for layer in _new_model.layers])
-    # for i in range(len(_new_model.layers)):
-    #
-    #     layer = _new_model.layers[i]
-    #     layer_config = layers_config[i]
-    #
-    #     # Try to find if the layer exists in the weights we just loaded
-    #     try:
-    #         assert layer.name in weights.keys()
-    #     except AssertionError:
-    #         # The layer isn't found.
-    #         if DEBUG:
-    #             warnings.warn("Layer %s of the new model didn't match anything in pre-trained model" % str(layer.name))
-    #             raw_input("Enter to continue")
-    #         continue
-    #
-    #     weights_layer = [weights[layer.name][x] for x in weights[layer.name].attrs['weight_names']]
-    #
-    #     _new_model.layers[i].set_weights(weights_layer)
-    #
-    #     if DEBUG:
-    #         print("Successfully loaded weights onto layer %s" % layer.name)
-    #         raw_input("Enter to continue")
-
-    return _new_model
-
-def remove_positive_path(positive_path, negative_paths):
-    counter = 0
-    new_negative_paths = []
-    for i in range(0, len(negative_paths)):
-        if not np.array_equal(negative_paths[i], positive_path):
-            new_negative_paths.append(np.asarray(negative_paths[i]))
-        else:
-            counter += 1
-            # print counter
-    return new_negative_paths
-
-def create_dataset_pairwise(file, max_sequence_length, relations):
-    """
-        This file is meant to create data for core-chain ranking ONLY.
-
-    :param file: id_big_data file
-    :param max_sequence_length: for padding/cropping
-    :param relations: the relations file to backtrack and look up shit.
-    :return:
-    """
-    glove_embeddings = get_glove_embeddings()
-
-    try:
-        with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pairwise'}, file + ".mapped.npz")) as data:
-            dataset = np.load(data)
-            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab, vectors = vocab_master.load()
-            # vectors = glove_embeddings[sorted(vocab.keys())]
-            return vectors, questions, pos_paths, neg_paths
-    except (EOFError,IOError) as e:
-        with open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, file)) as fp:
-            dataset = json.load(fp)
-            # dataset = dataset[:10]
-
-            ignored = []
-
-            pos_paths = []
-            for i in dataset:
-                path_id = i['parsed-data']['path_id']
-                positive_path = []
-                try:
-                    for p in path_id:
-                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                        positive_path += relations[int(p[1:])][3].tolist()
-                except (TypeError, ValueError) as e:
-                    ignored.append(i)
-                    continue
-                pos_paths.append(positive_path)
-
-            questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
-
-            neg_paths = []
-            for i in range(0, len(pos_paths)):
-                if i in ignored:
-                    continue
-                datum = dataset[i]
-                negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
-                np.random.shuffle(negative_paths_id)
-                negative_paths = []
-                for neg_path in negative_paths_id:
-                    negative_path = []
-                    for p in neg_path:
-                        try:
-                            negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
-                        except ValueError:
-                            negative_path += relations[int(p)][3].tolist()
-                    negative_paths.append(negative_path)
-                negative_paths = remove_positive_path(pos_paths[i],negative_paths)
-                try:
-                    negative_paths = np.random.choice(negative_paths,1000)
-                except ValueError:
-                    if len(negative_paths) == 0:
-                        negative_paths = neg_paths[-1]
-                        print("Using previous question's paths for this since no neg paths for this question.")
-                    else:
-                        index = np.random.randint(0, len(negative_paths), 1000)
-                        negative_paths = np.array(negative_paths)
-                        negative_paths = negative_paths[index]
-                neg_paths.append(negative_paths)
-
-            for i in range(0,len(neg_paths)):
-                neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
-            neg_paths = np.asarray(neg_paths)
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-
-            # # Map to new ID space.
-            # try:
-            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, ".vocab.pickle")))
-            #     vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npz" )))
-            # except (IOError, EOFError) as e:
-            #     if DEBUG:
-            #         warnings.warn("Did not find the vocabulary.")
-            vocab, vectors = vocab_master.load()
-
-
-            # all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
-            # # uniques = np.unique(all)
-            # try:
-            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, file + ".vocab.pickle")))
-            # except (IOError, EOFError) as e:
-            #     if DEBUG:
-            #         warnings.warn("Did not find the vocabulary.")
-            #     vocab = {}
-            #     # Create Vocabulary
-            #     for i in range(len(uniques)):
-            #         vocab[uniques[i]] = i
-
-            # Map everything
-            for i in range(len(questions)):
-                questions[i] = np.asarray([vocab[key] for key in questions[i]])
-                pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
-
-                for j in range(len(neg_paths[i])):
-                    neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
-
-            with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pairwise'} , file + ".mapped.npz"), "w+") as data:
-                np.savez(data, questions, pos_paths, neg_paths)
-
-            return vectors, questions, pos_paths, neg_paths
-
-def create_dataset_pointwise(file, max_sequence_length, relations):
-    """
-        This file is meant to create data for core-chain ranking ONLY.
-
-    :param file: id_big_data file
-    :param max_sequence_length: for padding/cropping
-    :param relations: the relations file to backtrack and look up shit.
-    :return:
-    """
-    glove_embeddings = get_glove_embeddings()
-
-    try:
-        with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pointwise'}, file + ".mapped.npz")) as data:
-            dataset = np.load(data)
-            questions, pos_paths, neg_paths = dataset['arr_0'], dataset['arr_1'], dataset['arr_2']
-            vocab, vectors = vocab_master.load()
-            # vectors = glove_embeddings[vocab.keys()]
-            return vectors, questions, pos_paths, neg_paths
-    except (EOFError,IOError) as e:
-        with open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':DATASET}, file)) as fp:
-            dataset = json.load(fp)
-            # dataset = dataset[:10]
-
-            ignored = []
-
-            pos_paths = []
-            for i in dataset:
-                path_id = i['parsed-data']['path_id']
-                positive_path = []
-                try:
-                    for p in path_id:
-                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                        positive_path += relations[int(p[1:])][3].tolist()
-                except (TypeError, ValueError) as e:
-                    ignored.append(i)
-                    continue
-                pos_paths.append(positive_path)
-
-            questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
-
-            neg_paths = []
-            for i in range(0,len(dataset)):
-                datum = dataset[i]
-                negative_paths_id = datum['uri']['hop-2-properties'] + datum['uri']['hop-1-properties']
-                np.random.shuffle(negative_paths_id)
-                negative_paths = []
-                for neg_path in negative_paths_id:
-                    negative_path = []
-                    for p in neg_path:
-                        try:
-                            negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
-                        except ValueError:
-                            negative_path += relations[int(p)][3].tolist()
-                    negative_paths.append(negative_path)
-                negative_paths = remove_positive_path(pos_paths[i],negative_paths)
-                try:
-                    negative_paths = np.random.choice(negative_paths,1000)
-                except ValueError:
-                    if len(negative_paths) == 0:
-                        negative_paths = neg_paths[-1]
-                        print("Using previous question's paths for this since no neg paths for this question.")
-                    else:
-                        index = np.random.randint(0, len(negative_paths), 1000)
-                        negative_paths = np.array(negative_paths)
-                        negative_paths = negative_paths[index]
-                neg_paths.append(negative_paths)
-
-            for i in range(0,len(neg_paths)):
-                neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
-            neg_paths = np.asarray(neg_paths)
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-
-            # Map to new ID space.
-            # try:
-            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, ".vocab.pickle")))
-            #     vectors = np.load(open(os.path.join(COMMON_DATA_DIR, "vectors.npz" )))
-            # except (IOError, EOFError) as e:
-            #     if DEBUG:
-            #         warnings.warn("Did not find the vocabulary.")
-            vocab, vectors = vocab_master.load()
-
-            # all = np.concatenate([questions, pos_paths, neg_paths.reshape((neg_paths.shape[0]*neg_paths.shape[1], neg_paths.shape[2]))], axis=0)
+        # Calculating dot score
+        score = torch.sum(ques_batch * pos_batch, -1)
+        # score = score.div(norm_ques_batch*norm_pos_batch).div_(2.0).add_(0.5)
+            # print("shape of score is,", score.shape)
+            # print("score is , ", score)
             #
-            # # ###################
-            # # Map to new ID space
-            # # ###################
             #
-            # uniques = np.unique(all)
-            # try:
-            #     vocab = pickle.load(open(os.path.join(COMMON_DATA_DIR, file + ".vocab.pickle")))
-            # except (IOError, EOFError) as e:
-            #     if DEBUG:
-            #         warnings.warn("Did not find the vocabulary.")
-            #     vocab = {}
-            #     # Create Vocabulary
-            #     for i in range(len(uniques)):
-            #         vocab[uniques[i]] = i
+            # print("shape of y label is ", y_label.shape)
+            # print("value of y label is ", y_label)
 
-            # vocab = {}
+        # raise ValueError
 
-            # Map everything
-            for i in range(len(questions)):
-                questions[i] = np.asarray([vocab[key] for key in questions[i]])
-                pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        optimizer.step()
 
-                for j in range(len(neg_paths[i])):
-                    neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
+        return loss
 
-            # Create slimmer, better, faster, vectors file.
-            # vectors = glove_embeddings[uniques]
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
 
-            with open(os.path.join(MODEL_SPECIFIC_DATA_DIR % {'dataset':DATASET, 'model':'core_chain_pointwise'}, file + ".mapped.npz"), "w+") as data:
-                np.savez(data, questions, pos_paths, neg_paths)
-                # pickle.dump(vocab,idx)
+            self.encoder.eval()
+            hidden = self.encoder.init_hidden(ques.shape[0], self.device)
 
-            return vectors, questions, pos_paths, neg_paths
+            _, question, _, _ = self.encoder(tu.trim(ques.long()), hidden)
+            _, paths, _, _ = self.encoder(tu.trim(paths.long()), hidden)
+
+            if self.pointwise:
+                # question = F.normalize(F.relu(question),p=1,dim=1)
+                # paths = F.normalize(F.relu(paths),p=1,dim=1)
+                # norm_ques_batch = torch.abs(torch.norm(question, dim=1, p=1))
+                # norm_pos_batch = torch.abs(torch.norm(paths, dim=1, p=1))
+                score = torch.sum(question * paths, -1)
+                # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
+            else:
+                score = torch.sum(question * paths, -1)
+
+            self.encoder.train()
+            return score
+
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder)]
+
+    def load_from(self, location):
+        # Pull the data from disk
+        if self.debug: print("loading Bilstmdot model from", location)
+        self.encoder.load_state_dict(torch.load(location)['encoder'])
+        if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
 
 
-if __name__ == "__main__":
-    warnings.warn("Code has been moved from this file to network_corechain. Please open that instead. Okay, auf weidersehen")
+class BiLstmDense(Model):
+    """
+        This model replaces the dot product of BiLstmDot with a two layered dense classifier.
+        Plus, we only use the last state of the encoder in doing so.
+        Like before, we have both pairwise and pointwise versions.
+    """
+
+    def __init__(self, _parameter_dict, _word_to_id,  _device, _pointwise=False, _debug=False):
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+        self.hiddendim = self.parameter_dict['hidden_size'] * (2 * int(self.parameter_dict['bidirectional']))
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder = com.NotSuchABetterEncoder(max_length=self.parameter_dict['max_length'],
+                                                 hidden_dim=self.parameter_dict['hidden_size'],
+                                                 number_of_layer=self.parameter_dict['number_of_layer'],
+                                                 embedding_dim=self.parameter_dict['embedding_dim'],
+                                                 vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
+                                                 dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
+                                                 vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
+
+        self.dense = com.DenseClf(inputdim=self.hiddendim*2,        # *2 because we have two things concatinated here
+                                  hiddendim=self.hiddendim/2,
+                                  outputdim=1).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data[
+            'y_label']
+
+        optimizer.zero_grad()
+        # Encoding all the data
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch_encoded, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch_encoded, _, _ = self.encoder(tu.trim(pos_batch), hidden)
+        _, neg_batch_encoded, _, _  = self.encoder(tu.trim(neg_batch), hidden)
+
+        # Calculating dot score
+        pos_scores = self.dense(torch.cat((ques_batch_encoded, pos_batch_encoded), dim=1))
+        neg_scores = self.dense(torch.cat((ques_batch_encoded, neg_batch_encoded), dim=1))
+
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters()+self.dense.parameters(), .5)
+        optimizer.step()
+
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch, _, _ = self.encoder(tu.trim(path_batch), hidden)
+
+        # Calculating dot score
+        score = self.dense(torch.cat((ques_batch, pos_batch), dim=1)).squeeze()
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+
+            self.encoder.eval()
+            hidden = self.encoder.init_hidden(ques.shape[0], self.device)
+
+            _, question, _, _ = self.encoder(tu.trim(ques.long()), hidden)
+            _, paths, _, _ = self.encoder(tu.trim(paths.long()), hidden)
+            score = self.dense(torch.cat((question, paths), dim=1)).squeeze()
+            self.encoder.train()
+
+            return score
+
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder), ('dense', self.dense)]
+
+
+class BiLstmDenseDot(Model):
+    """
+        This model uses the encoder, then condenses the vector into something of a smaller dimension.
+        Then uses a regular dot product to compute the final deal.
+        Plus, we only use the last state of the encoder in doing so.
+        Like before, we have both pairwise and pointwise versions.
+    """
+
+    def __init__(self, _parameter_dict, _word_to_id,  _device, _pointwise=False, _debug=False):
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.word_to_id = _word_to_id
+        self.pointwise = _pointwise
+
+        self.hiddendim = self.parameter_dict['hidden_size'] * (2 * int(self.parameter_dict['bidirectional']))
+
+        if self.debug:
+            print("Init Models")
+        self.encoder = com.NotSuchABetterEncoder(max_length=self.parameter_dict['max_length'],
+                                                 hidden_dim=self.parameter_dict['hidden_size'],
+                                                 number_of_layer=self.parameter_dict['number_of_layer'],
+                                                 embedding_dim=self.parameter_dict['embedding_dim'],
+                                                 vocab_size=self.parameter_dict['vocab_size'], bidirectional=True,
+                                                 dropout=self.parameter_dict['dropout'], mode='LSTM', enable_layer_norm=False,
+                                                 vectors=self.parameter_dict['vectors'], debug=self.debug).to(self.device)
+
+        self.dense = com.DenseClf(inputdim=self.hiddendim,
+                                  hiddendim=self.hiddendim/2,
+                                  outputdim=self.hiddendim/4).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data[
+            'y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch_encoded, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch_encoded, _, _ = self.encoder(tu.trim(pos_batch), hidden)
+        _, neg_batch_encoded, _, _ = self.encoder(tu.trim(neg_batch), hidden)
+
+
+        # Pass all encoded stuff through the dense too
+        ques_batch = self.dense(ques_batch_encoded)
+        pos_batch = self.dense(pos_batch_encoded)
+        neg_batch = self.dense(neg_batch_encoded)
+
+
+        # Calculating dot score
+        pos_scores = torch.sum(ques_batch * pos_batch, -1)
+        neg_scores = torch.sum(ques_batch * neg_batch, -1)
+
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch, _, _ = self.encoder(tu.trim(ques_batch), hidden)
+        _, pos_batch, _, _ = self.encoder(tu.trim(path_batch), hidden)
+
+        # Compress the last state
+        ques_batch = self.dense(ques_batch)
+        pos_batch = self.dense(pos_batch)
+
+        # Calculating dot score
+        score = torch.sum(ques_batch * pos_batch, -1)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+
+        with torch.no_grad():
+
+            self.encoder.eval()
+
+            hidden = self.encoder.init_hidden(ques.shape[0], self.device)
+
+            _, question, _, _ = self.encoder(tu.trim(ques.long()), hidden)
+            _, paths, _, _ = self.encoder(tu.trim(paths.long()), hidden)
+
+            # Dense
+            question = self.dense(question)
+            paths = self.dense(paths)
+
+            score = torch.sum(question * paths, -1)
+
+            self.encoder.train()
+
+            return score
+
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+https://arxiv.org/pdf/1606.01933.pdf
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder), ('dense', self.dense)]
+
+
+class CNNDot(Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder = com.CNN(_vectors=self.parameter_dict['vectors'], _vocab_size=self.parameter_dict['vocab_size'] ,
+                           _embedding_dim = self.parameter_dict['embedding_dim'] , _output_dim = self.parameter_dict['output_dim'],_debug=self.debug).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+    #
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
+
+        optimizer.zero_grad()
+        #Encoding all the data
+
+        ques_batch_encoded = self.encoder(ques_batch)
+        pos_batch_encoded = self.encoder(pos_batch)
+        neg_batch_encoded = self.encoder(neg_batch)
+
+
+
+        #Calculating dot score
+        pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
+        neg_scores = torch.sum(ques_batch_encoded * neg_batch_encoded, -1)
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        try:
+            loss = loss_fn(pos_scores, neg_scores, y_label)
+        except RuntimeError:
+            print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
+        loss.backward()
+        optimizer.step()
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        ques_batch = self.encoder(ques_batch)
+        pos_batch = self.encoder(path_batch)
+
+        # Calculating dot score
+        score = torch.sum(ques_batch * pos_batch, -1)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+
+            self.encoder.eval()
+
+            question = self.encoder(ques.long())
+            paths = self.encoder(paths.long())
+
+            if self.pointwise:
+                # question = F.normalize(F.relu(question),p=1,dim=1)
+                # paths = F.normalize(F.relu(paths),p=1,dim=1)
+                # norm_ques_batch = torch.abs(torch.norm(question, dim=1, p=1))
+                # norm_pos_batch = torch.abs(torch.norm(paths, dim=1, p=1))
+                score = torch.sum(question * paths, -1)
+                # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
+            else:
+                score = torch.sum(question * paths, -1)
+
+            self.encoder.train()
+            return score
+
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder)]
+
+    # def load_from(self, location):
+    #     # Pull the data from disk
+    #     if self.debug: print("loading Bilstmdot model from", location)
+    #     self.encoder.load_state_dict(torch.load(location)['encoder'])
+    #     if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
+
+
+class DecomposableAttention(Model):
+    """
+        Implementation of https://arxiv.org/pdf/1606.01933.pdf.
+        Uses an encoder and AttendCompareAggregate class in components
+    """
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+        self.hiddendim = self.parameter_dict['hidden_size'] * (1+ int(self.parameter_dict['bidirectional']))
+
+        if self.debug:
+            print("Init Models")
+
+        # self.encoder = FlatEncoder(embdim=self.parameter_dict['embedding_dim'],
+        #                            dims=[self.parameter_dict['hidden_size']],
+        #                            word_dic=self.word_to_id,
+        #                            bidir=True,dropout_rec=self.parameter_dict['dropout_rec'],
+        #                            dropout_in=self.parameter_dict['dropout_in']).to(self.device)
+
+        # self.encoder = com.Encoder(self.parameter_dict['max_length'], self.parameter_dict['hidden_size']
+        #                            , self.parameter_dict['number_of_layer'], self.parameter_dict['embedding_dim'],
+        #                            self.parameter_dict['vocab_size'],
+        #                            bidirectional=self.parameter_dict['bidirectional'],
+        #                            vectors=self.parameter_dict['vectors']).to(self.device)
+
+        self.encoder = com.NotSuchABetterEncoder(max_length = self.parameter_dict['max_length'],
+                                                 hidden_dim = self.parameter_dict['hidden_size'],
+                                                 number_of_layer = self.parameter_dict['number_of_layer'],
+                                                 embedding_dim = self.parameter_dict['embedding_dim'],
+                                                 vocab_size = self.parameter_dict['vocab_size'], bidirectional = True,
+                                                 dropout = self.parameter_dict['dropout'], mode = 'LSTM', enable_layer_norm = False,
+                                                 vectors = self.parameter_dict['vectors'], debug = self.debug).to(self.device)
+
+        self.scorer = com.BetterAttendCompareAggregate(inputdim=self.hiddendim, debug=self.debug).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data[
+            'y_label']
+
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], device)
+
+        optimizer.zero_grad()
+        # Encoding all the data
+        ques_batch_encoded, _, _, ques_mask = self.encoder(tu.trim(ques_batch),hidden)
+        pos_batch_encoded, _, _, pos_mask = self.encoder(tu.trim(pos_batch), hidden)
+        neg_batch_encoded, _, _, neg_mask = self.encoder(tu.trim(neg_batch), hidden)
+
+        # Now, we get a pos and a neg score.
+        pos_scores = self.scorer(ques_batch_encoded, pos_batch_encoded, ques_mask, pos_mask)
+        neg_scores = self.scorer(ques_batch_encoded, neg_batch_encoded, ques_mask, neg_mask)
+
+        '''
+                    If `y == 1` then it assumed the first input should be ranked higher
+                    (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        optimizer.step()
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        hidden = self.encoder.init_hidden(ques_batch.shape[0], device)
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        ques_batch, _, _, ques_mask = self.encoder(tu.trim(ques_batch), hidden)
+        path_batch, _, _, path_mask = self.encoder(tu.trim(path_batch), hidden)
+
+        # Calculating dot score
+        score = self.scorer(ques_batch, path_batch, ques_mask, path_mask).squeeze()
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+            self.encoder.eval()
+            hidden = self.encoder.init_hidden(ques.shape[0], device)
+
+            question, _, _, question_mask = self.encoder(tu.trim(ques.long()),hidden)
+            paths, _, _, paths_mask = self.encoder(tu.trim(paths.long()), hidden)
+            score = self.scorer(question, paths, question_mask, paths_mask)
+
+            self.encoder.train()
+            return score.squeeze()
+
+    def prepare_save(self):
+        return [('encoder', self.encoder), ('scorer', self.scorer)]
+
+
+class RelDetection(Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+        self.hiddendim = self.parameter_dict['hidden_size'] * (1+ int(self.parameter_dict['bidirectional']))
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder = com.HRBiLSTM(hidden_dim=_parameter_dict['hidden_size'],
+                                    embedding_dim=_parameter_dict['embedding_dim'],
+                                    dropout=_parameter_dict['dropout'],
+                                    vocab_size=_parameter_dict['vocab_size'],
+                                    vectors=_parameter_dict['vectors'],
+                                    debug=self.debug,
+                                    max_length=_parameter_dict['max_length']).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, pos_batch, pos_rel1_batch, pos_rel2_batch, neg_batch, neg_rel1_batch, neg_rel2_batch, y_label = \
+            data['ques_batch'], data['pos_batch'], data['pos_rel1_batch'], data['pos_rel2_batch'], \
+            data['neg_batch'], data['neg_rel1_batch'], data['neg_rel2_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Instantiate hidden states
+        _hp = self.encoder.init_hidden(ques_batch.shape[0], device=device)
+        _hn = self.encoder.init_hidden(ques_batch.shape[0], device=device)
+
+        # Encoding all the data
+        pos_scores = self.encoder(ques=ques_batch,
+                                  path_word=pos_batch,
+                                  path_rel_1=pos_rel1_batch,
+                                  path_rel_2=pos_rel2_batch,
+                                  _h=_hp)
+
+        neg_scores = self.encoder(ques=ques_batch,
+                                  path_word=neg_batch,
+                                  path_rel_1=neg_rel1_batch,
+                                  path_rel_2=neg_rel2_batch,
+                                  _h=_hn)
+
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        optimizer.step()
+
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, path_batch, path_rel1_batch, path_rel2_batch, y_label = \
+            data['ques_batch'], data['path_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Instantiate hidden states
+        _h = self.encoder.init_hidden(ques_batch.shape[0], device=device)
+
+        # Encoding all the data
+
+        score = self.encoder(ques=ques_batch,
+                             path_word=path_batch,
+                             path_rel_1=path_rel1_batch,
+                             path_rel_2=path_rel2_batch,
+                             _h=_h)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, paths_rel1,paths_rel2, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+            self.encoder.eval()
+            _h = self.encoder.init_hidden(ques.shape[0], device=device)
+            paths_rel1 = tu.no_one_left_behind(paths_rel1)
+            paths_rel2 = tu.no_one_left_behind(paths_rel2)
+            score = self.encoder(ques=ques,
+                                 path_word=paths,
+                                 path_rel_1=paths_rel1,
+                                 path_rel_2=paths_rel2,
+                                 _h=_h).squeeze()
+            self.encoder.train()
+            return score
+
+    def prepare_save(self):
+        return [('model',self.encoder)]
+
+
+class QelosSlotPointerModel(Model):
+
+    """
+        Eating Denis's shit
+    """
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder_q = com.QelosSlotPtrQuestionEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            device=_device,
+            residual=True,
+            mode = 'LSTM',
+            dropout_in=self.parameter_dict['dropout_in'],
+            dropout_rec=self.parameter_dict['dropout_rec'],
+            debug = self.debug).to(self.device)
+
+
+        self.encoder_p = com.QelosSlotPtrChainEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            device=_device,
+            residual=False,
+            mode = 'LSTM',
+            dropout_in=self.parameter_dict['dropout_in'],
+            dropout_rec=self.parameter_dict['dropout_rec'],
+            debug = self.debug).to(self.device)
+
+
+    def train(self, data, optimizer, loss_fn, device):
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, pos_1_batch, pos_2_batch, neg_1_batch, neg_2_batch, y_label = \
+            data['ques_batch'], data['pos_rel1_batch'], data['pos_rel2_batch'], \
+            data['neg_rel1_batch'], data['neg_rel2_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Have to manually check if the 2nd paths holds anything in this batch.
+        # If not, we have to pad everything up with zeros, or even call a limited part of the comparison module.
+        pos_2_batch = tu.no_one_left_behind(pos_2_batch)
+        neg_2_batch = tu.no_one_left_behind(neg_2_batch)
+
+
+        # assert torch.mean((torch.sum(pos_2_batch, dim=-1) != 0).float()) == 1
+        # assert torch.mean((torch.sum(pos_1_batch, dim=-1) != 0).float()) == 1
+
+        # Encoding all the data
+        ques_encoded,_ = self.encoder_q(tu.trim(ques_batch))
+        pos_encoded = self.encoder_p(tu.trim(pos_1_batch), tu.trim(pos_2_batch))
+        neg_encoded = self.encoder_p(tu.trim(neg_1_batch), tu.trim(neg_2_batch))
+
+        # Pass them to the comparison module
+        pos_scores = torch.sum(ques_encoded * pos_encoded, dim=-1)
+        neg_scores = torch.sum(ques_encoded * neg_encoded, dim=-1)
+
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, path_1_batch, path_2_batch, y_label = \
+            data['ques_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
+
+        path_2_batch = tu.no_one_left_behind(path_2_batch)
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        ques_encoded,_ = self.encoder_q(tu.trim(ques_batch))
+        pos_encoded = self.encoder_p(tu.trim(path_1_batch), tu.trim(path_2_batch))
+
+        score = torch.sum(ques_encoded * pos_encoded, dim=-1)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, paths_rel1,paths_rel2, device,attention_value=False):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+            self.encoder_q.eval()
+            self.encoder_p.eval()
+
+            # Have to manually check if the 2nd paths holds anything in this batch.
+            # If not, we have to pad everything up with zeros, or even call a limited part of the comparison module.
+            paths_rel2 = tu.no_one_left_behind(paths_rel2)
+
+            # Encoding all the data
+            ques_encoded,attention_score = self.encoder_q(tu.trim(ques))
+            path_encoded = self.encoder_p(tu.trim(paths_rel1), tu.trim(paths_rel2))
+
+            # Pass them to the comparison module
+            score = torch.sum(ques_encoded * path_encoded, dim=-1)
+
+            self.encoder_q.train()
+            self.encoder_p.train()
+            if attention_value:
+                return score,attention_score
+            else:
+                return score
+
+    def prepare_save(self):
+        return [('encoder_q', self.encoder_q), ('encoder_p', self.encoder_p)]
+
+
+class SlotPointerModel(Model):
+
+    """
+        EAT MY SAHIT DENIS
+    """
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder_q = com.NotSuchABetterEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            hidden_dim=self.parameter_dict['embedding_dim']/2,
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            residual=True,
+            mode = 'LSTM',
+            debug = self.debug).to(self.device)
+
+        self.encoder_p = com.NotSuchABetterEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            hidden_dim=self.parameter_dict['embedding_dim']/2,
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            residual=True,
+            mode = 'LSTM',
+            debug = self.debug).to(self.device)
+
+        self.comparer = com.SlotPointer(
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            max_len_ques=self.parameter_dict['max_length'],
+            hidden_dim=self.parameter_dict['embedding_dim']/2,
+            max_len_path=self.parameter_dict['relsp_pad'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            debug=self.debug).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        ques_batch, pos_1_batch, pos_2_batch, neg_1_batch, neg_2_batch, y_label = \
+            data['ques_batch'], data['pos_rel1_batch'], data['pos_rel2_batch'], \
+            data['neg_rel1_batch'], data['neg_rel2_batch'], data['y_label']
+
+        hidden = self.encoder_q.init_hidden(ques_batch.shape[0], device)
+
+        optimizer.zero_grad()
+
+        # Have to manually check if the 2nd paths holds anything in this batch.
+        # If not, we have to pad everything up with zeros, or even call a limited part of the comparison module.
+        pos_2_batch = tu.no_one_left_behind(pos_2_batch)
+        neg_2_batch = tu.no_one_left_behind(neg_2_batch)
+
+        # Encoding all the data
+        ques_batch_encoded, _, _, ques_mask, ques_batch_embedded, _ = self.encoder_q(tu.trim(ques_batch),hidden)
+        _, pos_1_encoded, _, pos_1_mask, pos_1_embedded, _ = self.encoder_p(pos_1_batch, hidden)
+        _, pos_2_encoded, _, pos_2_mask , pos_2_embedded, _ = self.encoder_p(pos_2_batch, hidden)
+        _, neg_1_encoded, _, neg_1_mask , neg_1_embedded, _ = self.encoder_p(neg_1_batch, hidden)
+        _, neg_2_encoded, _, neg_2_mask , neg_2_embedded, _ = self.encoder_p(neg_2_batch, hidden)
+
+        # Pass them to the comparison module
+        pos_scores = self.comparer(ques_enc=ques_batch_encoded,
+                                   ques_emb=ques_batch_embedded,
+                                   ques_mask=ques_mask,
+                                   path_1_enc=pos_1_encoded,
+                                   path_1_emb=pos_1_embedded,
+                                   path_1_mask = pos_1_mask,
+                                   path_2_enc=pos_2_encoded,
+                                   path_2_emb=pos_2_embedded,
+                                   path_2_mask = pos_2_mask)
+
+        # Pass them to the comparison module
+        neg_scores = self.comparer(ques_enc=ques_batch_encoded,
+                                   ques_emb=ques_batch_embedded,
+                                   ques_mask=ques_mask,
+                                   path_1_enc=neg_1_encoded,
+                                   path_1_emb=neg_1_embedded,
+                                   path_1_mask = neg_1_mask,
+                                   path_2_enc=neg_2_encoded,
+                                   path_2_emb=neg_2_embedded,
+                                   path_2_mask = neg_2_mask)
+
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def _train_pointwise(self, data, optimizer, loss_fn, device):
+        ques_batch, path_1_batch, path_2_batch, y_label = \
+            data['ques_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
+
+        path_2_batch = tu.no_one_left_behind(path_2_batch)
+
+        hidden = self.encoder_q.init_hidden(ques_batch.shape[0], device)
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        ques_batch_encoded, _, _, ques_mask, ques_batch_embedded, _ = self.encoder_q(tu.trim(ques_batch), hidden)
+        _, pos_1_encoded, _, _, _, pos_1_embedded = self.encoder_p(path_1_batch, hidden)
+        _, pos_2_encoded, _, _, _, pos_2_embedded = self.encoder_p(path_2_batch, hidden)
+
+        score = self.comparer(ques_enc=ques_batch_encoded,
+                                   ques_emb=ques_batch_embedded,
+                                   ques_mask=ques_mask,
+                                   path_1_enc=pos_1_encoded,
+                                   path_1_emb=pos_1_embedded,
+                                   path_2_enc=pos_2_encoded,
+                                   path_2_emb=pos_2_embedded)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, paths_rel1,paths_rel2, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+            self.encoder_q.eval()
+            self.encoder_p.eval()
+            self.comparer.eval()
+            hidden = self.encoder_q.init_hidden(ques.shape[0], device=device)
+
+            paths_rel2 = tu.no_one_left_behind(paths_rel2)
+
+            # Encoding all the data
+            ques_batch_encoded, _, _, ques_mask, ques_batch_embedded, _ = self.encoder_q(tu.trim(ques), hidden)
+            _, pos_1_encoded, _, pos_1_mask,  pos_1_embedded, _ = self.encoder_p(paths_rel1, hidden)
+            _, pos_2_encoded, _, pos_2_mask,  pos_2_embedded, _ = self.encoder_p(paths_rel2, hidden)
+
+            score = self.comparer(ques_enc=ques_batch_encoded,
+                                  ques_emb=ques_batch_embedded,
+                                  ques_mask=ques_mask,
+                                  path_1_enc=pos_1_encoded,
+                                  path_1_emb=pos_1_embedded,
+                                  path_1_mask=pos_1_mask,
+                                  path_2_enc=pos_2_encoded,
+                                  path_2_emb=pos_2_embedded,
+                                  path_2_mask=pos_2_mask).squeeze()
+
+            self.encoder_q.train()
+            self.encoder_p.train()
+            self.comparer.train()
+            return score
+
+    def prepare_save(self):
+        return [('model', self.encoder_q)]
+
+
+class BiLstmDot_skip(Model):
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+
+
+        self.encoder = com.QelosFlatEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            max_length = self.parameter_dict['max_length'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            mode = 'LSTM',
+            debug = self.debug,
+            device = self.device,
+            residual=True).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+    #
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
+
+        optimizer.zero_grad()
+        #Encoding all the data
+
+        ques_batch_encoded = self.encoder(tu.trim(ques_batch))
+        pos_batch_encoded = self.encoder(tu.trim(pos_batch))
+        neg_batch_encoded = self.encoder(tu.trim(neg_batch))
+
+
+
+        #Calculating dot score
+        pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
+        neg_scores = torch.sum(ques_batch_encoded * neg_batch_encoded, -1)
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        try:
+            loss = loss_fn(pos_scores, neg_scores, y_label)
+        except RuntimeError:
+            print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
+        loss.backward()
+        optimizer.step()
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        ques_batch = self.encoder(tu.trim(ques_batch))
+        pos_batch = self.encoder(tu.trim(path_batch))
+
+        # Calculating dot score
+        score = torch.sum(ques_batch * pos_batch, -1)
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+
+            self.encoder.eval()
+
+            question = self.encoder(tu.trim(ques.long()))
+            paths = self.encoder(tu.trim(paths.long()))
+
+            if self.pointwise:
+                # question = F.normalize(F.relu(question),p=1,dim=1)
+                # paths = F.normalize(F.relu(paths),p=1,dim=1)
+                # norm_ques_batch = torch.abs(torch.norm(question, dim=1, p=1))
+                # norm_pos_batch = torch.abs(torch.norm(paths, dim=1, p=1))
+                score = torch.sum(question * paths, -1)
+                # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
+            else:
+                score = torch.sum(question * paths, -1)
+
+            self.encoder.train()
+            return score
+
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder)]
+
+    def load_from(self, location):
+        # Pull the data from disk
+        if self.debug: print("loading Bilstmdot model from", location)
+        self.encoder.load_state_dict(torch.load(location)['encoder'])
+        if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
+
+
+class BiLstmDot_multiencoder(Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+
+
+        self.encoder_q = com.NotSuchABetterEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            max_length = self.parameter_dict['max_length'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            mode = 'LSTM',
+            residual=False,
+            debug = self.debug).to(self.device)
+
+        self.encoder_p = com.NotSuchABetterEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            max_length=self.parameter_dict['max_length'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            mode='LSTM',
+            residual=False,
+            debug=self.debug).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+    #
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
+
+        optimizer.zero_grad()
+        #Encoding all the data
+
+        hidden = self.encoder_q.init_hidden(ques_batch.shape[0],self.device)
+        _, ques_batch_encoded, _, _ = self.encoder_q(tu.trim(ques_batch), hidden)
+        _, pos_batch_encoded, _, _ = self.encoder_p(tu.trim(pos_batch), hidden)
+        _, neg_batch_encoded, _, _  = self.encoder_p(tu.trim(neg_batch), hidden)
+
+
+
+        #Calculating dot score
+        pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
+        neg_scores = torch.sum(ques_batch_encoded * neg_batch_encoded, -1)
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        try:
+            loss = loss_fn(pos_scores, neg_scores, y_label)
+        except RuntimeError:
+            print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(list(self.encoder_q.parameters()) + list(self.encoder_p.parameters()), .5)
+        optimizer.step()
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        hidden = self.encoder_q.init_hidden(ques_batch.shape[0], self.device)
+        _, ques_batch, _, _ = self.encoder_q(tu.trim(ques_batch), hidden)
+        _, pos_batch, _, _ = self.encoder_p(tu.trim(path_batch), hidden)
+
+        #
+        # norm_ques_batch = torch.abs(torch.norm(ques_batch,dim=1,p=1))
+        # norm_pos_batch = torch.abs(torch.norm(pos_batch,dim=1,p=1))
+
+        # ques_batch = F.normalize(F.relu(ques_batch),p=1,dim=1)
+        # pos_batch = F.normalize(F.relu(pos_batch),p=1,dim=1)
+        # ques_batch =(F.normalize(ques_batch,p=1,dim=1)/2) + .5
+        # pos_batch =(F.normalize(pos_batch,p=1,dim=1)/2) + .5
+
+
+
+
+        # Calculating dot score
+        score = torch.sum(ques_batch * pos_batch, -1)
+        # score = score.div(norm_ques_batch*norm_pos_batch).div_(2.0).add_(0.5)
+            # print("shape of score is,", score.shape)
+            # print("score is , ", score)
+            #
+            #
+            # print("shape of y label is ", y_label.shape)
+            # print("value of y label is ", y_label)
+
+        # raise ValueError
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(list(self.encoder_q.parameters()) + list(self.encoder_p.parameters()), .5)
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+
+            self.encoder_q.eval()
+            self.encoder_p.eval()
+            hidden = self.encoder_q.init_hidden(ques.shape[0], self.device)
+
+            _, question, _, _ = self.encoder_q(tu.trim(ques.long()), hidden)
+            _, paths, _, _ = self.encoder_p(tu.trim(paths.long()), hidden)
+
+            if self.pointwise:
+                # question = F.normalize(F.relu(question),p=1,dim=1)
+                # paths = F.normalize(F.relu(paths),p=1,dim=1)
+                # norm_ques_batch = torch.abs(torch.norm(question, dim=1, p=1))
+                # norm_pos_batch = torch.abs(torch.norm(paths, dim=1, p=1))
+                score = torch.sum(question * paths, -1)
+                # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
+            else:
+                score = torch.sum(question * paths, -1)
+
+            self.encoder_q.train()
+            self.encoder_p.train()
+            return score
+
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder_q', self.encoder_q),('encoder_p', self.encoder_p)]
+
+    def load_from(self, location):
+        # Pull the data from disk
+        if self.debug: print("loading Bilstmdot model from", location)
+        self.encoder.load_state_dict(torch.load(location)['encoder'])
+        if self.debug: print("model loaded with weights ,", self.get_parameter_sum())
+
+
+class QelosSlotPointerModel_common_encoder(QelosSlotPointerModel):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        self.encoder_q = com.QelosSlotPtrQuestionEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            device=_device,
+            residual=True,
+            mode='LSTM',
+            dropout_in=self.parameter_dict['dropout_in'],
+            dropout_rec=self.parameter_dict['dropout_rec'],
+            debug=self.debug).to(self.device)
+
+        enc = self.encoder_q.return_encoder()
+
+        self.encoder_p = com.QelosSlotPtrChainEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=self.parameter_dict['dropout'],
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            device=_device,
+            residual=True,
+            mode='LSTM',
+            dropout_in=self.parameter_dict['dropout_in'],
+            dropout_rec=self.parameter_dict['dropout_rec'],
+            debug=self.debug,
+            encoder=enc).to(self.device)
+
+
+
+class BiLstmDot_ulmfit(Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        # Load the pre-trained model
+        pretrained_weights = torch.load('./ulmfit/wt103/fwd_wt103_enc.h5', map_location= lambda storage, loc: storage)
+        new_vectors = self.parameter_dict['vectors']
+        pretrained_weights['encoder.weight'] = T(new_vectors)
+        pretrained_weights['encoder_with_dropout.embed.weight'] = T(np.copy(new_vectors))
+
+        self.encoder = fastai.lm_rnn.RNN_Encoder(ntoken=new_vectors.shape[0], emb_sz=400, n_hid=1150, n_layers=3, pad_token=0).to(self.device)
+        self.encoder.load_state_dict(pretrained_weights)
+        # self.encoder = com.NotSuchABetterEncoder(
+        #     number_of_layer=self.parameter_dict['number_of_layer'],
+        #     bidirectional=self.parameter_dict['bidirectional'],
+        #     embedding_dim=self.parameter_dict['embedding_dim'],
+        #     max_length = self.parameter_dict['max_length'],
+        #     hidden_dim=self.parameter_dict['hidden_size'],
+        #     vocab_size=self.parameter_dict['vocab_size'],
+        #     dropout=self.parameter_dict['dropout'],
+        #     vectors=self.parameter_dict['vectors'],
+        #     enable_layer_norm=False,
+        #     mode = 'LSTM',
+        #     debug = self.debug).to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+    #
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
+
+        optimizer.zero_grad()
+        #Encoding all the data
+
+        op_q = self.encoder(tu.trim(ques_batch))
+        op_p = self.encoder(tu.trim(pos_batch))
+        op_n = self.encoder(tu.trim(neg_batch))
+
+        ques_batch_encoded = op_q[1][0][:,-1]
+        pos_batch_encoded = op_p[1][0][:,-1]
+        neg_batch_encoded = op_n[1][0][:,-1]
+
+        #Calculating dot score
+        pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
+        neg_scores = torch.sum(ques_batch_encoded * neg_batch_encoded, -1)
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        try:
+            loss = loss_fn(pos_scores, neg_scores, y_label)
+        except RuntimeError:
+            print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        optimizer.step()
+        return loss
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, paths and y labels}
+            :params models list of [models]
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+            returrns loss
+        '''
+        # Unpacking the data and model from args
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        optimizer.zero_grad()
+
+        # Encoding all the data
+        op_q = self.encoder(tu.trim(ques_batch))
+        op_p = self.encoder(tu.trim(path_batch))
+
+        ques_batch = op_q[1][0][:,-1]
+        pos_batch = op_p[1][0][:,-1]
+
+        # Calculating dot score
+        score = torch.sum(ques_batch * pos_batch, -1)
+        # score = score.div(norm_ques_batch*norm_pos_batch).div_(2.0).add_(0.5)
+            # print("shape of score is,", score.shape)
+            # print("score is , ", score)
+            #
+            #
+            # print("shape of y label is ", y_label.shape)
+            # print("value of y label is ", y_label)
+
+        # raise ValueError
+
+        '''
+            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+        '''
+        loss = loss_fn(score, y_label)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        optimizer.step()
+
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+
+            self.encoder.eval()
+            # Encoding all the data
+            op_q = self.encoder(tu.trim(ques))
+            op_p = self.encoder(tu.trim(paths))
+
+            question = op_q[0][0][:,-1]
+            paths = op_p[0][0][:,-1]
+
+            if self.pointwise:
+                # question = F.normalize(F.relu(question),p=1,dim=1)
+                # paths = F.normalize(F.relu(paths),p=1,dim=1)
+                # norm_ques_batch = torch.abs(torch.norm(question, dim=1, p=1))
+                # norm_pos_batch = torch.abs(torch.norm(paths, dim=1, p=1))
+                score = torch.sum(question * paths, -1)
+                # score = score.div(norm_ques_batch * norm_pos_batch).div_(2.0).add_(0.5)
+            else:
+                score = torch.sum(question * paths, -1)
+
+            self.encoder.train()
+            return score
+
+    def prepare_save(self):
+        """
+
+            This function is called when someone wants to save the underlying models.
+            Returns a tuple of key:model pairs which is to be interpreted within save model.
+
+        :return: [(key, model)]
+        """
+        return [('encoder', self.encoder)]
+
+    def load_from(self, location):
+        # Pull the data from disk
+        if self.debug: print("loading Bilstmdot model from", location)
+        self.encoder.load_state_dict(torch.load(location)['encoder'])
+        if self.debug: print("model loaded with weights ,", self.get_parameter_sum())

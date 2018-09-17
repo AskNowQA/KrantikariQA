@@ -12,12 +12,19 @@ import pickle
 
 def merge_multiple_forms():
 	try:
-		labels = pickle.load(open('resources/labels.pickle','r'))
+
+		labels = pickle.load(open('../resources/labels.pickle','r'))
 	except:
-		f = open('resources/labels.pickle','w+')
+		try:
+			f = open('../resources/labels.pickle','w+')
+		except IOError:
+			f = open('resources/labels.pickle','w+')
 		labels = {}
 
-	forms = pickle.load(open('resources/relations_multiple_forms.pickle'))
+	try:
+		forms = pickle.load(open('../resources/relations_multiple_forms.pickle'))
+	except IOError:
+		forms = pickle.load(open('resources/relations_multiple_forms.pickle'))
 
 	for key in forms.keys():
 		try:
@@ -29,5 +36,5 @@ def merge_multiple_forms():
 			labels[u'http://dbpedia.org/ontology/'+key] = list(set(labels[u'http://dbpedia.org/ontology/'+key]+forms[key]))
 		except KeyError:
 			labels[u'http://dbpedia.org/ontology/'+key] = forms[key]
-	print "here"
-	pickle.dump(labels,f)
+
+	pickle.dump(labels,open('../resources/labels.pickle','w+'))

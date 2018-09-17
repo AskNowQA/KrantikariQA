@@ -1,66 +1,86 @@
-from __future__ import absolute_import
-import os
-import pickle
-import sys
-import json
-import warnings
-import numpy as np
-import keras.backend.tensorflow_backend as K
-from keras import optimizers
-from keras.layers import Input, Dense
-from keras.layers import Embedding
-from keras.layers import Bidirectional, LSTM
-from keras.models import Model
 
-import network as n
-from utils import embeddings_interface
-from utils import natural_language_utilities as nlutils
+# Imports
+from __future__ import print_function
+
+# In-repo files
 from utils import prepare_vocab_continous as vocab_master
+from utils import tensor_utils as tu
+from utils import embeddings_interface as ei
+import data_loader as dl
+import components as com
+import auxiliary as aux
+import network as net
 
-# Todos
-# @TODO: The model doesn't take the embedding vectors as input.
-# @TODO: Maybe put in negative sampling
+# Torch files
+import torch
+import torch.nn as nn
+from torch import optim
+from torch.utils.data import  DataLoader
 
-# Setting a seed to clamp the stochastic nature of the code
+# Other libs
+# from qelos_core.scripts.lcquad.corerank import FlatEncoder
+
+import os
+import sys
+import time
+import json
+import numpy as np
+# import matplotlib.pyplot as plt
+if sys.version_info[0] == 3: import configparser as ConfigParser
+else: import ConfigParser
+# import pylab
+
+device = torch.device("cuda")
 np.random.seed(42)
+torch.manual_seed(42)
 
-# Some Macros
-DEBUG = True
-MAX_SEQ_LENGTH = 25
+# Important Macros
 
-# DATASET = 'lcquad'
-# FILENAME = 'qald_id_big_data.json' if DATASET is 'qald' else 'id_big_data.json'
-# RAW_DATASET_LOC = os.path.join(n.COMMON_DATA_DIR, 'id_big_data.json')
-# DATA_DIR = './data/models/intent/lcquad/' if LCQUAD else './data/models/intent/qald/'
+# Reading and setting up config parser
+config = ConfigParser.ConfigParser()
+config.readfp(open('configs/intent.cfg'))
 
-# Model Macros
-EPOCHS = 300
-BATCH_SIZE = 300 # Around 11 splits for full training dataset
-LEARNING_RATE = 0.001
-NEGATIVE_SAMPLES = 200
-LOSS = 'categorical_crossentropy'
-EMBEDDING_DIM = 300
-OPTIMIZER = optimizers.Adam(LEARNING_RATE)
+# Setting up device,model name and loss types.
+training_model = 'bilstm_dense'
+_dataset = 'lcquad'
+pointwise = False
 
-# Global variables
-vocab = None
+#Loading relations file.
+COMMON_DATA_DIR = 'data/data/common'
+_dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
+_word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
-"""
-    Training data is going to be
-        X: a list of ID
-        Y: count/list/ask
+# Fixing parameters
 
-    Get X:
-        - parse Iid-big-data file to get the question
-        - get the final continous vocab dict to convert IDs
-    Get Y:
-        - parse their sparql to compute Y labels
-"""
+parameter_dict = {}
+parameter_dict['max_length'] =  int(config.get(training_model,'max_length'))
+parameter_dict['hidden_size'] = int(config.get(training_model,'hidden_size'))
+parameter_dict['number_of_layer'] = int(config.get(training_model,'number_of_layer'))
+parameter_dict['embedding_dim'] = int(config.get(training_model,'embedding_dim'))
+parameter_dict['vocab_size'] = int(config.get(training_model,'vocab_size'))
+parameter_dict['batch_size'] = int(config.get(training_model,'batch_size'))
+parameter_dict['bidirectional'] = bool(config.get(training_model,'bidirectional'))
+parameter_dict['_neg_paths_per_epoch_train'] = int(config.get(training_model,'_neg_paths_per_epoch_train'))
+parameter_dict['_neg_paths_per_epoch_validation'] = int(config.get(training_model,'_neg_paths_per_epoch_validation'))
+parameter_dict['total_negative_samples'] = int(config.get(training_model,'total_negative_samples'))
+parameter_dict['epochs'] = int(config.get(training_model,'epochs'))
+parameter_dict['dropout'] = float(config.get(training_model,'dropout'))
 
+_dataset_specific_data_dir,\
+    _model_specific_data_dir,\
+    _file,\
+    _max_sequence_length,\
+    _neg_paths_per_epoch_train,\
+    _neg_paths_per_epoch_validation,\
+    _training_split,\
+    _validation_split,\
+    _index = aux.data_loading_parameters(_dataset,parameter_dict)
 
-# Better warning formatting. Ignore.
-def better_warning(message, category, filename, lineno, file=None, line=None):
-    return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
+parameter_dict['index'] = _index
+parameter_dict['training_split'] = _training_split
+parameter_dict['validation_split'] = _validation_split
+parameter_dict['dataset'] = _dataset
+
 
 
 def get_x(_datum):
@@ -85,194 +105,298 @@ def get_y(_datum):
     return np.asarray([0, 0, 1])
 
 
-def create_dataset():
+
+def convert_to_continous_ids(X, vocab):
     """
-        Open file
-        Call getX, getY on every datapoint
-
-    :return: two lists of dataset (train+test)
+        Maps the IDs in X to their values in vocab.
+        The vectors and vocab are expected to come via vocab_master file
     """
-
-    if DATASET == 'lcquad':
-        dataset = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME)))
-        index = None
-    else:
-        dataset_train = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME[0])))
-        dataset_test = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset': DATASET}, FILENAME[1])))
-
-        index = len(dataset_train) - 1
-        dataset = dataset_train + dataset_test
-
-    X = np.zeros((len(dataset), n.MAX_SEQ_LENGTH), dtype=np.int64)
-    Y = np.zeros((len(dataset), 3), dtype=np.int64)
-
-    for i in range(len(dataset)):
-        data = dataset[i]
-
-        # Call fns to parse it
-        x, y = get_x(data), get_y(data)
-
-        # Append ze data into their lists
-        X[i, :min(x.shape[0], n.MAX_SEQ_LENGTH)] = x[:min(x.shape[0], n.MAX_SEQ_LENGTH)]
-        Y[i] = y
-
-    # Convert to new (continous IDs)
-    vectors, X, Y = convert_new_ids(X, Y)
-
-    # Shuffle
-    s = np.arange(X.shape[0])
-    np.random.shuffle(s)
-    X = X[s]
-    Y = Y[s]
-
-    # Split
-    if DATASET == 'lcquad':
-        train_X, test_X = X[:int(X.shape[0]*0.8)], X[int(X.shape[0]*0.8):]
-        train_Y, test_Y = Y[:int(Y.shape[0]*0.8)], Y[int(Y.shape[0]*0.8):]
-    else:
-        train_X, test_X = X[:index], X[index:]
-        train_Y, test_Y = Y[:index], Y[index:]
-
-    # # Save
-    # np.save(open(os.path.join(MODEL_DIR, 'trainX.npy'), 'w+'), train_X)
-    # np.save(open(os.path.join(MODEL_DIR, 'trainY.npy'), 'w+'), train_Y)
-    # np.save(open(os.path.join(MODEL_DIR, 'testX.npy'), 'w+'), test_X)
-    # np.save(open(os.path.join(MODEL_DIR, 'testY.npy'), 'w+'), test_Y)
-
-    return vectors, train_X, test_X, train_Y, test_Y
-
-
-def convert_new_ids(X, Y):
-    """
-        If not vocabulary, pull from disk, and add stuff to it.
-    :param X: numpy mat n, 25
-    :param Y: numpy mat n, 3
-    :return: reduced embedding mat, X (converted), Y
-    """
-    global vocab, vectors
-
-    # Collect the embedding matrix.
-    # glove_embeddings = get_glove_embeddings()
-
-    # See if we've already loaded the new vocab.
-    if not vocab or not vectors:
-        # try:
-        #     vocab = pickle.load(open('resources_v8/id_big_data.json.vocab.pickle'))
-        # except (IOError, EOFError) as e:
-        #     if DEBUG:
-        #         warnings.warn("Did not find the vocabulary.")
-        #     vocab = {}
-        vocab, vectors = vocab_master.load()
-
-    # Map X
     for i in range(X.shape[0]):
         for j in range(X.shape[1]):
             X[i][j] = vocab[X[i][j]]
 
-    # Return stuff
-    return vectors, X, Y
+    return X
 
+
+def preprocess_data(dataset, vocab, parameter_dict):
+    """
+        Process the raw data to make X, Y
+        Convert them to the new (continous) ID space
+        Pad BUT DO NOT SHUFFLE!
+
+        Challenge: how do we keep this synced with released splits?
+    """
+
+    X = np.zeros((len(dataset), parameter_dict['max_length']), dtype=np.int64)
+    Y = np.zeros((len(dataset), 3), dtype=np.int64)
+
+    for i in range(len(dataset)):
+        datum = dataset[i]
+
+        # Call fns to parse it
+        x, y = get_x(datum), get_y(datum)
+
+        # Append ze data into their lists
+        X[i, :min(x.shape[0], parameter_dict['max_length'])] = x[:min(x.shape[0], parameter_dict['max_length'])]
+        Y[i] = y
+
+    # Convert them to new IDs
+    X = convert_to_continous_ids(X, vocab)
+
+    # Split
+    if parameter_dict['index'] == None:
+        # We don't have a specific index, so we split based on split points.
+
+        train_X = X[:int(X.shape[0] * parameter_dict['training_split'])]
+        train_Y = Y[:int(Y.shape[0] * parameter_dict['training_split'])]
+
+        valid_X = X[int(X.shape[0] * parameter_dict['training_split']): int(
+            X.shape[0] * parameter_dict['validation_split'])]
+        valid_Y = Y[int(Y.shape[0] * parameter_dict['training_split']): int(
+            Y.shape[0] * parameter_dict['validation_split'])]
+
+        test_X = X[int(X.shape[0] * parameter_dict['validation_split']):]
+        test_Y = Y[int(Y.shape[0] * parameter_dict['validation_split']):]
+
+        return {'train_X': train_X, 'train_Y': train_Y,
+                'valid_X': valid_X, 'valid_Y': valid_Y,
+                'test_X': test_X, 'test_Y': test_Y}
+
+    else:
+
+        # We have an index to split with. We first get the test split out by index,
+        # and then we split the rest based on training_split
+
+        #         test_X = X[int(X.shape[0]*parameter_dict['index']): ]
+        #         test_Y = Y[int(Y.shape[0]*parameter_dict['index']): ]
+
+        #         rest_X = X[ :int(X.shape[0]*parameter_dict['index'])]
+        #         rest_Y = Y[ :int(Y.shape[0]*parameter_dict['index']): ]
+
+        train_X = X[:parameter_dict['index']]
+        train_Y = Y[:parameter_dict['index']]
+
+        valid_X = X[parameter_dict['index']:]
+        valid_Y = Y[parameter_dict['index']:]
+
+        return {'train_X': train_X, 'train_Y': train_Y,
+                'valid_X': valid_X, 'valid_Y': valid_Y,
+                'test_X': None, 'test_Y': None}
+
+
+class IntentClassifier(net.Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+        self.parameter_dict['hidden_size'] = 150
+        self.hiddendim = self.parameter_dict['hidden_size'] * (2 * int(self.parameter_dict['bidirectional']))
+
+        if self.debug:
+            print("Init Models")
+
+
+        self.encoder = com.QelosFlatEncoder(
+            number_of_layer=self.parameter_dict['number_of_layer'],
+            embedding_dim=self.parameter_dict['embedding_dim'],
+            bidirectional=self.parameter_dict['bidirectional'],
+            hidden_dim=self.parameter_dict['hidden_size'],
+            vocab_size=self.parameter_dict['vocab_size'],
+            max_length=self.parameter_dict['max_length'],
+            dropout=0.3,
+            vectors=self.parameter_dict['vectors'],
+            enable_layer_norm=False,
+            residual=False,
+            mode = 'LSTM',
+            debug = self.debug,
+            device = self.device).to(self.device)
+
+        self.dense = com.DenseClf(inputdim=self.hiddendim,  # *2 because we have two things concatinated here
+                                  hiddendim=self.hiddendim / 2,
+                                  outputdim=3).to(self.device)
+
+    def train_batch(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+        optimizer.zero_grad()
+
+        # Unpacking the data and model from args
+        ques_batch, y_label = data['ques_batch'], data['y_label']
+
+        ques_batch = torch.tensor(ques_batch, dtype=torch.long, device=device)
+        y_label = torch.tensor(y_label, dtype=torch.float, device=device)
+
+        # Encoding all the data
+        ques_batch = self.encoder(tu.trim(ques_batch))
+
+        # Calculating dot score
+        out = self.dense(ques_batch)
+
+        '''
+            If `y == 1` then it assumed the first input should be ranked higher
+            (have a larger value) than the second input, and vice-versa for `y == -1`
+        '''
+        loss = loss_fn(out, y_label)
+        loss.backward()
+        optimizer.step()
+
+        return out, loss
+
+    def predict(self, data, device):
+        with torch.no_grad():
+            self.encoder.eval()
+            self.dense.eval()
+            ques_batch = data['ques_batch']
+
+            ques_batch = torch.tensor(ques_batch, dtype=torch.long, device=device)
+
+            # Encoding all the data
+            ques_batch = self.encoder(tu.trim(ques_batch))
+
+            # Calculating dot score
+            out = self.dense(ques_batch)
+
+            self.encoder.train()
+            self.dense.train()
+
+            return out
+
+    def eval(self, y_true, y_pred):
+        return np.mean(np.argmax(y_true, axis=1) == np.argmax(y_pred.detach().cpu().numpy(), axis=1))
+
+    def prepare_save(self):
+        return [('encoder', self.encoder), ('dense', self.dense)]
+
+
+def training_loop(classifier, optimizer, loss_fn, dataset, parameter_dict, device):
+    training_acc = []
+    valid_acc = []
+    training_loss = []
+    best_valid_acc = 0.0
+    loc = aux.save_location('intent', 'bilstm_dense', 'lcquad')
+
+    for epoch in range(parameter_dict['epochs']):
+
+        epoch_time = time.time()
+
+        epoch_loss = []
+        epoch_train_acc = []
+
+        for b in range(int(dataset['len'] / int(parameter_dict['batch_size']))):
+            batch_time = time.time()
+
+            # Sample new data
+            data = {}
+            index = np.random.randint(0, dataset['len'], parameter_dict['batch_size'])
+
+            data['ques_batch'] = dataset['train_X'][index]
+            data['y_label'] = dataset['train_Y'][index]
+
+            y_pred, loss = classifier.train_batch(data, optimizer, loss_fn, device)
+
+            acc = classifier.eval(y_true=data['y_label'], y_pred=y_pred)
+
+            # Book-keeping
+            epoch_loss.append(loss.item())
+            epoch_train_acc.append(acc)
+
+        #             print("Batch:\t%d" % b, "/%d\t: " % (dataset['len']/int(parameter_dict['batch_size'])),
+        #                   "%s" % (time.time() - batch_time),
+        #                   "\t%s" % (time.time() - epoch_time),
+        #                   "\tloss: %s" % loss.item(),
+        #                   end=None if b + 1 == dataset['len']/int(parameter_dict['batch_size']) else "\r")
+        # Epoch level
+        training_acc.append(epoch_train_acc)
+        training_loss.append(epoch_loss)
+
+        # Evaluate on validation data
+        data = {}
+        data['ques_batch'] = dataset['valid_X']
+        data['y_label'] = dataset['valid_Y']
+        y_pred = classifier.predict(data, device)
+        valid_acc.append(classifier.eval(y_true=data['y_label'], y_pred=y_pred))
+
+        # IF it outperformed, save model.
+        if best_valid_acc < valid_acc[-1]:
+            aux_save_information = {
+                'epoch': epoch,
+                'validation_accuracy': valid_acc[-1],
+                'parameter_dict': parameter_dict}
+
+            aux.save_model(loc, classifier, model_name='model.torch', epochs=epoch, optimizer=optimizer,
+                           accuracy=valid_acc[-1], aux_save_information={})
+            best_valid_acc = valid_acc[-1]
+
+        print("Epoch: ", epoch, "/", parameter_dict['epochs'],
+              "\t\bTime: %s\t" % (time.time() - epoch_time),
+              "Loss: %s\t" % (sum(epoch_loss)),
+              "Valdacc: %s\t" % (valid_acc[-1]))
+
+    return classifier, training_loss, training_acc, valid_acc
+
+
+# def visualize_loss(loss, loss2=None, _label="Some label", _label2="Some other label", _name="Generic Name",
+#                    _only_epoch=True):
+#     """
+#         Fn to visualize loss.
+#         Expects either
+#             - [int, int] for epoch level stuff
+#             - [ [int, int], [int, int] ] for batch level data.
+#     """
 #
-# def get_glove_embeddings():
-#     from utils.embeddings_interface import __check_prepared__
-#     __check_prepared__('glove')
-#     from utils.embeddings_interface import glove_embeddings
-#     return glove_embeddings
-
-
-def rnn_model(embedding_layer, X_train, Y_train, max_seq_length):
-    """
-        The simplest model at hand to do this job.
-        A Bidirectional LSTM, A dense and a dense softmax output layer.
-
-    :param embedding_layer:
-    :param X_train:
-    :param Y_train:
-    :param max_seq_length:
-    :return:
-    """
-    sequence_input = Input(shape=(max_seq_length,))
-    embedded_sequences = embedding_layer(sequence_input)
-    x = Bidirectional(LSTM(128, dropout=0.5))(embedded_sequences)
-    x = Dense(128, activation='relu')(x)
-    preds = Dense(3, activation='softmax')(x)
-
-    model = Model(sequence_input, preds)
-    model.compile(loss=LOSS,
-                  optimizer=OPTIMIZER,
-                  metrics=['acc'])
-    model.summary()
-
-    # Training time bois.
-    model.fit(np.asarray(X_train), np.asarray(Y_train),
-              epochs=20, batch_size=128)
-
-    return model
-
-
-def run(vectors, X_train, Y_train, gpu):
-    """
-        File which instantiates the model.
-        Puts in the embedding layer and everything else.
-        Calls evaluate and gets results
-
-    :param vectors:
-    :param X_train:
-    :param X_test:
-    :param Y_train:
-    :param Y_test:
-    :return:
-    """
-    with K.tf.device('/gpu:' + gpu):
-        # Construct a common embedding layer
-        embedding_layer = Embedding(vectors.shape[0],
-                                    EMBEDDING_DIM,
-                                    weights=[vectors],
-                                    input_length=n.MAX_SEQ_LENGTH,
-                                    trainable=False)
-
-        # Train
-        model = rnn_model(embedding_layer, X_train, Y_train, n.MAX_SEQ_LENGTH)
-
-        return model
-
+#     plt.rcParams['figure.figsize'] = [15, 8]
+#
+#     # Detect input format
+#     if type(loss[0]) is not list:  # in [int, float, long]:
+#
+#         #         print("here")
+#         plt.plot(loss, '-b', label=_label)
+#         if loss2: plt.plot(loss2, '-r', label=_label2)
+#         plt.ylabel(_name)
+#         pylab.legend(loc='upper left')
+#         plt.show()
+#
+#     elif type(loss[0]) == list:
+#
+#         if _only_epoch:
+#             loss = [np.mean(x) for x in loss]
+#             if loss2 is not None:
+#                 loss2 = [np.mean(x) for x in loss2]
+#
+#         else:
+#             loss = [y for x in loss for y in x]
+#             if loss2 is not None: loss2 = [y for x in loss2 for y in x]
+#
+#         plt.plot(loss, '-b', label=_label)
+#         if loss2 is not None: plt.plot(loss2, '-r', label=_label2)
+#         plt.ylabel(_name)
+#         pylab.legend(loc='upper left')
+#         plt.show()
 
 if __name__ == "__main__":
+    # Pull raw data from disk
 
-    gpu = sys.argv[1]
-    DATASET = sys.argv[2].strip()
+    dataset = json.load(open(os.path.join(_dataset_specific_data_dir, _file)))
+    vocab, parameter_dict['vectors'] = vocab_master.load()
 
-    # See if the args are valid.
-    while True:
-        try:
-            assert gpu in ['0', '1', '2', '3']
-            assert DATASET in ['lcquad', 'qald']
-            break
-        except AssertionError:
-            gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
-            DATASET = raw_input("Did not understand which Dataset to use. Please write it again: ")
+    _dataset = preprocess_data(dataset, vocab, parameter_dict)
+    _dataset['len'] = len(_dataset['train_X'])
+    classifier = IntentClassifier(_parameter_dict=parameter_dict, _word_to_id=_word_to_id, _device=device)
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
-    FILENAME = ['qald_id_big_data_train.json', 'qald_id_big_data_test.json'] if DATASET == 'qald' else 'id_big_data.json'
-    n.MODEL = 'intent'
-    n.DATASET = DATASET
+    optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, classifier.encoder.parameters())) +
+                           list(filter(lambda p: p.requires_grad, classifier.dense.parameters())))
 
-    # n.NEGATIVE_SAMPLES = NEGATIVE_SAMPLES
-    # n.BATCH_SIZE = BATCH_SIZE
+    loss_fn = nn.MSELoss()
 
-    vectors, X_train, X_test, Y_train, Y_test = create_dataset()
+    op = training_loop(classifier, optimizer, loss_fn, _dataset, parameter_dict, device)
 
-    model = run(vectors, X_train, Y_train, gpu)
-
-    # Predict
-    Y_test_cap = model.predict(X_test)
-
-    # Evaluate
-    result = 0
-    for i in range(len(Y_test_cap)):
-        if np.argmax(Y_test_cap[i]) == np.argmax(Y_test[i]):
-            result = result + 1
-    print("rnn model results are ", result/float(len(Y_test_cap)))
-
-    # Time to save model.
-    n.smart_save_model(model)

@@ -1,6 +1,6 @@
 '''
 
-    Takes in a entity as input and retrives a two hop sub graph around it by querying DBpedia which doesn't include any literal. 
+    Takes in a entity as input and retrives a two hop sub graph around it by querying DBpedia which doesn't include any literal.
 
 '''
 import numpy as np
@@ -402,6 +402,8 @@ class create_subgraph():
                     paths_hop2_uri.append(path_uri)
 
 
+        if len(_entities) == 2:
+            pass
         # #idfiy everything and return.
         # paths_hop1_id = []
         # for p in paths_hop1_uri:

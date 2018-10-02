@@ -1,16 +1,3 @@
-"""
-    This script, by default,
-        1. checks which config should it work in:
-            fastaipretrained + glove/fasttext
-            glove/fasttext
-        2. Based on config, checks whether we have a parsed vectors file stored or not
-        3. If found, it then loads it, loads corresponding vocab
-        4. If not, loads the pretrained torch model for extracting vectors out of that
-        5. For the words not in the pretrained model, it goes through the raw file of an embedding, parses it
-            and takes the vectors
-        6. Saves the vectors+config; vocab+config in the destination.
-"""
-
 import os
 import sys
 import torch
@@ -78,19 +65,20 @@ class NotYetImplementedError(Exception):
 
 
 def __check_prepared__(_embedding=None):
-    if len(vectors) < len(SPECIAL_CHARACTERS) or \
-            len(vocab) < len(SPECIAL_CHARACTERS) or \
+    if len(vectors) <= len(SPECIAL_CHARACTERS) or \
+            len(vocab) <= len(SPECIAL_CHARACTERS) or \
             (_embedding != None and _embedding != SELECTED_EMBEDDING):
         __prepare__(_embedding)
 
 
 def __prepare__(_embedding=None):
-    global SELECTED_EMBEDDING
-
-    _init_special_characters_()
+    global SELECTED_EMBEDDING, EMBEDDING_DIM
 
     # If someone gave an embedding, mark that as the permanent one
     SELECTED_EMBEDDING = _embedding if _embedding != None else DEFAULT_EMBEDDING
+    EMBEDDING_DIM = 300 if SELECTED_EMBEDDING in ['glove'] else 400
+
+    _init_special_characters_()
 
     if _embedding == 'ulmfit':
         _parse_ulmfit_()
@@ -102,8 +90,6 @@ def __prepare__(_embedding=None):
         warnings.warn("Haven't implemented Fasttext parser yet.")
         raise NotYetImplementedError
 
-    save()
-
 
 def _init_special_characters_():
     """
@@ -114,7 +100,12 @@ def _init_special_characters_():
     """
     global vectors, vocab
 
-    assert len(vectors) == 0 & len(vocab) == 0
+    try:
+        assert len(vectors) == 0 & len(vocab) == 0
+    except AssertionError:
+        warnings.warn("Found non empty vectors, vocab. Cleaning them up.")
+        for sp_char in SPECIAL_CHARACTERS:
+            assert sp_char in vocab
 
     # Push special chars in the vocab, alongwith their vectors IF not already there.
     for i, sp_char in enumerate(SPECIAL_CHARACTERS):
@@ -145,7 +136,7 @@ def __parse_line__(line):
             tokens.pop(0)
 
     #     print(line)
-    assert len(tokens) == EMBEDDING_DIM
+    assert len(tokens) == 300  # Hardcoded here, because we know glove pretrained is 300d
     #     raise EOFError
     return ' '.join(word), np.asarray(tokens)
 
@@ -156,116 +147,146 @@ def _parse_glove_():
     """
     global vectors, vocab
 
-    # Assume that vectors can be list OR numpy array.
+    print("Loading Glove vocab and vectors from disk. Sit Tight.")
 
-    changes = 0
-    lines = 0
-    new_vectors = []
+    try:
+        # Try to load from disk
+        vocab, vectors = load(_embedding='glove')
 
-    # Open raw file
-    f = open(os.path.join(glove_location['dir'], glove_location['raw']))
+        return True
 
-    if DEBUG:
-        max_value = progressbar.UnknownLength if GLOVE_LENGTH is None else GLOVE_LENGTH
-        bar = progressbar.ProgressBar(max_value=max_value)
+    except FileNotFoundError:
 
-    for line in f:
-        lines += 1
-        # Parse line
-        word, coefs = __parse_line__(line)
+        warnings.warn("Couldn't find Glove vocab and/or vectors on disk. Parsing from raw file will TAKE TIME ...")
 
-        #         try:
-        #             coefs = np.asarray(values[1:], dtype='float32')
-        #         except ValueError:
-        #             traceback.print_exc()
-        #             print(lines)
-        #             print(values)
-        #             print(word)
-        # Ignore if word is a special char
-        if word in SPECIAL_CHARACTERS:
-            continue
+        # Assume that vectors can be list OR numpy array.
 
-        # Ignore if we already have this word
-        try:
-            _ = vocab[word]
-            continue
-        except KeyError:
-            # Its a new word, put it in somewhere.
-            vocab[word] = len(vocab)
-            new_vectors.append(coefs)
-            changes += 1
+        changes = 0
+        lines = 0
+        new_vectors = []
+
+        # Open raw file
+        f = open(os.path.join(glove_location['dir'], glove_location['raw']))
 
         if DEBUG:
-            bar.update(lines)
+            max_value = progressbar.UnknownLength if GLOVE_LENGTH is None else GLOVE_LENGTH
+            bar = progressbar.ProgressBar(max_value=max_value)
 
-    f.close()
+        for line in f:
+            lines += 1
+            # Parse line
+            word, coefs = __parse_line__(line)
 
-    # Merge vectors
-    new_vectors = np.array(new_vectors)
-    vectors = np.array(vectors)
+            #         try:
+            #             coefs = np.asarray(values[1:], dtype='float32')
+            #         except ValueError:
+            #             traceback.print_exc()
+            #             print(lines)
+            #             print(values)
+            #             print(word)
+            # Ignore if word is a special char
+            if word in SPECIAL_CHARACTERS:
+                continue
 
-    if DEBUG:
-        print("Old vectors: ", vectors.shape)
-        print("New vectors: ", new_vectors.shape)
+            # Ignore if we already have this word
+            try:
+                _ = vocab[word]
+                continue
+            except KeyError:
+                # Its a new word, put it in somewhere.
+                vocab[word] = len(vocab)
+                new_vectors.append(coefs)
+                changes += 1
 
-    vectors = np.vstack((vectors, new_vectors))
+            if DEBUG:
+                bar.update(lines)
 
-    if DEBUG:
-        print("Combined vectors: ", vectors.shape)
-        print("Vocab: ", len(vocab))
+        f.close()
 
-    return True
+        # Merge vectors
+        new_vectors = np.array(new_vectors)
+        vectors = np.array(vectors)
+
+        if DEBUG:
+            print("Old vectors: ", vectors.shape)
+            print("New vectors: ", new_vectors.shape)
+
+        vectors = np.vstack((vectors, new_vectors))
+
+        if DEBUG:
+            print("Combined vectors: ", vectors.shape)
+            print("Vocab: ", len(vocab))
+
+        save()
+
+        return True
 
 
 def _parse_ulmfit_():
     global vocab, vectors
 
-    # Load ulmfit vectors and vocab in mem
-    ulmfit_words = pickle.load(open(
-        os.path.join(ulmfit_location['dir'], ulmfit_location['raw_voc']), 'rb'))
-    ulmfit_vocab = {word: index for index, word in enumerate(ulmfit_words)}
-    ulmfit_model = torch.load(os.path.join(ulmfit_location['dir'], ulmfit_location['raw_vec']),
-                              map_location=lambda storage, loc: storage)
-    ulmfit_vectors = to_np(ulmfit_model['encoder.weight'])
+    print("Loading ULMFIT vocab and vectors from disk. Sit Tight.")
 
-    to_delete = []
-    to_delete_char = []
-    for sp_char in SPECIAL_CHARACTERS:
-        try:
-            sp_char_id = ulmfit_vocab[sp_char]
-            to_delete.append(sp_char_id)
-            to_delete_char.append(sp_char)
-        except KeyError:
-            pass
+    try:
+        # Try to load from disk
+        vocab, vectors = load(_embedding='ulmfit')
 
-    print(to_delete)
+        return True
 
-    if DEBUG:
-        print("Vocab :", len(ulmfit_vocab))
-        print("Vectors: ", ulmfit_vectors.shape)
+    except FileNotFoundError:
 
-    # Delete these things from vectors, vocab
-    ulmfit_vectors = np.delete(ulmfit_vectors, to_delete, 0)
-    for i in range(len(to_delete)):
-        id = to_delete[i]
-        char = to_delete_char[i]
-        ulmfit_vocab.pop(char)
+        warnings.warn("Couldn't find ULMFIT vocab and/or vectors on disk. Parsing them from raw. Any second now ...")
 
-    if DEBUG:
-        print("Vocab :", len(ulmfit_vocab))
-        print("Vectors: ", ulmfit_vectors.shape)
+        # Load ulmfit vectors and vocab in mem
+        ulmfit_words = pickle.load(open(
+            os.path.join(ulmfit_location['dir'], ulmfit_location['raw_voc']), 'rb'))
+        ulmfit_vocab = {word: index for index, word in enumerate(ulmfit_words)}
+        ulmfit_model = torch.load(os.path.join(ulmfit_location['dir'], ulmfit_location['raw_vec']),
+                                  map_location=lambda storage, loc: storage)
+        ulmfit_vectors = to_np(ulmfit_model['encoder.weight'])
 
-    # Merge old vocab and ULMFiT vocab
-    for key, id in ulmfit_vocab.items():
-        vocab[key] = id + len(SPECIAL_CHARACTERS)
+        to_delete = []
+        to_delete_char = []
+        for sp_char in SPECIAL_CHARACTERS:
+            try:
+                sp_char_id = ulmfit_vocab[sp_char]
+                to_delete.append(sp_char_id)
+                to_delete_char.append(sp_char)
+            except KeyError:
+                pass
 
-    # Merge vectors
-    vectors = np.array(vectors)
-    vectors = np.vstack((vectors, ulmfit_vectors))
+        print(to_delete)
 
-    if DEBUG:
-        print("Vocab: ", len(vocab))
-        print("Vectors: ", vectors.shape)
+        if DEBUG:
+            print("Vocab :", len(ulmfit_vocab))
+            print("Vectors: ", ulmfit_vectors.shape)
+
+        # Delete these things from vectors, vocab
+        ulmfit_vectors = np.delete(ulmfit_vectors, to_delete, 0)
+        for i in range(len(to_delete)):
+            id = to_delete[i]
+            char = to_delete_char[i]
+            ulmfit_vocab.pop(char)
+
+        if DEBUG:
+            print("Vocab :", len(ulmfit_vocab))
+            print("Vectors: ", ulmfit_vectors.shape)
+
+        # Merge old vocab and ULMFiT vocab
+        for key, id in ulmfit_vocab.items():
+            vocab[key] = id + len(SPECIAL_CHARACTERS)
+
+        # Merge vectors
+        vectors = np.array(vectors)
+        vectors = np.vstack((vectors, ulmfit_vectors))
+
+        if DEBUG:
+            print("Vocab: ", len(vocab))
+            print("Vectors: ", vectors.shape)
+
+        save()
+
+        return True
 
 
 def save():
@@ -284,6 +305,22 @@ def save():
 
     # Save vocab
     pickle.dump(vocab, open(os.path.join(parsed_location, locs['voc']), 'wb+'))
+
+
+def load(_embedding):
+    local_vocab, local_vectors = {}, []
+
+    if _embedding == 'glove':
+        locs = glove_location
+    elif _embedding == 'ulmfit':
+        locs = ulmfit_location
+    elif _embedding == 'fasttext':
+        raise NotYetImplementedError
+
+    local_vocab = pickle.load(open(os.path.join(parsed_location, locs['voc']), 'rb'))
+    local_vectors = np.load(os.path.join(parsed_location, locs['vec']))
+
+    return local_vocab, local_vectors
 
 
 def vocabularize(_tokens, _report_unks=False, _case_sensitive=False, _embedding=None):
@@ -405,4 +442,5 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding='glove'):
     v_phrase_2 = __congregate__(vw_phrase_2)
     cosine_similarity = np.dot(v_phrase_1, v_phrase_2) / (np.linalg.norm(v_phrase_1) * np.linalg.norm(v_phrase_2))
     return float(cosine_similarity)
+
 

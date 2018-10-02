@@ -1,0 +1,452 @@
+{ 
+  "hi" : {
+      "Localiced Instances" : 100303 ,
+      "Canonicalized Instances" : 43520 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "de" : {
+      "Localiced Instances" : 1650620 ,
+      "Canonicalized Instances" : 866862 ,
+      "Mappingbased Properties" : 562 ,
+      "Mappingbased Statements" : 5831653 ,
+      "Raw Infobox Properties" : 1294 ,
+      "Raw Infobox Statements" : 5573353 ,
+      "Type Statements" : 5210311
+    } ,
+  "pt" : {
+      "Localiced Instances" : 865889 ,
+      "Canonicalized Instances" : 597909 ,
+      "Mappingbased Properties" : 605 ,
+      "Mappingbased Statements" : 3219540 ,
+      "Raw Infobox Properties" : 1131 ,
+      "Raw Infobox Statements" : 3222469 ,
+      "Type Statements" : 3109737
+    } ,
+  "lt" : {
+      "Localiced Instances" : 175300 ,
+      "Canonicalized Instances" : 97510 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "hr" : {
+      "Localiced Instances" : 138498 ,
+      "Canonicalized Instances" : 96313 ,
+      "Mappingbased Properties" : 146 ,
+      "Mappingbased Statements" : 110078 ,
+      "Raw Infobox Properties" : 192 ,
+      "Raw Infobox Statements" : 107428 ,
+      "Type Statements" : 139632
+    } ,
+  "lv" : {
+      "Localiced Instances" : 56743 ,
+      "Canonicalized Instances" : 43235 ,
+      "Mappingbased Properties" : 191 ,
+      "Mappingbased Statements" : 96242 ,
+      "Raw Infobox Properties" : 252 ,
+      "Raw Infobox Statements" : 92200 ,
+      "Type Statements" : 205177
+    } ,
+  "hu" : {
+      "Localiced Instances" : 364856 ,
+      "Canonicalized Instances" : 268518 ,
+      "Mappingbased Properties" : 294 ,
+      "Mappingbased Statements" : 482777 ,
+      "Raw Infobox Properties" : 464 ,
+      "Raw Infobox Statements" : 509495 ,
+      "Type Statements" : 1326603
+    } ,
+  "hy" : {
+      "Localiced Instances" : 187631 ,
+      "Canonicalized Instances" : 91928 ,
+      "Mappingbased Properties" : 9 ,
+      "Mappingbased Statements" : 612 ,
+      "Raw Infobox Properties" : 9 ,
+      "Raw Infobox Statements" : 496 ,
+      "Type Statements" : 14663
+    } ,
+  "uk" : {
+      "Localiced Instances" : 598245 ,
+      "Canonicalized Instances" : 339457 ,
+      "Mappingbased Properties" : 219 ,
+      "Mappingbased Statements" : 715322 ,
+      "Raw Infobox Properties" : 320 ,
+      "Raw Infobox Statements" : 706124 ,
+      "Type Statements" : 1752319
+    } ,
+  "id" : {
+      "Localiced Instances" : 368456 ,
+      "Canonicalized Instances" : 167838 ,
+      "Mappingbased Properties" : 383 ,
+      "Mappingbased Statements" : 475369 ,
+      "Raw Infobox Properties" : 529 ,
+      "Raw Infobox Statements" : 610847 ,
+      "Type Statements" : 591432
+    } ,
+  "ur" : {
+      "Localiced Instances" : 93558 ,
+      "Canonicalized Instances" : 80454 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "mk" : {
+      "Localiced Instances" : 81814 ,
+      "Canonicalized Instances" : 54488 ,
+      "Mappingbased Properties" : 431 ,
+      "Mappingbased Statements" : 151289 ,
+      "Raw Infobox Properties" : 722 ,
+      "Raw Infobox Statements" : 168274 ,
+      "Type Statements" : 179101
+    } ,
+  "el" : {
+      "Localiced Instances" : 108917 ,
+      "Canonicalized Instances" : 78697 ,
+      "Mappingbased Properties" : 544 ,
+      "Mappingbased Statements" : 185379 ,
+      "Raw Infobox Properties" : 865 ,
+      "Raw Infobox Statements" : 191598 ,
+      "Type Statements" : 322884
+    } ,
+  "mt" : {
+      "Localiced Instances" : 3104 ,
+      "Canonicalized Instances" : 2812 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "en" : {
+      "Localiced Instances" : 4678230 ,
+      "Canonicalized Instances" : 4678230 ,
+      "Mappingbased Properties" : 1379 ,
+      "Mappingbased Statements" : 37549405 ,
+      "Raw Infobox Properties" : 2062 ,
+      "Raw Infobox Statements" : 30024092 ,
+      "Type Statements" : 36704825
+    } ,
+  "eo" : {
+      "Localiced Instances" : 212402 ,
+      "Canonicalized Instances" : 158490 ,
+      "Mappingbased Properties" : 102 ,
+      "Mappingbased Statements" : 309371 ,
+      "Raw Infobox Properties" : 121 ,
+      "Raw Infobox Statements" : 311982 ,
+      "Type Statements" : 695244
+    } ,
+  "it" : {
+      "Localiced Instances" : 968794 ,
+      "Canonicalized Instances" : 662339 ,
+      "Mappingbased Properties" : 290 ,
+      "Mappingbased Statements" : 4167992 ,
+      "Raw Infobox Properties" : 354 ,
+      "Raw Infobox Statements" : 4057181 ,
+      "Type Statements" : 5194351
+    } ,
+  "es" : {
+      "Localiced Instances" : 1120144 ,
+      "Canonicalized Instances" : 731184 ,
+      "Mappingbased Properties" : 546 ,
+      "Mappingbased Statements" : 3936855 ,
+      "Raw Infobox Properties" : 868 ,
+      "Raw Infobox Statements" : 4028061 ,
+      "Type Statements" : 4722765
+    } ,
+  "zh" : {
+      "Localiced Instances" : 784931 ,
+      "Canonicalized Instances" : 430425 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "et" : {
+      "Localiced Instances" : 143421 ,
+      "Canonicalized Instances" : 86216 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "eu" : {
+      "Localiced Instances" : 147185 ,
+      "Canonicalized Instances" : 100511 ,
+      "Mappingbased Properties" : 134 ,
+      "Mappingbased Statements" : 386067 ,
+      "Raw Infobox Properties" : 165 ,
+      "Raw Infobox Statements" : 393060 ,
+      "Type Statements" : 929358
+    } ,
+  "ar" : {
+      "Localiced Instances" : 396695 ,
+      "Canonicalized Instances" : 263345 ,
+      "Mappingbased Properties" : 279 ,
+      "Mappingbased Statements" : 226054 ,
+      "Raw Infobox Properties" : 463 ,
+      "Raw Infobox Statements" : 245974 ,
+      "Type Statements" : 485625
+    } ,
+  "vi" : {
+      "Localiced Instances" : 1128254 ,
+      "Canonicalized Instances" : 407040 ,
+      "Mappingbased Properties" : 42 ,
+      "Mappingbased Statements" : 1272 ,
+      "Raw Infobox Properties" : 44 ,
+      "Raw Infobox Statements" : 1385 ,
+      "Type Statements" : 35544
+    } ,
+  "ja" : {
+      "Localiced Instances" : 958534 ,
+      "Canonicalized Instances" : 422183 ,
+      "Mappingbased Properties" : 418 ,
+      "Mappingbased Statements" : 1311093 ,
+      "Raw Infobox Properties" : 748 ,
+      "Raw Infobox Statements" : 1328514 ,
+      "Type Statements" : 1395299
+    } ,
+  "az" : {
+      "Localiced Instances" : 92917 ,
+      "Canonicalized Instances" : 59486 ,
+      "Mappingbased Properties" : 29 ,
+      "Mappingbased Statements" : 14752 ,
+      "Raw Infobox Properties" : 38 ,
+      "Raw Infobox Statements" : 14358 ,
+      "Type Statements" : 268748
+    } ,
+  "fa" : {
+      "Localiced Instances" : 451685 ,
+      "Canonicalized Instances" : 363274 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "ro" : {
+      "Localiced Instances" : 356002 ,
+      "Canonicalized Instances" : 235101 ,
+      "Mappingbased Properties" : 38 ,
+      "Mappingbased Statements" : 8737 ,
+      "Raw Infobox Properties" : 22 ,
+      "Raw Infobox Statements" : 5210 ,
+      "Type Statements" : 7306
+    } ,
+  "nl" : {
+      "Localiced Instances" : 1770113 ,
+      "Canonicalized Instances" : 716751 ,
+      "Mappingbased Properties" : 909 ,
+      "Mappingbased Statements" : 4289080 ,
+      "Raw Infobox Properties" : 1534 ,
+      "Raw Infobox Statements" : 4362324 ,
+      "Type Statements" : 4551743
+    } ,
+  "be" : {
+      "Localiced Instances" : 103744 ,
+      "Canonicalized Instances" : 59411 ,
+      "Mappingbased Properties" : 205 ,
+      "Mappingbased Statements" : 198116 ,
+      "Raw Infobox Properties" : 307 ,
+      "Raw Infobox Statements" : 200739 ,
+      "Type Statements" : 234262
+    } ,
+  "fi" : {
+      "Localiced Instances" : 369263 ,
+      "Canonicalized Instances" : 259203 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "ru" : {
+      "Localiced Instances" : 1114029 ,
+      "Canonicalized Instances" : 618319 ,
+      "Mappingbased Properties" : 153 ,
+      "Mappingbased Statements" : 1964313 ,
+      "Raw Infobox Properties" : 205 ,
+      "Raw Infobox Statements" : 1912672 ,
+      "Type Statements" : 2449185
+    } ,
+  "bg" : {
+      "Localiced Instances" : 201810 ,
+      "Canonicalized Instances" : 149139 ,
+      "Mappingbased Properties" : 335 ,
+      "Mappingbased Statements" : 629010 ,
+      "Raw Infobox Properties" : 547 ,
+      "Raw Infobox Statements" : 610171 ,
+      "Type Statements" : 645584
+    } ,
+  "bn" : {
+      "Localiced Instances" : 40025 ,
+      "Canonicalized Instances" : 34092 ,
+      "Mappingbased Properties" : 92 ,
+      "Mappingbased Statements" : 18431 ,
+      "Raw Infobox Properties" : 92 ,
+      "Raw Infobox Statements" : 19951 ,
+      "Type Statements" : 31440
+    } ,
+  "fr" : {
+      "Localiced Instances" : 1591318 ,
+      "Canonicalized Instances" : 1027815 ,
+      "Mappingbased Properties" : 933 ,
+      "Mappingbased Statements" : 4407915 ,
+      "Raw Infobox Properties" : 1363 ,
+      "Raw Infobox Statements" : 5704950 ,
+      "Type Statements" : 5020942
+    } ,
+  "commons" : {
+      "Localiced Instances" : 0 ,
+      "Canonicalized Instances" : 0 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "sk" : {
+      "Localiced Instances" : 184673 ,
+      "Canonicalized Instances" : 135223 ,
+      "Mappingbased Properties" : 27 ,
+      "Mappingbased Statements" : 49932 ,
+      "Raw Infobox Properties" : 26 ,
+      "Raw Infobox Statements" : 45500 ,
+      "Type Statements" : 40814
+    } ,
+  "sl" : {
+      "Localiced Instances" : 133400 ,
+      "Canonicalized Instances" : 87932 ,
+      "Mappingbased Properties" : 491 ,
+      "Mappingbased Statements" : 116603 ,
+      "Raw Infobox Properties" : 697 ,
+      "Raw Infobox Statements" : 116084 ,
+      "Type Statements" : 372132
+    } ,
+  "ga" : {
+      "Localiced Instances" : 34303 ,
+      "Canonicalized Instances" : 31522 ,
+      "Mappingbased Properties" : 121 ,
+      "Mappingbased Statements" : 40562 ,
+      "Raw Infobox Properties" : 186 ,
+      "Raw Infobox Statements" : 42405 ,
+      "Type Statements" : 68332
+    } ,
+  "ca" : {
+      "Localiced Instances" : 360716 ,
+      "Canonicalized Instances" : 247759 ,
+      "Mappingbased Properties" : 163 ,
+      "Mappingbased Statements" : 764193 ,
+      "Raw Infobox Properties" : 259 ,
+      "Raw Infobox Statements" : 692155 ,
+      "Type Statements" : 1308746
+    } ,
+  "sr" : {
+      "Localiced Instances" : 311499 ,
+      "Canonicalized Instances" : 209243 ,
+      "Mappingbased Properties" : 604 ,
+      "Mappingbased Statements" : 1281889 ,
+      "Raw Infobox Properties" : 1146 ,
+      "Raw Infobox Statements" : 1316310 ,
+      "Type Statements" : 1260224
+    } ,
+  "sv" : {
+      "Localiced Instances" : 2592113 ,
+      "Canonicalized Instances" : 518073 ,
+      "Mappingbased Properties" : 381 ,
+      "Mappingbased Statements" : 1666424 ,
+      "Raw Infobox Properties" : 530 ,
+      "Raw Infobox Statements" : 1682855 ,
+      "Type Statements" : 2133747
+    } ,
+  "ko" : {
+      "Localiced Instances" : 310811 ,
+      "Canonicalized Instances" : 200040 ,
+      "Mappingbased Properties" : 437 ,
+      "Mappingbased Statements" : 654274 ,
+      "Raw Infobox Properties" : 639 ,
+      "Raw Infobox Statements" : 631729 ,
+      "Type Statements" : 741532
+    } ,
+  "gl" : {
+      "Localiced Instances" : 117315 ,
+      "Canonicalized Instances" : 72723 ,
+      "Mappingbased Properties" : 224 ,
+      "Mappingbased Statements" : 248197 ,
+      "Raw Infobox Properties" : 389 ,
+      "Raw Infobox Statements" : 285232 ,
+      "Type Statements" : 227481
+    } ,
+  "war" : {
+      "Localiced Instances" : 1256010 ,
+      "Canonicalized Instances" : 262598 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "cs" : {
+      "Localiced Instances" : 332158 ,
+      "Canonicalized Instances" : 218563 ,
+      "Mappingbased Properties" : 250 ,
+      "Mappingbased Statements" : 570389 ,
+      "Raw Infobox Properties" : 321 ,
+      "Raw Infobox Statements" : 591662 ,
+      "Type Statements" : 687239
+    } ,
+  "cy" : {
+      "Localiced Instances" : 67202 ,
+      "Canonicalized Instances" : 47797 ,
+      "Mappingbased Properties" : 35 ,
+      "Mappingbased Statements" : 7197 ,
+      "Raw Infobox Properties" : 35 ,
+      "Raw Infobox Statements" : 7130 ,
+      "Type Statements" : 63413
+    } ,
+  "pl" : {
+      "Localiced Instances" : 1082027 ,
+      "Canonicalized Instances" : 690338 ,
+      "Mappingbased Properties" : 243 ,
+      "Mappingbased Statements" : 2477783 ,
+      "Raw Infobox Properties" : 368 ,
+      "Raw Infobox Statements" : 2448104 ,
+      "Type Statements" : 4298636
+    } ,
+  "da" : {
+      "Localiced Instances" : 204614 ,
+      "Canonicalized Instances" : 137732 ,
+      "Mappingbased Properties" : -1 ,
+      "Mappingbased Statements" : 0 ,
+      "Raw Infobox Properties" : -1 ,
+      "Raw Infobox Statements" : 0 ,
+      "Type Statements" : 0
+    } ,
+  "tr" : {
+      "Localiced Instances" : 248178 ,
+      "Canonicalized Instances" : 164147 ,
+      "Mappingbased Properties" : 443 ,
+      "Mappingbased Statements" : 465931 ,
+      "Raw Infobox Properties" : 805 ,
+      "Raw Infobox Statements" : 458263 ,
+      "Type Statements" : 663719
+    } ,
+  "all" : {
+      "Localiced Instances" : 28658449 ,
+      "Canonicalized Instances" : 17315785 ,
+      "Mappingbased Properties" : 12676 ,
+      "Mappingbased Statements" : 79030098 ,
+      "Raw Infobox Properties" : 20101 ,
+      "Raw Infobox Statements" : 72720337 ,
+      "Type Statements" : 88090095
+    }
+}

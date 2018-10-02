@@ -31,10 +31,10 @@ try:
 except ImportError:
     from utils import natural_language_utilities as nlutils
 
-try:
-    import labels_mulitple_form
-except ImportError:
-    from utils import labels_mulitple_form
+# try:
+#     import labels_mulitple_form
+# except ImportError:
+#     from utils import labels_mulitple_form
 
 # GLOBAL MACROS
 # DBPEDIA_ENDPOINTS = ['http://dbpedia.org/sparql/']
@@ -97,7 +97,22 @@ GET_OBJECT = '''SELECT DISTINCT ?entity WHERE {	%(target_resource)s %(property)s
 
 GET_SAME_AS = '''SELECT DISTINCT ?entity WHERE {?entity owl:sameAs %(target_resource)s}'''
 
-
+GET_LEFT_RIGHT_PROPERTIES_OF_RESOURCE_WITH_RIGHT_PROPERTY = '''SELECT DISTINCT ?property1 ?property2 
+                                                                WHERE {   
+                                                                %(target_resource)s  %(property)s ?useless_resource .
+                                                                {optional {?useless_resource ?property1 ?useless_resource_2}}
+                                                                UNION
+                                                                {optional {?useless_resource_3 ?property2 ?useless_resource}}
+                                                                FILTER(!isLiteral(?useless_resource) && !isLiteral(?useless_resource_2) && !isLiteral(?useless_resource_3))
+                                                                } LIMIT 10000 OFFSET %(offset)s '''
+GET_LEFT_RIGHT_PROPERTIES_OF_RESOURCE_WITH_LEFT_PROPERTY = '''SELECT DISTINCT ?property1 ?property2 
+                                                                WHERE {   
+                                                                ?useless_resource   %(property)s  %(target_resource)s.
+                                                                {optional {?useless_resource ?property1 ?useless_resource_2}}
+                                                                UNION
+                                                                {optional {?useless_resource_3 ?property2 ?useless_resource}}
+                                                                FILTER(!isLiteral(?useless_resource) && !isLiteral(?useless_resource_2) && !isLiteral(?useless_resource_3))
+                                                                } LIMIT 10000 OFFSET %(offset)s'''
 class DBPedia:
     def __init__(self, _method='round-robin', _verbose=False, _db_name=0, caching=True):
 
@@ -120,8 +135,8 @@ class DBPedia:
 
             print("Label Cache not found. Creating a new one")
             traceback.print_exc()
-            labels_mulitple_form.merge_multiple_forms()  # This should populate the dictionary with multiple form info and already pickle it
-            self.labels = pickle.load(open('../resources/labels.pickle'))
+            # labels_mulitple_form.merge_multiple_forms()  # This should populate the dictionary with multiple form info and already pickle it
+            self.labels = ''
         self.fresh_labels = 0
 
     # initilizing the redis server.
@@ -521,6 +536,52 @@ class DBPedia:
             return entity_list
         else:
             return None
+
+    def get_hop2_subgraph(self,_resource_uri,_property_uri,right=False):
+        if _resource_uri[0] != '<':
+            _resource_uri = '<' + _resource_uri + '>'
+        if _property_uri[0] != '<':
+            _property_uri = '<' + _property_uri + '>'
+
+        offset = 0
+        if right:
+            query = GET_LEFT_RIGHT_PROPERTIES_OF_RESOURCE_WITH_RIGHT_PROPERTY % {'target_resource':_resource_uri,
+                                                                                 'property':_property_uri,
+                                                                                 'offset' : offset}
+        else:
+            query = GET_LEFT_RIGHT_PROPERTIES_OF_RESOURCE_WITH_LEFT_PROPERTY % {'target_resource': _resource_uri,
+                                                                                 'property': _property_uri,
+                                                                                 'offset': offset}
+
+        final_response = self.shoot_custom_query(query)
+
+        if len(final_response[u'results'][u'bindings']) > 10000:
+            offset_flag = True
+            while offset_flag:
+                offset = offset + 10000
+                if right:
+                    query = GET_LEFT_RIGHT_PROPERTIES_OF_RESOURCE_WITH_RIGHT_PROPERTY % {
+                        'target_resource': _resource_uri,
+                        'property': _property_uri,
+                        'offset': offset}
+                else:
+                    query = GET_LEFT_RIGHT_PROPERTIES_OF_RESOURCE_WITH_LEFT_PROPERTY % {
+                        'target_resource': _resource_uri,
+                        'property': _property_uri,
+                        'offset': offset}
+                response = self.shoot_custom_query(query)
+                final_response[u'results'][u'bindings'] = final_response[u'results'][u'bindings'] + response[u'results'][u'bindings']
+
+                if len(response[u'results'][u'bindings']) < 10000:
+                    offset_flag = False
+
+        right_property_list = [x[u'property1'][u'value'].encode('ascii', 'ignore') for x in
+                               final_response[u'results'][u'bindings'] if 'property1' in x.keys()]
+
+        left_property_list = [x[u'property2'][u'value'].encode('ascii', 'ignore') for x in
+                              final_response[u'results'][u'bindings'] if 'property2' in x.keys()]
+
+        return right_property_list, left_property_list
 
 
 if __name__ == '__main__':

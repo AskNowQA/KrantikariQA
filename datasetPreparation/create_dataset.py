@@ -32,12 +32,27 @@ class create_data_node():
         r = requests.post("http://localhost:3000/parsesparql", json=query)
         return r.json()
 
+    def handle_count(self,sparql_query):
+        '''
+            SPARQL parsing serer as well as Qald Parser(new name) only supports count if it is of form
+                 (COUNT(?uri) as ?uri) with uri being the variable
+                 or
+                 (COUNT(?x) as ?x) with x being the variable.
+
+                 No other variable is supported currently.
+        :param sparql_query: a sparql query with above described structure
+        :return: sparql query in a cleaner format (COUNT(?uri) as ?uri),(COUNT(?x) as ?x)
+        '''
+        sparql_query = sparql_query.replace('COUNT(?uri)' , '(COUNT(?uri) as ?uri)')
+        sparql_query = sparql_query.replace('COUNT(?x)' , '(COUNT(?uri) as ?x)')
+        return sparql_query
+
     def dataset_preparation_time(self,_data_node):
         parsed_sparql = self.parse_sparql(_data_node['sparql_query'])
         print('parsed sparql is ', parsed_sparql)
         path, entity, constraints = qp.get_true_path(parsed_sparql,_data_node['sparql_query'])
         print('entity is ', entity)
         hop1,hop2  = self.create_subgraph.subgraph(entity,_data_node['corrected_question'],self.relation_file,_use_blacklist=True,_qald=self.qald)
-        return hop1,hop2
+        return hop1,hop2,path,entity,constraints
 
 

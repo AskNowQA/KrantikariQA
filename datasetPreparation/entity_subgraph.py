@@ -123,7 +123,68 @@ class create_subgraph():
 
         return _predicates
 
-    def get_hop2_subgraph(self, _entity, _predicate, dbp, _right=True):
+    @staticmethod
+    def get_two_topic_entity_paths(SPARQL, te1, te2, id, dbp):
+        if id == 1:
+            temp = {}
+            temp['te1'] = te1
+            temp['te2'] = te2
+            answer = dbp.get_answer(SPARQL)  # -,+
+            data_temp = []
+            for i in range(len(answer['r1'])):
+                data_temp.append(['-', answer['r1'][i].decode("utf-8"), "+", answer['r2'][i].decode("utf-8")])
+            temp['path'] = data_temp
+            return temp
+        if id == 2:
+            temp = {}
+            temp['te1'] = te1
+            temp['te2'] = te2
+            answer = dbp.get_answer(SPARQL)  # -,+
+            data_temp = []
+            for i in range(len(answer['r1'])):
+                data_temp.append(['+', answer['r1'][i].decode("utf-8"), "-", answer['r2'][i].decode("utf-8")])
+            temp['path'] = data_temp
+            return temp
+        if id == 3:
+            temp = {}
+            temp['te1'] = te1
+            temp['te2'] = te2
+            answer = dbp.get_answer(SPARQL)  # -,+
+            data_temp = []
+            for i in range(len(answer['r1'])):
+                data_temp.append(['+', answer['r1'][i].decode("utf-8"), "+", answer['r2'][i].decode("utf-8")])
+            temp['path'] = data_temp
+            return temp
+        if id == 4:
+            temp = {}
+            temp['te1'] = te1
+            temp['te2'] = te2
+            answer = dbp.get_answer(SPARQL)  # -,+
+            data_temp = []
+            for i in range(len(answer['r1'])):
+                data_temp.append(['+', answer['r1'][i].decode("utf-8")])
+            temp['path'] = data_temp
+            return temp
+        if id == 5:
+            temp = {}
+            temp['te1'] = te1
+            answer = dbp.get_answer(SPARQL)  # -,+
+            data_temp = []
+            for i in range(len(answer['r1'])):
+                data_temp.append(['+', answer['r1'][i].decode("utf-8")])
+            temp['path'] = data_temp
+            return temp
+        if id == 6:
+            temp = {}
+            temp['te1'] = te1
+            answer = dbp.get_answer(SPARQL)  # -,+
+            data_temp = []
+            for i in range(len(answer['r1'])):
+                data_temp.append(['-', answer['r1'][i].decode("utf-8")])
+            temp['path'] = data_temp
+            return temp
+
+    def legacy_get_hop2_subgraph(self, _entity, _predicate, dbp, _right=True):
         """
             Function fetches the 2hop subgraph around this entity, and following this predicate
         :param _entity: str: URI of the entity around which we need the subgraph
@@ -150,21 +211,52 @@ class create_subgraph():
 
         return list(set([r.decode("utf-8") for r in right_predicates])), list(
                 set([l.decode("utf-8") for l in left_predicates]))
-    # def get_hop2_subgraph(self,_entity,_predicate,dbp,_right=True):
-    #     '''
-    #
-    #
-    #
-    #     :param _entity: central entity
-    #     :param _predicate: a predicate after which one needs the subgraph
-    #     :return: a set of outgoing and incoming predicates with respect to that of given _predicate
-    #     '''
-    #     right_properties,left_properties = dbp.get_hop2_subgraph(str(_entity),_predicate,right=_right)
-    #     # print("len in the function ", len(right_properties),len(left_properties))
-    #     return list(set([r.decode("utf-8")  for r in right_properties])),list(set([l.decode("utf-8") for l in left_properties]))
+
+    def get_hop2_subgraph(self,_entity,_predicate,dbp,_right=True):
+        '''
 
 
 
+        :param _entity: central entity
+        :param _predicate: a predicate after which one needs the subgraph
+        :return: a set of outgoing and incoming predicates with respect to that of given _predicate
+        '''
+        right_properties,left_properties = dbp.get_hop2_subgraph(str(_entity),_predicate,right=_right)
+        # print("len in the function ", len(right_properties),len(left_properties))
+        return list(set([r.decode("utf-8")  for r in right_properties])),list(set([l.decode("utf-8") for l in left_properties]))
+
+    @classmethod
+    def two_topic_entity(cls, te1, te2, dbp):
+        '''
+            The reason to handle two topic entity differtly is that, having two entites can help in
+            drastically reducing search space.
+            There are three ways to fit the set of te1,te2 and r1,r2
+             > SELECT DISTINCT ?uri WHERE { ?uri <%(e_to_e_out)s> <%(e_out_1)s> . ?uri <%(e_to_e_out)s> <%(e_out_2)s>}
+             > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. <%(e_in_2)s> <%(e_in_to_e_2)s> ?uri}
+             > SELECT DISTINCT ?uri WHERE { <%(e_in_1)s> <%(e_in_to_e_1)s> ?uri. ?uri <%(e_in_2)s> <%(e_in_to_e_2)s> }
+        '''
+        if te1[0] != "<":
+            te1 = "<" + te1 + ">"
+        if te2[0] != "<":
+            te2 = "<" + te2 + ">"
+
+        data = []
+        SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
+        SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
+        SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+
+        SPARQL1 = SPARQL1 % {'te1': te1, 'te2': te2}
+        SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
+        SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+        data.append(cls.get_two_topic_entity_paths(SPARQL1, te1, te2, 1, dbp))
+        # data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
+        data.append(cls.get_two_topic_entity_paths(SPARQL2, te1, te2, 2, dbp))
+        # data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
+        data.append(cls.get_two_topic_entity_paths(SPARQL3, te1, te2, 3, dbp))
+
+        return data
+
+    # data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
     def subgraph(self,_entities,_question,_relations,_use_blacklist=True,_qald=False):
         '''
 
@@ -403,7 +495,14 @@ class create_subgraph():
 
 
         if len(_entities) == 2:
-            pass
+            results = self.two_topic_entity(_entities[0], _entities[1], self.dbp)
+
+            return [], results
+            #Filtering out blacklisted relationships
+            for node in results:
+                for paths in node['path']:
+                    pass
+
         # #idfiy everything and return.
         # paths_hop1_id = []
         # for p in paths_hop1_uri:

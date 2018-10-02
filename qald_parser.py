@@ -43,7 +43,7 @@ import pickle
 import warnings
 from pprint import pprint
 
-from utils.dbpedia_interface import DBPedia
+# from utils.dbpedia_interface import DBPedia
 from utils import natural_language_utilities as nlutils
 
 # Some macros
@@ -55,7 +55,7 @@ PARSED_QALD_DIR_TEST = './resources/qald-7-test-parsed.pickle'
 
 
 # Global variables
-dbp = DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
+# dbp = DBPedia(_verbose=True, caching=True)  # Summon a DBpedia interface
 
 
 # Better warning formatting. Ignore.
@@ -318,10 +318,11 @@ def get_true_path(sparql, raw_sparql):
 
     # Detect and handle COUNT queries differently.
     try:
-        temp = sparql['variables'][0]['expression']['agggregation']
-        is_count = True
-        constraints['count'] = True
-        sparql['variables'] = [sparql['variables'][0]['expression']['expression']]
+        temp = sparql['variables'][0]['expression']['aggregation']
+        if temp == 'count':
+            is_count = True
+            constraints['count'] = True
+            sparql['variables'] = [sparql['variables'][0]['expression']['expression']]
     except (TypeError, KeyError) as e:
         pass
 

@@ -307,7 +307,7 @@ class DBPedia:
         variables = [x for x in response[u'head'][u'vars']]
 
         # NOTE: Assuming that there's only one variable
-        for index in xrange(0, len(variables)):
+        for index in range(0, len(variables)):
             value = [x[variables[index]][u'value'].encode('ascii', 'ignore') for x in response[u'results'][u'bindings']]
             values[variables[index]] = value
         return values

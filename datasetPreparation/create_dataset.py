@@ -50,9 +50,11 @@ class create_data_node():
     def dataset_preparation_time(self,_data_node):
         parsed_sparql = self.parse_sparql(_data_node['sparql_query'])
         print('parsed sparql is ', parsed_sparql)
+        '''
+            Currently path output is --> ['-http://dbpedia.org/property/mother', '+http://dbpedia.org/property/spouse']
+            Shift to standard semantics --> ['-','http://dbpedia.org/property/mother', '+', 'http://dbpedia.org/property/spouse']
+        '''
         path, entity, constraints = qp.get_true_path(parsed_sparql,_data_node['sparql_query'])
         print('entity is ', entity)
         hop1,hop2  = self.create_subgraph.subgraph(entity,_data_node['corrected_question'],self.relation_file,_use_blacklist=True,_qald=self.qald)
         return hop1,hop2,path,entity,constraints
-
-

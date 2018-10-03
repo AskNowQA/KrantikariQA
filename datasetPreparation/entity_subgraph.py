@@ -123,6 +123,26 @@ class create_subgraph():
 
         return _predicates
 
+    def check_path_for_filter(self,path,predicate_blacklist,_use_blacklist=True, _only_dbo=False, _qald=False):
+        '''
+
+
+        :param path: ['-', 'http://dbpedia.org/property/mother', '+','http://dbpedia.org/property/regent']
+        :param predicate_blacklist: a list of black list path
+        :param _use_blacklist: Same as filter predicate
+        :param _only_dbo: Same as filter predicate
+        :param _qald: Same as filter predicate
+        :return:
+
+            path is ['-', 'http://dbpedia.org/property/mother', '+','http://dbpedia.org/property/regent']
+            It checks if every relation in the path is part of blacklist or not. If no return True else fasle
+        '''
+        rel = [path[1],path[-1]]
+        if len(self.filter_predicates(rel, predicate_blacklist,_use_blacklist=True, _only_dbo=False, _qald=False)) == 2:
+            return True
+        return False
+
+
     @staticmethod
     def get_two_topic_entity_paths(SPARQL, te1, te2, id, dbp):
         if id == 1:
@@ -497,11 +517,19 @@ class create_subgraph():
         if len(_entities) == 2:
             results = self.two_topic_entity(_entities[0], _entities[1], self.dbp)
 
-            return [], results
+            # return [], results
             #Filtering out blacklisted relationships
+            all_paths = []
             for node in results:
-                for paths in node['path']:
-                    pass
+                all_paths = all_paths + node['path']
+
+            paths_hop2_uri = []
+            for path in all_paths:
+                if self.check_path_for_filter(path,predicate_blacklist=self.predicate_blacklist
+                        ,_use_blacklist=True, _only_dbo=_qald, _qald=_qald):
+                    paths_hop2_uri.append(path)
+
+            paths_hop1_uri = []
 
         # #idfiy everything and return.
         # paths_hop1_id = []

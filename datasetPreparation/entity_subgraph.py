@@ -389,24 +389,6 @@ class create_subgraph():
             e_out_to_e_out_out_sf = [sf_vocab[x] for uris in e_out_to_e_out_out.values() for x in uris]
             e_out_in_to_e_out_sf = [sf_vocab[x] for uris in e_out_in_to_e_out.values() for x in uris]
 
-
-            if True:
-                print(len(e_in_in_to_e_in_sf),len(e_in_to_e_in_out_sf),len(e_out_to_e_out_out_sf),len(e_out_in_to_e_out_sf))
-                print(len(set(e_out_in_to_e_out_sf)))
-                print("number of predicates for e_in_to_e_in_out is", len(e_in_to_e_in_out))
-                print("number of predicates for e_out_to_e_out_out_sf is", len(e_out_to_e_out_out))
-                total_counter = 0
-                for key in e_in_to_e_in_out:
-                    total_counter = total_counter + len(e_in_to_e_in_out[key])
-                print ("e_in_to_e_in_out outgoing properties", total_counter)
-                total_counter = 0
-                for key in e_out_to_e_out_out:
-                    total_counter = total_counter + len(e_out_to_e_out_out[key])
-                print("e_out_to_e_out_out outgoing properties", total_counter)
-                total_counter = 0
-                for key in e_out_in_to_e_out:
-                    total_counter = total_counter + len(e_out_in_to_e_out[key])
-                print("e_out_in_to_e_out outgoing properties", total_counter)
             # WORD-EMBEDDING FILTERING
             e_in_in_to_e_in_filter_indices = self.similar_predicates(_v_qt=v_qt,_predicates=e_in_in_to_e_in_sf,
                                                                      _return_indices=True,

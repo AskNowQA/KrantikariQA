@@ -4,18 +4,18 @@
 
 '''
 import numpy as np
-# from utils import embeddings_interface
+from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
 import traceback
 
-class create_subgraph():
+class CreateSubgraph:
     def __init__(self,_dbpedia_interface,_predicate_blacklist,relation_file, qald=False):
 
         self.K_1HOP_GLOVE = 200
         self.K_1HOP_MODEL = 5
         self.K_2HOP_GLOVE = 2000
         self.K_2HOP_MODEL = 5
-        self.EMBEDDING = "glove"
+        self.EMBEDDING = "ulmfit"
         self.TRAINING = True # for older system
         self.qald = qald #Dataset specific stuff. As the predicate blacklist would be differently handled when compared to LC-QuAD.
 
@@ -36,9 +36,7 @@ class create_subgraph():
             Function used to tokenize the question and compare the tokens with the predicates.
             Then their top k are selected.
         """
-        if len(_predicates) > _k:
-            return range(_k)
-        return range(len(_predicates))
+
         # If there are no predicates
         if len(_predicates) == 0:
             return np.asarray([]) if _return_indices else []
@@ -53,7 +51,7 @@ class create_subgraph():
                 p = _predicates[i].decode("utf-8")
             except:
                 p = _predicates[i]
-            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding=self.EMBEDDING), axis=0)
+            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding=self.EMBEDDING).astype(np.float), axis=0)
 
             # If either of them is a zero vector, the cosine is 0.\
             if np.sum(v_p) == 0.0 or np.sum(_v_qt) == 0.0 or p.strip() == "":
@@ -137,7 +135,10 @@ class create_subgraph():
             path is ['-', 'http://dbpedia.org/property/mother', '+','http://dbpedia.org/property/regent']
             It checks if every relation in the path is part of blacklist or not. If no return True else fasle
         '''
-        rel = [path[1],path[-1]]
+        if len(path) == 2:
+            rel = [path[1]]
+        else:
+            rel = [path[1],path[-1]]
         if len(self.filter_predicates(rel, predicate_blacklist,_use_blacklist=True, _only_dbo=False, _qald=False)) == 2:
             return True
         return False
@@ -264,15 +265,21 @@ class create_subgraph():
         SPARQL1 = '''SELECT DISTINCT ?r1 ?r2 WHERE { ?uri ?r1 %(te1)s. ?uri ?r2 %(te2)s . } '''
         SPARQL2 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  %(te2)s ?r2 ?uri . } '''
         SPARQL3 = '''SELECT DISTINCT ?r1 ?r2 WHERE { %(te1)s ?r1 ?uri.  ?uri ?r2 %(te2)s . } '''
+        SPARQL4 = '''SELECT DISTINCT ?r1 WHERE { %(te1)s ?r1 %(te2)s . } '''
 
         SPARQL1 = SPARQL1 % {'te1': te1, 'te2': te2}
         SPARQL2 = SPARQL2 % {'te1': te1, 'te2': te2}
         SPARQL3 = SPARQL3 % {'te1': te1, 'te2': te2}
+        SPARQL4 = SPARQL4 % {'te1': te1, 'te2': te2}
+
         data.append(cls.get_two_topic_entity_paths(SPARQL1, te1, te2, 1, dbp))
         # data.append(cls.get_something(SPARQL1, te2, te1, 1, dbp))
         data.append(cls.get_two_topic_entity_paths(SPARQL2, te1, te2, 2, dbp))
         # data.append(cls.get_something(SPARQL2, te2, te1, 2, dbp))
         data.append(cls.get_two_topic_entity_paths(SPARQL3, te1, te2, 3, dbp))
+        temp = cls.get_two_topic_entity_paths(SPARQL4, te1, te2, 4, dbp)
+        print(len(temp['path']), " is the length of the path")
+        data.append(cls.get_two_topic_entity_paths(SPARQL4, te1, te2, 4, dbp))
 
         return data
 
@@ -299,8 +306,8 @@ class create_subgraph():
         qt = nlutils.tokenize(_question, _remove_stopwords=False)
 
         # Vectorize question
-        v_qt = " "
-        # v_qt = np.mean(embeddings_interface.vectorize(qt, _embedding=self.EMBEDDING), axis=0)
+        # v_qt = " "
+        v_qt = np.mean(embeddings_interface.vectorize(qt, _embedding=self.EMBEDDING).astype(np.float), axis=0)
 
         if len(_entities) == 1:
 
@@ -506,12 +513,16 @@ class create_subgraph():
                 all_paths = all_paths + node['path']
 
             paths_hop2_uri = []
+            paths_hop1_uri = []
+
             for path in all_paths:
                 if self.check_path_for_filter(path,predicate_blacklist=self.predicate_blacklist
                         ,_use_blacklist=True, _only_dbo=_qald, _qald=_qald):
-                    paths_hop2_uri.append(path)
+                    if len(path) > 2:
+                        paths_hop2_uri.append(path)
+                    else:
+                        paths_hop1_uri.append(path)
 
-            paths_hop1_uri = []
 
         # #idfiy everything and return.
         # paths_hop1_id = []

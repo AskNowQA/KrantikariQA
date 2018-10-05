@@ -15,26 +15,41 @@ def run(_dataset,_save_location,_file_name,_predicate_blacklist,_relation_file,_
 
     Note :- flag is used for determining whether the correct path was generated in the dataset
     generation process or not.
+
+    data = {
+            'node' : _data_node,
+            'parsed_sparql' : '',
+            'path':[],
+            'entity':[],
+            'constraints':{},
+            'updated_sparql':'',
+            'hop1':[],
+            'hop2':[],
+            'error_flag':{
+                'path_found_in_data_generated':False,
+                'constraint_found_in_data_generated':False
+            },
+            'rdf_constraint' : {}
+        }
     '''
 
     counter = 0
-    cd_node = cd.create_data_node(_predicate_blacklist,_relation_file,_qald)
+    cd_node = cd.CreateDataNode(_predicate_blacklist=_predicate_blacklist, _relation_file=_relation_file, _qald=_qald)
     successful_data = []
     unsuccessful_data = []
     for node in _dataset:
         try:
-            temp = {}
-            temp['node'] = node
-            temp['hop1'],temp['hop2'],temp['path'],temp['entity'],temp['constraints'],flag =  cd_node.dataset_preparation_time(node)
-            if flag:
-                successful_data.append(temp)
+            data =  cd_node.dataset_preparation_time(_data_node=node,rdf=True)
+            data['error_flag']['aux_error'] = False
+            if data['error_flag']['path_found_in_data_generated'] and \
+                    data['error_flag']['constraint_found_in_data_generated']:
+                successful_data.append(data)
             else:
-                temp['error'] = 'true path not generated'
-                unsuccessful_data.append(temp)
+                unsuccessful_data.append(data)
         except:
             temp = {}
             temp['node'] = node
-            temp['error'] = str(traceback.print_exc())
+            temp['error_flag']['aux_error'] = str(traceback.print_exc())
             unsuccessful_data.append(temp)
         print ("done with, ", counter)
         counter = counter + 1

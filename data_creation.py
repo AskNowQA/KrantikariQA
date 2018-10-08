@@ -4,13 +4,29 @@
 
 import datasetPreparation.create_dataset as cd
 import traceback
+import pathlib
+import json
+import sys
+import os
+# Checks if the location exists and if not create a new one.
+create_dir = lambda dir_location: pathlib.Path(dir_location).mkdir(parents=True, exist_ok=True)
 
-def run(_dataset,_save_location,_file_name,_predicate_blacklist,_relation_file,_qald=False):
+
+
+_save_location_success = 'data/data/raw/%(dataset)s/success'
+_save_location_unsuccess = 'data/data/raw/%(dataset)s/unsuccess'
+_save_location = 'data/data/raw/lcquad'
+file_name = '.json'
+
+def run(_dataset,_save_location_success,_save_location_unsuccess,
+        _file_name,_predicate_blacklist,_relation_file,return_data,_qald=False):
     '''
 
     :param dataset: a list of data node.
-    :param save_location: location where the data would be stored.
-    :param file_name: name of the file in which data is stored.
+    :param _save_location_success: location where the data where everything is correct is stored.
+    :param _save_location_unsuccess: location where the data where there was some error is stored.
+    :param file_name: name f the file in which data is stored.
+    :param return_data: returns the success and unsucess data if true else nothing is returned
     :return:
 
     Note :- flag is used for determining whether the correct path was generated in the dataset
@@ -33,10 +49,17 @@ def run(_dataset,_save_location,_file_name,_predicate_blacklist,_relation_file,_
         }
     '''
 
+    #creating dir, if it doesn't exists
+    create_dir(_save_location_success)
+    create_dir(_save_location_unsuccess)
+    fullpath_success = os.path.join(_save_location_success,_file_name)
+    fullpath_unsuccess = os.path.join(_save_location_unsuccess,_file_name)
+
     counter = 0
     cd_node = cd.CreateDataNode(_predicate_blacklist=_predicate_blacklist, _relation_file=_relation_file, _qald=_qald)
     successful_data = []
     unsuccessful_data = []
+
     for node in _dataset:
         try:
             data =  cd_node.dataset_preparation_time(_data_node=node,rdf=True)
@@ -54,4 +77,51 @@ def run(_dataset,_save_location,_file_name,_predicate_blacklist,_relation_file,_
         print ("done with, ", counter)
         counter = counter + 1
 
-    return successful_data,unsuccessful_data
+    json.dump(successful_data,open(fullpath_success,'w+'))
+    json.dump(unsuccessful_data,open(fullpath_unsuccess,'w+'))
+
+    print("the len of successfull data is ", len(successful_data))
+    print("the len of unsuccessfull data is ", len(unsuccessful_data))
+    if return_data:
+        return successful_data,unsuccessful_data
+
+if __name__ == "__main__":
+    start_index = sys.argv[1]
+    end_index = sys.argv[2]
+    dataset = sys.argv[3]
+
+    file_name = start_index+file_name
+
+    _save_location_success = _save_location_success % {'dataset':dataset}
+    _save_location_unsuccess = _save_location_unsuccess % {'dataset':dataset}
+
+    pb = open('resources/predicate.blacklist').readlines()
+    pb[-1] = pb[-1] + '\n'
+    pb = [r[:-1] for r in pb]
+
+
+
+    if dataset == 'qald':
+        '''
+            Functionality not supported
+        '''
+        print("this functionality is not supported yet")
+
+
+    if dataset == 'lcquad':
+        _dataset = json.load(open('resources/data_set.json'))
+
+    if end_index == -1:
+        _dataset = _dataset[int(start_index):]
+    else:
+        _dataset = _dataset[int(start_index):int(end_index)]
+
+
+    if dataset == 'lcquad':
+        run(_dataset=_dataset, _save_location_success=_save_location_success
+            , _save_location_unsuccess=_save_location_unsuccess,
+            _file_name=file_name,
+            _predicate_blacklist=pb, _relation_file={}, return_data=False, _qald=False)
+
+
+

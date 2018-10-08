@@ -10,7 +10,7 @@ import progressbar
 
 # This code will NOT work locally.
 sys.path.append('/data/priyansh/conda/fastai')
-# os.environ['QT_QPA_PLATFORM']='offscreen'
+os.environ['QT_QPA_PLATFORM']='offscreen'
 from fastai.text import *
 
 DEBUG = True
@@ -80,13 +80,13 @@ def __prepare__(_embedding=None):
 
     _init_special_characters_()
 
-    if _embedding == 'ulmfit':
+    if SELECTED_EMBEDDING == 'ulmfit':
         _parse_ulmfit_()
 
-    if _embedding == 'glove':
+    if SELECTED_EMBEDDING == 'glove':
         _parse_glove_()
 
-    if _embedding == 'fasttext':
+    if SELECTED_EMBEDDING == 'fasttext':
         warnings.warn("Haven't implemented Fasttext parser yet.")
         raise NotYetImplementedError
 

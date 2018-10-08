@@ -555,7 +555,7 @@ class DBPedia:
 
         final_response = self.shoot_custom_query(query)
 
-        if len(final_response[u'results'][u'bindings']) > 10000:
+        if len(final_response[u'results'][u'bindings']) > 99999:
             offset_flag = True
             while offset_flag:
                 offset = offset + 10000

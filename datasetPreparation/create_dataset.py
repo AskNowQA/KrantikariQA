@@ -84,7 +84,7 @@ class CreateDataNode():
                 hop1.pop(index)
                 return hop1,hop2,True
             except ValueError:
-                print(hop1_sf[0],path_sf[0])
+                # print(hop1_sf[0],path_sf[0])
                 print(traceback.print_exc())
                 return hop1,hop2,False
         else:
@@ -95,7 +95,7 @@ class CreateDataNode():
                 hop2.pop(index)
                 return hop1,hop2,True
             except ValueError:
-                print(hop2_sf[0], path_sf[0])
+                # print(hop2_sf[0], path_sf[0])
                 print(traceback.print_exc())
                 return hop1,hop2,False
 
@@ -108,7 +108,7 @@ class CreateDataNode():
         :return:
         '''
         try:
-            const_list_sf = [[r[0], nlutils.get_label_via_parsing(r[1])] for r in constraint_list]
+            const_list_sf = [nlutils.get_label_via_parsing(r) for r in constraint_list]
             true_constraint_sf = nlutils.get_label_via_parsing(true_constraint)
             index = const_list_sf.index(true_constraint_sf)
             constraint_list.pop(index)

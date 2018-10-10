@@ -95,9 +95,12 @@ def generate_rdf_candidates(path,topic_entity,dbp):
     '''
     sparql = construct_sparql(path,topic_entity)
     sparql_x_constraints, sparql_uri_constraints = construct_sparql_with_constraints(sparql)
-    x_const = shoot_sparql(sparql = sparql_x_constraints, dbp=dbp, x=True)
+    if len(path) > 2:
+        x_const = shoot_sparql(sparql = sparql_x_constraints, dbp=dbp, x=True)
+        x_const = [rel.decode("utf-8") for rel in x_const if is_not_blacklisted(rel.decode('utf-8'))]
+    else:
+        x_const = []
     uri_const = shoot_sparql(sparql = sparql_uri_constraints, dbp=dbp, x=False)
-    x_const = [rel.decode("utf-8") for rel in x_const if is_not_blacklisted(rel.decode('utf-8'))]
     uri_const = [rel.decode("utf-8") for rel in uri_const if is_not_blacklisted(rel.decode("utf-8"))]
     return x_const,uri_const
 

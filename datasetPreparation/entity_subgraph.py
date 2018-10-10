@@ -137,10 +137,13 @@ class CreateSubgraph:
         '''
         if len(path) == 2:
             rel = [path[1]]
+            if len(self.filter_predicates(rel, predicate_blacklist, _use_blacklist=True, _only_dbo=False,
+                                          _qald=False)) == 1:
+                return True
         else:
             rel = [path[1],path[-1]]
-        if len(self.filter_predicates(rel, predicate_blacklist,_use_blacklist=True, _only_dbo=False, _qald=False)) == 2:
-            return True
+            if len(self.filter_predicates(rel, predicate_blacklist,_use_blacklist=True, _only_dbo=False, _qald=False)) == 2:
+                return True
         return False
 
 
@@ -279,7 +282,7 @@ class CreateSubgraph:
         data.append(cls.get_two_topic_entity_paths(SPARQL3, te1, te2, 3, dbp))
         temp = cls.get_two_topic_entity_paths(SPARQL4, te1, te2, 4, dbp)
         print(len(temp['path']), " is the length of the path")
-        data.append(cls.get_two_topic_entity_paths(SPARQL4, te1, te2, 4, dbp))
+        data.append(temp)
 
         return data
 

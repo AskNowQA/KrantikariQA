@@ -142,6 +142,7 @@ def idfy_relations_in_node(node,relation_dict):
     return node,relation_dict
 
 combined_data = collect_files(_save_location_success % {'dataset':dataset})
+combined_data_un = collect_files(_save_location_unsuccess % {'dataset':dataset})
 
 for index,node in enumerate(combined_data):
     combined_data[index],relation_dict = idfy_relations_in_node(node,relation_dict=relation_dict)

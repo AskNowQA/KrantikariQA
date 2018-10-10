@@ -72,7 +72,8 @@ def run(_dataset,_save_location_success,_save_location_unsuccess,
         except:
             temp = {}
             temp['node'] = node
-            temp['error_flag']['aux_error'] = str(traceback.print_exc())
+            temp['error_flag'] = {}
+            temp['error_flag']['aux_error'] = traceback.format_exc()
             unsuccessful_data.append(temp)
         print ("done with, ", counter)
         counter = counter + 1
@@ -109,7 +110,7 @@ if __name__ == "__main__":
 
 
     if dataset == 'lcquad':
-        _dataset = json.load(open('resources/data_set.json'))
+        _dataset = json.load(open('resources/unsucessfull.json'))
 
     if end_index == -1:
         _dataset = _dataset[int(start_index):]

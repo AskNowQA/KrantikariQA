@@ -23,7 +23,7 @@ from utils import embeddings_interface as ei
 dataset = 'lcquad'
 _save_location_success = 'data/data/raw/%(dataset)s/success'
 _save_location_unsuccess = 'data/data/raw/%(dataset)s/unsuccess'
-relation_dict_location = 'data/data/common/new_relation.pickle'
+relation_dict_location = 'data/data/common/relations.pickle'
 final_data_location = 'data/data/raw/%(dataset)s/success/id_big_data.json'
 
 dbp = dbi.DBPedia(caching=True)
@@ -168,13 +168,13 @@ pickle.dump(relation_dict,open(relation_dict_location,'wb+'))
 id_data = []
 
 
-x_id = ei.vocabularize(['x'])[0]
-uri_id = ei.vocabularize(['uri'])[0]
+x_id = int(ei.vocabularize(['x'])[0])
+uri_id = int(ei.vocabularize(['uri'])[0])
 
 for index,node in enumerate(combined_data):
     temp = {
         'uri' : {
-            'question-id' : list(ei.vocabularize(nlutils.tokenize(node['node']['corrected_question']))),
+            'question-id' : [int(id) for id in list(ei.vocabularize(nlutils.tokenize(node['node']['corrected_question'])))],
             'hop-2-properties' : node['hop2'],
             'hop-1-properties' : node['hop1']
         },
@@ -198,6 +198,7 @@ for index,node in enumerate(combined_data):
     temp['rdf-type-constraints'] = rdf_candidates
     id_data.append(temp)
 
+#embedding interface update vocab here
 json.dump(id_data,open(final_data_location %{'dataset':dataset},'w+'))
 
 

@@ -45,7 +45,7 @@ _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 _relations = aux.load_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
-gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
+# gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
 
 
 def load_data(data,parameter_dict,pointwise,schema='default',shuffle = False):
@@ -101,7 +101,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
     aux_save_information = {
         'epoch' : 0,
         'test_accuracy':0.0,
-        'validation_accuracy':0.0,
+        'validation_accura""cy':0.0,
         'parameter_dict':parameter_dict
     }
     train_loss = []
@@ -321,7 +321,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # setting up device,model name and loss types.
+    # setting up device,model namenpp and loss types.
     device = torch.device(args.device)
     training_model = args.model
     _dataset = args.dataset

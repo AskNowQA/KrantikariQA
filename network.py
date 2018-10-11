@@ -7,8 +7,6 @@ import os, sys
 os.environ['QT_QPA_PLATFORM']='offscreen'
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 sys.path.append('/data/priyansh/conda/fastai')
 import fastai

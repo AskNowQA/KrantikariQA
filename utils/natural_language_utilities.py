@@ -6,6 +6,7 @@ import os.path
 import warnings
 import html
 import validators
+import numpy as np
 
 if sys.version[0] == '2': from urlparse import urlparse
 else: from urllib.parse import urlparse
@@ -243,6 +244,21 @@ def fixup(x):
         ' @-@ ','-').replace('\\', ' \\ ')
     return re1.sub(' ', html.unescape(x))
 
+
+def pad_sequence(matrix_seq,max_length):
+    '''
+
+        #Works with list od list as well as numpy matrix
+    :param sequence: a matrix of list
+    :param max_length:
+    :return:
+
+    '''
+    pad_matrix =  np.zeros((len(matrix_seq), max_length))
+    for i, arr in enumerate(matrix_seq):
+        pad_matrix[i, :min(max_length, len(arr))] = arr[:min(max_length, len(arr))]
+
+    return pad_matrix
 
 
 if __name__ == "__main__":

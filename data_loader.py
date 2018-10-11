@@ -6,13 +6,16 @@ import os
 import sys
 import json
 import math
+import traceback
 import numpy as np
 from sklearn.utils import shuffle
 from torch.utils.data import Dataset, DataLoader
-from keras.preprocessing.sequence import pad_sequences
+# from utils.natural_language_utilities import pad_sequence
 
-if sys.version_info[0] == 3: import configparser as ConfigParser
-else: import ConfigParser
+if sys.version_info[0] == 3:
+    import configparser as ConfigParser
+else:
+    import ConfigParser
 
 # Custom imports
 from utils import embeddings_interface
@@ -32,6 +35,8 @@ config.read('configs/macros.cfg')
 SEED = config.getint('Commons', 'seed')
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
 COMMON_DATA_DIR = 'data/data/common'
+
+embeddings_interface.__check_prepared__()
 
 def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
               _neg_paths_per_epoch_train,
@@ -281,7 +286,15 @@ def create_relation_lookup_table(COMMON_DATA_DIR):
     glove_id_sf_to_glove_id_rel = {}
     for keys in relation:
         k = str(list(relation[keys][3]))
-        glove_id_sf_to_glove_id_rel[k] = list(relation[keys][4])
+        #THIS MUST BE REPLACED REPLACE REPLACE REPALCE
+        '''
+            REPLACE
+            REPLACE
+            REPLACE
+            REPLACE
+            REPLACE
+        '''
+        glove_id_sf_to_glove_id_rel[k] = list(relation[keys][-1])
 
     return glove_id_sf_to_glove_id_rel
 
@@ -341,7 +354,8 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
 
 
             # vocab, vectors = vocab_master.load_ulmfit()
-            vocab, vectors = vocab_master.load()
+            # vocab, vectors = vocab_master.load()
+            vectors = embeddings_interface.vectors
             #TODO: return everything.
             return vectors,questions, pos_paths, neg_paths, \
             pos_paths_rel1_sp, pos_paths_rel2_sp,neg_paths_rel1_sp, neg_paths_rel2_sp, \
@@ -349,7 +363,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
 
     except (EOFError, IOError) as e:
         with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset}, file)) as fp:
-            dataset = json.load(fp)
+            dataset = json.load(fp)[:100]
             glove_id_sf_to_glove_id_rel = create_relation_lookup_table(COMMON_DATA_DIR)
 
             ignored = []
@@ -368,14 +382,19 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
 
             pos_paths = []
             for i in dataset:
-                path_id = i['parsed-data']['path_id']
+                #@TODO: Change this path as soon as training thing changes.
+                path_id = i['parsed-data']['path']
                 positive_path = []
                 try:
                     for p in path_id:
-                        positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p[0])]
-                        positive_path += relations[int(p[1:])][3].tolist()
+                        if p in ['+','-']:
+                            positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
+                        else:
+                            positive_path += relations[int(p)][3].tolist()
                 except (TypeError, ValueError) as e:
                     ignored.append(i)
+                    print("error here")
+                    print(traceback.print_exc())
                     continue
                 pos_paths.append(positive_path)
 
@@ -398,7 +417,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             '''
 
             questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+            questions = nlutils.pad_sequence(questions,max_sequence_length)
 
             neg_paths = []
             for i in range(0, len(pos_paths)):
@@ -436,6 +455,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
 
             special_char = [embeddings_interface.vocabularize(['+']), embeddings_interface.vocabularize(['-'])]
             for pps in pos_paths:
+
                 p1, p2 = break_path(pps, special_char)
                 pos_paths_rel1_sp.append(p1)
                 pos_paths_rel1_rd.append(relation_table_lookup(p1,glove_id_sf_to_glove_id_rel))
@@ -469,55 +489,58 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
 
 
             for i in range(0, len(neg_paths)):
-                neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
-                neg_paths_rel1_sp[i] = pad_sequences(neg_paths_rel1_sp[i], maxlen=max_sequence_length, padding='post')
-                neg_paths_rel2_sp[i] = pad_sequences(neg_paths_rel2_sp[i], maxlen=max_sequence_length, padding='post')
-                neg_paths_rel1_rd[i] = pad_sequences(neg_paths_rel1_rd[i], maxlen=max_sequence_length, padding='post')
-                neg_paths_rel2_rd[i] = pad_sequences(neg_paths_rel2_rd[i], maxlen=max_sequence_length, padding='post')
+                neg_paths[i] = nlutils.pad_sequence(neg_paths[i],max_sequence_length)
+                neg_paths_rel1_sp[i] = nlutils.pad_sequence(neg_paths_rel1_sp[i],max_sequence_length)
+                neg_paths_rel2_sp[i] = nlutils.pad_sequence(neg_paths_rel2_sp[i],max_sequence_length)
+                neg_paths_rel1_rd[i] = nlutils.pad_sequence(neg_paths_rel1_rd[i],max_sequence_length)
+                neg_paths_rel2_rd[i] = nlutils.pad_sequence(neg_paths_rel2_rd[i],max_sequence_length)
             neg_paths = np.asarray(neg_paths)
             neg_paths_rel1_sp = np.asarray(neg_paths_rel1_sp)
             neg_paths_rel2_sp = np.asarray(neg_paths_rel2_sp)
             neg_paths_rel1_rd = np.asarray(neg_paths_rel1_rd)
             neg_paths_rel2_rd = np.asarray(neg_paths_rel2_rd)
 
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-            pos_paths_rel1_sp = pad_sequences(pos_paths_rel1_sp, maxlen=max_sequence_length, padding='post')
-            pos_paths_rel2_sp = pad_sequences(pos_paths_rel2_sp, maxlen=max_sequence_length, padding='post')
-            pos_paths_rel1_rd = pad_sequences(pos_paths_rel1_rd, maxlen=max_sequence_length, padding='post')
-            pos_paths_rel2_rd = pad_sequences(pos_paths_rel2_rd, maxlen=max_sequence_length, padding='post')
+            pos_paths = nlutils.pad_sequence(pos_paths,max_sequence_length)
+            pos_paths_rel1_sp = nlutils.pad_sequence(pos_paths_rel1_sp,max_sequence_length)
+            pos_paths_rel2_sp = nlutils.pad_sequence(pos_paths_rel2_sp,max_sequence_length)
+            pos_paths_rel1_rd = nlutils.pad_sequence(pos_paths_rel1_rd,max_sequence_length)
+            pos_paths_rel2_rd = nlutils.pad_sequence(pos_paths_rel2_rd,max_sequence_length)
 
 
             # vocab, vectors = vocab_master.load_ulmfit()
-            vocab, vectors = vocab_master.load()
+            # vocab, vectors = vocab_master.load()
+            vectors = embeddings_interface.vectors
 
-            # Map everything
-            unks_counter = 0
-            # number of unks
-            for i in range(len(questions)):
-                for index in range(len(questions[i])):
-                    try:
-                        questions[i][index] = vocab[questions[i][index]]
-                    except KeyError:
-                        unks_counter = unks_counter + 1
-                        questions[i][index] = 1
-                # questions[i] = np.asarray([vocab[key] for key in questions[i]])
-                pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
-                pos_paths_rel1_sp[i] = np.asarray([vocab[key] for key in pos_paths_rel1_sp[i]])
-                pos_paths_rel2_sp[i] = np.asarray([vocab[key] for key in pos_paths_rel2_sp[i]])
-                pos_paths_rel1_rd[i] = np.asarray([vocab[key] for key in pos_paths_rel1_rd[i]])
-                pos_paths_rel2_rd[i] = np.asarray([vocab[key] for key in pos_paths_rel2_rd[i]])
-
-                for j in range(len(neg_paths[i])):
-                    neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
-                    neg_paths_rel1_sp[i][j] = np.asarray([vocab[key] for key in neg_paths_rel1_sp[i][j]])
-                    neg_paths_rel2_sp[i][j] = np.asarray([vocab[key] for key in neg_paths_rel2_sp[i][j]])
-                    neg_paths_rel1_rd[i][j] = np.asarray([vocab[key] for key in neg_paths_rel1_rd[i][j]])
-                    neg_paths_rel2_rd[i][j] = np.asarray([vocab[key] for key in neg_paths_rel2_rd[i][j]])
-
-            print("places where glove id exists and not in vecotrs ", unks_counter)
+            #Legacy stuff.
+            # # Map everything
+            # unks_counter = 0
+            # # number of unks
+            # for i in range(len(questions)):
+            #     for index in range(len(questions[i])):
+            #         try:
+            #             questions[i][index] = vocab[questions[i][index]]
+            #         except KeyError:
+            #             unks_counter = unks_counter + 1
+            #             questions[i][index] = 1
+            #     # questions[i] = np.asarray([vocab[key] for key in questions[i]])
+            #     pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+            #     pos_paths_rel1_sp[i] = np.asarray([vocab[key] for key in pos_paths_rel1_sp[i]])
+            #     pos_paths_rel2_sp[i] = np.asarray([vocab[key] for key in pos_paths_rel2_sp[i]])
+            #     pos_paths_rel1_rd[i] = np.asarray([vocab[key] for key in pos_paths_rel1_rd[i]])
+            #     pos_paths_rel2_rd[i] = np.asarray([vocab[key] for key in pos_paths_rel2_rd[i]])
+            #
+            #     for j in range(len(neg_paths[i])):
+            #         neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
+            #         neg_paths_rel1_sp[i][j] = np.asarray([vocab[key] for key in neg_paths_rel1_sp[i][j]])
+            #         neg_paths_rel2_sp[i][j] = np.asarray([vocab[key] for key in neg_paths_rel2_sp[i][j]])
+            #         neg_paths_rel1_rd[i][j] = np.asarray([vocab[key] for key in neg_paths_rel1_rd[i][j]])
+            #         neg_paths_rel2_rd[i][j] = np.asarray([vocab[key] for key in neg_paths_rel2_rd[i][j]])
+            #
+            # print("places where glove id exists and not in vecotrs ", unks_counter)
             # return vectors, questions, pos_paths, neg_paths, pos_paths_rel1_sp, pos_paths_rel2_sp, neg_paths_rel1_sp, neg_paths_rel2_sp, \
             #        pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd
 
+            print("att ht place where things are made")
             with open(os.path.join(_model_specific_data_dir % {'dataset': _dataset, 'model': _model},
                                    file + ".mapped.npz"), "wb+") as data:
                 np.savez(data, questions, pos_paths, neg_paths,
@@ -597,7 +620,7 @@ def create_dataset_slotpointer(file, max_sequence_length, relations, _dataset, _
 
             '''
             questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
-            questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
+            questions = nlutils.pad_sequences(questions, max_sequence_length)
 
             neg_paths = []
 
@@ -666,13 +689,13 @@ def create_dataset_slotpointer(file, max_sequence_length, relations, _dataset, _
 
 
             for i in range(0, len(neg_paths)):
-                neg_paths[i] = pad_sequences(neg_paths[i], maxlen=max_sequence_length, padding='post')
-                neg_paths_rel1[i] = pad_sequences(neg_paths_rel1[i], maxlen=max_sequence_length, padding='post')
-                neg_paths_rel2[i] = pad_sequences(neg_paths_rel2[i], maxlen=max_sequence_length, padding='post')
+                neg_paths[i] = nlutils.pad_sequences(neg_paths[i], maxlen=max_sequence_length)
+                neg_paths_rel1[i] = nlutils.pad_sequences(neg_paths_rel1[i], maxlen=max_sequence_length)
+                neg_paths_rel2[i] = nlutils.pad_sequences(neg_paths_rel2[i], maxlen=max_sequence_length)
             neg_paths = np.asarray(neg_paths)
-            pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
-            pos_paths_rel1 = pad_sequences(pos_paths_rel1, maxlen=max_sequence_length, padding='post')
-            pos_paths_rel2 = pad_sequences(pos_paths_rel2, maxlen=max_sequence_length, padding='post')
+            pos_paths = nlutils.pad_sequences(pos_paths, maxlen=max_sequence_length)
+            pos_paths_rel1 = nlutils.pad_sequences(pos_paths_rel1, maxlen=max_sequence_length)
+            pos_paths_rel2 = nlutils.pad_sequences(pos_paths_rel2, maxlen=max_sequence_length)
 
             vocab, vectors = vocab_master.load()
 
@@ -710,7 +733,7 @@ def create_dataset_slotpointer(file, max_sequence_length, relations, _dataset, _
 
 def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_data_dir,
                             _model_specific_data_dir
-                            , _model='core_chain_pairwise'):
+                            , _model='core_chain_pairwise',_coomon_dir='data/data/common'):
     with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset, 'model': _model},
                            file)) as data:
         dataset = json.load(data)
@@ -745,7 +768,7 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
             unpadded_neg_path = datum["rdf-type-constraints"]
             unpadded_neg_path = remove_positive_path(pos_path, unpadded_neg_path)
             np.random.shuffle(unpadded_neg_path)
-            unpadded_neg_path = pad_sequences(unpadded_neg_path, maxlen=max_sequence_length, padding='post')
+            unpadded_neg_path = nlutils.pad_sequences(unpadded_neg_path,max_sequence_length)
 
             '''
                 Remove positive path from negative paths.
@@ -768,34 +791,37 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
         questions = np.asarray(questions, dtype=np.int64)
 
         # questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
-        pos_paths = pad_sequences(pos_paths, maxlen=max_sequence_length, padding='post')
+        pos_paths = nlutils.pad_sequences(pos_paths, max_sequence_length)
         neg_paths = np.asarray(neg_paths)
 
-        vocab, vectors = vocab_master.load()
+        # vocab, vectors = vocab_master.load()
 
+
+        vectors = embeddings_interface.vectors
         exception_counter = 0
+        #Legacy stuff
         # Map everything
-        for i in range(len(questions)):
-            questions[i] = np.asarray([vocab[key] for key in questions[i]])
-
-            # pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
-            for t in range(len(pos_paths[i])):
-                try:
-                    pos_paths[i][t] = vocab[pos_paths[i][t]]
-                except KeyError:
-                    print("key error")
-            #     try:
-            #         if pos_paths[i][t] == 36418:
-            #             print ("ola")
-            #         pos_paths[i][t] = vocab[pos_paths[i][t]]
-            #     except KeyError:
-            #         exception_counter = exception_counter + 1
-            #         print(exception_counter)
-            # print(exception_counter)
-            # raise Exception
-            # pos_paths[i] = np.asarray(pos_paths[i])
-            for j in range(len(neg_paths[i])):
-                neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
+        # for i in range(len(questions)):
+        #     questions[i] = np.asarray([vocab[key] for key in questions[i]])
+        #
+        #     # pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
+        #     for t in range(len(pos_paths[i])):
+        #         try:
+        #             pos_paths[i][t] = vocab[pos_paths[i][t]]
+        #         except KeyError:
+        #             print("key error")
+        #     #     try:
+        #     #         if pos_paths[i][t] == 36418:
+        #     #             print ("ola")
+        #     #         pos_paths[i][t] = vocab[pos_paths[i][t]]
+        #     #     except KeyError:
+        #     #         exception_counter = exception_counter + 1
+        #     #         print(exception_counter)
+        #     # print(exception_counter)
+        #     # raise Exception
+        #     # pos_paths[i] = np.asarray(pos_paths[i])
+        #     for j in range(len(neg_paths[i])):
+        #         neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
         return vectors, questions, pos_paths, neg_paths
 

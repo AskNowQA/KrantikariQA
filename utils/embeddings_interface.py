@@ -177,13 +177,6 @@ def _parse_glove_():
             # Parse line
             word, coefs = __parse_line__(line)
 
-            #         try:
-            #             coefs = np.asarray(values[1:], dtype='float32')
-            #         except ValueError:
-            #             traceback.print_exc()
-            #             print(lines)
-            #             print(values)
-            #             print(word)
             # Ignore if word is a special char
             if word in SPECIAL_CHARACTERS:
                 continue
@@ -444,3 +437,22 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding='glove'):
     return float(cosine_similarity)
 
 
+def update_vocab(_words, _embedding=None):
+    """
+        Function to add new words to an existing vocab and save it to disk.
+
+    :return: None
+    """
+    global vocab, vectors
+    __check_prepared__(_embedding=_embedding)
+
+    old_len = len(vocab)
+    new_vocab = {word: vocab.get(word, len(vocab)+i) for i, word in enumerate(_words)}
+    vocab.update(new_vocab)
+    new_len = len(vocab)
+
+    # Need new vectors for all these new words.
+    new_vectors = np.random.randn(new_len-old_len, EMBEDDING_DIM)
+    vectors = np.vstack((vectors, new_vectors))
+
+    save()

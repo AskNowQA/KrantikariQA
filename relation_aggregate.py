@@ -114,7 +114,7 @@ print "dumping the file", COMMON_DIR
 
 print "length of unique relations", str(len(relations_dict))
 
-pickle.dump(relations_dict,open(COMMON_DIR + 'relations.pickle','w+'))
+pickle.dump(relations_dict, open(COMMON_DIR + 'relations.pickle','w+'))
 
 print "saving the dump locations"
 

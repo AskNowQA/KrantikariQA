@@ -94,7 +94,7 @@ def get_y(_datum):
                 001: list
     """
 
-    data = _datum['parsed-data']['sparql_query'][:_datum['parsed-data']['sparql_query'].lower().find('{')]
+    data = _datum['parsed-data']['node']['sparql_query'][:_datum['parsed-data']['node']['sparql_query'].lower().find('{')]
     # Check for ask
     if u'ask' in data.lower():
         return np.asarray([0, 1, 0])
@@ -105,20 +105,20 @@ def get_y(_datum):
     return np.asarray([0, 0, 1])
 
 
+#
+# def convert_to_continous_ids(X, vocab):
+#     """
+#         Maps the IDs in X to their values in vocab.
+#         The vectors and vocab are expected to come via vocab_master file
+#     """
+#     for i in range(X.shape[0]):
+#         for j in range(X.shape[1]):
+#             X[i][j] = vocab[X[i][j]]
+#
+#     return X
 
-def convert_to_continous_ids(X, vocab):
-    """
-        Maps the IDs in X to their values in vocab.
-        The vectors and vocab are expected to come via vocab_master file
-    """
-    for i in range(X.shape[0]):
-        for j in range(X.shape[1]):
-            X[i][j] = vocab[X[i][j]]
 
-    return X
-
-
-def preprocess_data(dataset, vocab, parameter_dict):
+def preprocess_data(dataset, parameter_dict):
     """
         Process the raw data to make X, Y
         Convert them to the new (continous) ID space
@@ -141,7 +141,7 @@ def preprocess_data(dataset, vocab, parameter_dict):
         Y[i] = y
 
     # Convert them to new IDs
-    X = convert_to_continous_ids(X, vocab)
+    # X = convert_to_continous_ids(X, vocab)
 
     # Split
     if parameter_dict['index'] == None:
@@ -387,9 +387,10 @@ if __name__ == "__main__":
     # Pull raw data from disk
 
     dataset = json.load(open(os.path.join(_dataset_specific_data_dir, _file)))
-    vocab, parameter_dict['vectors'] = vocab_master.load()
+    ei.__check_prepared__()
+    parameter_dict['vectors'] = ei.vectors
 
-    _dataset = preprocess_data(dataset, vocab, parameter_dict)
+    _dataset = preprocess_data(dataset, parameter_dict)
     _dataset['len'] = len(_dataset['train_X'])
     classifier = IntentClassifier(_parameter_dict=parameter_dict, _word_to_id=_word_to_id, _device=device)
 

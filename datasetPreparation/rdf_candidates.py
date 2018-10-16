@@ -90,6 +90,7 @@ def generate_rdf_candidates(path,topic_entity,dbp):
     '''
 
     :param path: the path for which the candidates needs to be generated
+    :param topic_entity: a list of topic entity
     :return: candidates
 
     '''

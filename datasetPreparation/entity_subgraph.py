@@ -117,7 +117,7 @@ class CreateSubgraph:
             _predicates = predicates_new
 
         # Filter out uniques
-        _predicates = list(set(_predicates))
+        # _predicates = _predicates
 
         return _predicates
 
@@ -318,9 +318,9 @@ class CreateSubgraph:
             right_properties, left_properties = self.dbp.get_properties(_uri=_entities[0], label=False)
             right_properties, left_properties = list(set([r.decode("utf-8") for r in right_properties])),list(set([l.decode("utf-8")for l in left_properties]))
 
-            right_properties = self.filter_predicates(right_properties, predicate_blacklist=self.predicate_blacklist,_use_blacklist=_use_blacklist, _only_dbo=_qald,
-                                                      _qald=_qald)
-            left_properties = self.filter_predicates(left_properties, predicate_blacklist=self.predicate_blacklist,_use_blacklist=_use_blacklist, _only_dbo=_qald, _qald=_qald)
+            right_properties = list(set(self.filter_predicates(right_properties, predicate_blacklist=self.predicate_blacklist,_use_blacklist=_use_blacklist, _only_dbo=_qald,
+                                                      _qald=_qald)))
+            left_properties = list(set(self.filter_predicates(left_properties, predicate_blacklist=self.predicate_blacklist,_use_blacklist=_use_blacklist, _only_dbo=_qald, _qald=_qald)))
 
 
 

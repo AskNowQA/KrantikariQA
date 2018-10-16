@@ -426,7 +426,7 @@ if __name__ == "__main__":
 
             modeler.load_from(model_path)
             optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())) +
-                                   list(filter(lambda p: p.requires_grad, modeler.scorer.parameters())))
+                                   list(filter(lambda p: p.requires_grad, modeler.scorer.parameters())),lr=0.0001)
 
     if training_model == 'reldet':
         modeler = net.RelDetection(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,

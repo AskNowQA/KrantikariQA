@@ -12,11 +12,9 @@ import corechain as cc
 import torch
 import torch.nn as nn
 from torch import optim
-from torch.utils.data import  DataLoader
 
 # Other libs
 import sys
-import time
 import numpy as np
 
 if sys.version_info[0] == 3: import configparser as ConfigParser

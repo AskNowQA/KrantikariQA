@@ -24,7 +24,7 @@ dataset = 'lcquad'
 _save_location_success = 'data/data/raw/%(dataset)s/success'
 _save_location_unsuccess = 'data/data/raw/%(dataset)s/unsuccess'
 relation_dict_location = 'data/data/common/relations.pickle'
-final_data_location = 'data/data/raw/%(dataset)s/success/id_big_data.json'
+final_data_location = 'data/data/%(dataset)s/id_big_data.json'
 
 dbp = dbi.DBPedia(caching=True)
 
@@ -148,6 +148,17 @@ for index,node in enumerate(combined_data):
     combined_data[index],relation_dict = idfy_relations_in_node(node,relation_dict=relation_dict)
 
 
+
+'''
+For hiearchial relation detection module one need all the relation (uri)
+have a randomly init vectors. 
+'''
+
+keys = list(relation_dict.keys())
+ei.update_vocab(keys)
+for rel in relation_dict:
+    relation_dict[rel].append(ei.vocabularize([rel]))
+
 print("done dumping relation")
 pickle.dump(relation_dict,open(relation_dict_location,'wb+'))
 
@@ -194,7 +205,7 @@ for index,node in enumerate(combined_data):
     for candidate_id in node['rdf_constraint']['candidates']['uri']:
         rdf_candidates.append([uri_id,candidate_id])
     for candidate_id in node['rdf_constraint']['candidates']['x']:
-        rdf_candidates.append([uri_id, candidate_id])
+        rdf_candidates.append([x_id, candidate_id])
     temp['rdf-type-constraints'] = rdf_candidates
     id_data.append(temp)
 

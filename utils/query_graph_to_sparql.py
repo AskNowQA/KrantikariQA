@@ -117,7 +117,7 @@ def return_sign(sign):
         return '-'
 
 
-def rdf_type_candidates(data, path_id, vocab, relations, reverse_vocab):
+def rdf_type_candidates(data, path_id, relations):
     '''
         Takes in path ID (continous IDs, not glove vocab).
         And return type candidates (in continous IDs)
@@ -133,7 +133,7 @@ def rdf_type_candidates(data, path_id, vocab, relations, reverse_vocab):
 
     # @TODO: Only generate specific candidates
     data = data['parsed-data']
-    path = id_to_path(path_id, relations, reverse_vocab, core_chain=True)
+    path = id_to_path(path_id, relations, core_chain=True)
     sparql = drt.reconstruct(data['entity'], path, alternative=True)
     sparqls = drt.create_sparql_constraints(sparql)
 
@@ -148,24 +148,24 @@ def rdf_type_candidates(data, path_id, vocab, relations, reverse_vocab):
     for i in range(len(type_x_candidates)):
         for j in range(len(type_x_candidates[i])):
             try:
-                type_x_candidates[i][j] = vocab[type_x_candidates[i][j]]
+                type_x_candidates[i][j] = type_x_candidates[i][j]
             except KeyError:
                 '''
                     vocab[1] refers to unknow word.
                 '''
-                type_x_candidates[i][j] = vocab[1]
+                type_x_candidates[i][j] = [1]
     for i in range(len(type_uri_candidates)):
         for j in range(len(type_uri_candidates[i])):
             try:
-                type_uri_candidates[i][j] = vocab[type_uri_candidates[i][j]]
+                type_uri_candidates[i][j] = type_uri_candidates[i][j]
             except:
-                type_uri_candidates[i][j] = vocab[1]
+                type_uri_candidates[i][j] = [1]
 
     # Return based on given input.
     return type_x_candidates + type_uri_candidates
 
 
-def id_to_path(path_id, relations, embeddingid_to_gloveid, core_chain = True):
+def id_to_path(path_id, relations, core_chain = True):
     '''
 
 
@@ -176,7 +176,7 @@ def id_to_path(path_id, relations, embeddingid_to_gloveid, core_chain = True):
     '''
 
     # mapping from discrete space to continuous space.
-    path_id = np.asarray([embeddingid_to_gloveid[i] for i in path_id])
+    # path_id = np.asarray([embeddingid_to_gloveid[i] for i in path_id])
 
     # find all the relations in the given paths
     if core_chain:
@@ -252,7 +252,7 @@ def rel_id_to_rel(rel, _relations):
             return occurrences[0][0]
 
 plus_id, minus_id = None, None # These are vocab IDs
-def reconstruct_corechain(_chain ,relations, embeddings_interface, embeddingid_to_gloveid):
+def reconstruct_corechain(_chain ,relations, embeddings_interface):
     """
         Expects a corechain made of continous IDs, and returns it in its text format (uri form)
         @TODO: TEST!
@@ -266,8 +266,8 @@ def reconstruct_corechain(_chain ,relations, embeddings_interface, embeddingid_t
         plus_id = embeddings_interface.vocabularize(['+'])
         minus_id = embeddings_interface.vocabularize(['-'])
 
-    corechain_vocabbed = [embeddingid_to_gloveid[key] for key in _chain]
-
+    # corechain_vocabbed = [embeddingid_to_gloveid[key] for key in _chain]
+    corechain_vocabbed = _chain
     # Find the hop-length of the corechain
     length = sum([ 1 for id in corechain_vocabbed if id in [plus_id, minus_id]])
 
@@ -303,7 +303,7 @@ def reconstruct_corechain(_chain ,relations, embeddings_interface, embeddingid_t
     return signs, uris
 
 
-def convert_rdf_path_to_text(path, embeddings_interface, embeddingid_to_gloveid):
+def convert_rdf_path_to_text(path, embeddings_interface):
     """
         Function used to convert a path relations(of continous IDs) to a text path.
         Eg. [ 5, 3, 420] : [uri, dbo:Poop]
@@ -313,12 +313,12 @@ def convert_rdf_path_to_text(path, embeddings_interface, embeddingid_to_gloveid)
     """
 
     # First we need to convert path to glove vocab
-    path = [embeddingid_to_gloveid[x] for x in path]
+    # path = [embeddingid_to_gloveid[x] for x in path]
 
     # Then to convert this to text
     var = ''
-    for key in embeddings_interface.glove_vocab.keys():
-        if embeddings_interface.glove_vocab[key] == path[0]:
+    for key in embeddings_interface.vocab.keys():
+        if embeddings_interface.vocab[key] == path[0]:
             var = key
             break
 
@@ -331,7 +331,7 @@ def convert_rdf_path_to_text(path, embeddings_interface, embeddingid_to_gloveid)
     return [var, dbo_class]
 
 
-def convert(_graph, relations, embeddings_interface, embeddingid_to_gloveid):
+def convert(_graph, relations, embeddings_interface):
     """
         Expects a dict containing:
             best_path,
@@ -357,8 +357,7 @@ def convert(_graph, relations, embeddings_interface, embeddingid_to_gloveid):
     # Convert the corechain to glove embeddings
     corechain_signs, corechain_uris = reconstruct_corechain(_graph['best_path'],
                                                             relations,
-                                                            embeddings_interface,
-                                                            embeddingid_to_gloveid)
+                                                            embeddings_interface)
 
     # Construct the stuff outside the where clause
     sparql_value["ask"] = 'ASK' if _graph['intent'] == 'ask' else 'SELECT DISTINCT'
@@ -375,8 +374,7 @@ def convert(_graph, relations, embeddings_interface, embeddingid_to_gloveid):
             rdf_constraint_values = {}
             rdf_constraint_values['var'] = _graph['rdf_constraint_type']
             rdf_constraint_values['uri'] = convert_rdf_path_to_text(_graph['rdf_best_path'],
-                                                                    embeddings_interface=embeddings_interface,
-                                                                    embeddingid_to_gloveid=embeddingid_to_gloveid)[1]
+                                                                    embeddings_interface=embeddings_interface)[1]
 
             sparql_value["rdf"] = rdf_constraint_template % rdf_constraint_values
         except IndexError:

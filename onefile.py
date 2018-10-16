@@ -1,12 +1,6 @@
 from __future__ import print_function
 
-import torch
-import torch.nn as nn
-from torch import optim
-from torch.utils.data import  DataLoader
 
-
-from utils import prepare_vocab_continous as vocab_master
 from utils import query_graph_to_sparql as sparql_constructor
 from utils import dbpedia_interface as db_interface
 from utils import embeddings_interface
@@ -19,8 +13,7 @@ import network as net
 
 import os
 import sys
-import json
-import time
+import torch
 import pickle
 import numpy as np
 from pprint import pprint
@@ -38,9 +31,10 @@ config = ConfigParser.ConfigParser()
 config.readfp(open('configs/macros.cfg'))
 
 #setting up device,model name and loss types.
-training_model = 'bilstm_densedot'
+training_model = 'bilstm_dot'
 _dataset = 'lcquad'
 pointwise = False
+training_model_number =40
 _debug = False
 
 #Loading relations file.
@@ -71,16 +65,16 @@ parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
 parameter_dict['_model_dir'] = './data/models/'
 
 parameter_dict['corechainmodel'] = training_model
-parameter_dict['corechainmodelnumber'] = '11'
+parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
 parameter_dict['intentmodel'] = 'bilstm_dense'
-parameter_dict['intentmodelnumber'] = '10'
+parameter_dict['intentmodelnumber'] = '13'
 
 parameter_dict['rdftypemodel'] = 'bilstm_dense'
-parameter_dict['rdftypemodelnumber'] = '6'
+parameter_dict['rdftypemodelnumber'] = '9'
 
 parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-parameter_dict['rdfclassmodelnumber'] = '9'
+parameter_dict['rdfclassmodelnumber'] = '13'
 
 
 class QuestionAnswering:
@@ -107,6 +101,10 @@ class QuestionAnswering:
         # Load models
         # self.parameters['dataset'] = 'transfer-b'
         self._load_corechain_model()
+        '''
+            since all auxilary components perform really bad if just trained on QALD
+            We always use ones trained on LC-QuAD.'        
+        '''
         self.parameters['dataset'] = 'lcquad'
         self._load_rdftype_model()
         self._load_rdfclass_model()
@@ -365,16 +363,19 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
     # questions = pad_sequences([question], maxlen=max_length, padding='post')
 
     # inverse id version of positive path and creating a numpy version
-    positive_path_id = data['parsed-data']['path_id']
+    positive_path_id = data['parsed-data']['path']
     no_positive_path = False
     if positive_path_id == [-1]:
         positive_path = np.asarray([-1])
         no_positive_path = True
     else:
         positive_path = []
-        for path in positive_path_id:
-            positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(path[0])]
-            positive_path += relations[int(path[1:])][3].tolist()
+        for p in positive_path_id:
+            if p in ['+', '-']:
+                positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
+            else:
+                positive_path += relations[int(p)][3].tolist()
+
         positive_path = np.asarray(positive_path)
     # padded_positive_path = pad_sequences([positive_path], maxlen=max_length, padding='post')
 
@@ -399,16 +400,20 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
     # remap all the id's to the continous id space.
 
     # passing all the elements through vocab
-    question = np.asarray([gloveid_to_embeddingid[key] for key in question])
-    if not no_positive_path:
-        positive_path = np.asarray([gloveid_to_embeddingid[key] for key in positive_path])
-    for i in range(0, len(negative_paths)):
-        # temp = []
-        for j in xrange(0, len(negative_paths[i])):
-            try:
-                negative_paths[i][j] = gloveid_to_embeddingid[negative_paths[i][j]]
-            except:
-                negative_paths[i][j] = gloveid_to_embeddingid[0]
+    '''
+        Legacy stuff.
+        This was a mapping between glove and embedding id. For now we are nit using it. 
+    '''
+    # question = np.asarray([gloveid_to_embeddingid[key] for key in question])
+    # if not no_positive_path:
+    #     positive_path = np.asarray([gloveid_to_embeddingid[key] for key in positive_path])
+    # for i in range(0, len(negative_paths)):
+    #     # temp = []
+    #     for j in range(0, len(negative_paths[i])):
+    #         try:
+    #             negative_paths[i][j] = gloveid_to_embeddingid[negative_paths[i][j]]
+    #         except:
+    #             negative_paths[i][j] = gloveid_to_embeddingid[0]
                 # negative_paths[i] = np.asarray(temp)
                 # negative_paths[i] = np.asarray([vocab[key] for key in negative_paths[i] if key in vocab.keys()])
     if qald:
@@ -426,7 +431,7 @@ def prune_candidate_space(question, paths, k=None):
 
     return np.arange(len(paths))
 
-def create_sparql(log, data, embeddings_interface, embeddingid_to_gloveid, relations):
+def create_sparql(log, data, embeddings_interface, relations):
     """
         Creates a query graph from logs and sends it to sparql_constructor
             for getting a valid SPARQL query (or results) back.
@@ -454,8 +459,7 @@ def create_sparql(log, data, embeddings_interface, embeddingid_to_gloveid, relat
     query_graph['rdf_constraint'] = False if log['pred_rdf_type'] == 'none' else True
 
     return sparql_constructor.convert(_graph=query_graph, relations=relations,
-                                        embeddings_interface=embeddings_interface,
-                                        embeddingid_to_gloveid=embeddingid_to_gloveid)
+                                        embeddings_interface=embeddings_interface)
 
 
 def create_rd_sp_paths(paths):
@@ -468,10 +472,16 @@ def create_rd_sp_paths(paths):
     for p in paths:
         p1, p2 = dl.break_path(p, special_char)
         paths_rel1_sp.append(p1)
-        paths_rel1_rd.append(dl.relation_table_lookup_reverse(p1,glove_id_sf_to_glove_id_rel,embeddingid_to_gloveid,gloveid_to_embeddingid))
+        '''
+            >>>>IMPLEMENT THIS<<<<
+            >>>>IMPLEMENT THIS<<<<
+            >>>>IMPLEMENT THIS<<<<
+            >>>>IMPLEMENT THIS<<<<
+        '''
+        paths_rel1_rd.append(dl.relation_table_lookup_reverse(p1,glove_id_sf_to_glove_id_rel))
         if p2 is not None:
             paths_rel2_sp.append(p2)
-            paths_rel2_rd.append(dl.relation_table_lookup_reverse(p2,glove_id_sf_to_glove_id_rel,embeddingid_to_gloveid,gloveid_to_embeddingid))
+            paths_rel2_rd.append(dl.relation_table_lookup_reverse(p2,glove_id_sf_to_glove_id_rel))
         else:
             paths_rel2_sp.append(dummy_path)
             paths_rel2_rd.append(dummy_path)
@@ -567,7 +577,7 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
     return mrr, best_path, path_predicted_correct
 
 
-def answer_question(qa, index, data, gloveid_to_embeddingid, embeddingid_to_gloveid, relations, parameter_dict):
+def answer_question(qa, index, data, relations, parameter_dict):
     """
         Uses everything to do everyhing for one data instance (one question, subgraph etc).
     """
@@ -586,8 +596,8 @@ def answer_question(qa, index, data, gloveid_to_embeddingid, embeddingid_to_glov
     metrics = {}
 
     question, positive_path, negative_paths, no_positive_path = dl.construct_paths(data, qald=True,
-                                                                                   relations=relations,
-                                                                                   gloveid_to_embeddingid=gloveid_to_embeddingid)
+                                                                                   relations=relations)
+
     log['question'] = question
 
     '''
@@ -704,9 +714,7 @@ def answer_question(qa, index, data, gloveid_to_embeddingid, embeddingid_to_glov
                 and the rdf type model is just used to see if we need paths at all.
         """
         rdf_candidates = sparql_constructor.rdf_type_candidates(data, best_path,
-                                                                gloveid_to_embeddingid,
-                                                                relations,
-                                                                embeddingid_to_gloveid)
+                                                                relations)
 
         if rdf_candidates:
 
@@ -846,15 +854,14 @@ if __name__ == "__main__":
     _max_sequence_length, _neg_paths_per_epoch_train, \
     _neg_paths_per_epoch_validation, _training_split, _validation_split, _index = TEMP
 
-    _data, _gloveid_to_embeddingid, _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
+    _data,  _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
                                                                          _dataset_specific_data_dir=_dataset_specific_data_dir,
                                                                          split_point=.80)
 
     parameter_dict['vectors'] = _vectors
 
     # For interpretability's sake
-    gloveid_to_embeddingid, embeddingid_to_gloveid, word_to_gloveid, \
-    gloveid_to_word = aux.load_embeddingid_gloveid()
+    word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
 
     """
         Different counters and metrics to store accuracy of diff modules
@@ -903,8 +910,6 @@ if __name__ == "__main__":
         log, metrics = answer_question(qa=qa,
                                        index=index,
                                        data=data,
-                                       gloveid_to_embeddingid=_gloveid_to_embeddingid,
-                                       embeddingid_to_gloveid=embeddingid_to_gloveid,
                                        relations=_relations,
                                        parameter_dict=parameter_dict)
 
@@ -919,23 +924,22 @@ if __name__ == "__main__":
         sparql = create_sparql(log=log,
                                data=data,
                                embeddings_interface=embeddings_interface,
-                               embeddingid_to_gloveid=embeddingid_to_gloveid,
                                relations=_relations)
 
         # metrics = eval(data, log, metrics)
 
         # Update logs
         Logging['runtime'].append({'log': log, 'metrics': metrics,
-                                   'pred_sparql': sparql, 'true_sparql': data['parsed-data']['sparql_query']})
+                                   'pred_sparql': sparql, 'true_sparql': data['parsed-data']['node']['sparql_query']})
 
         # Update metrics
         core_chain_acc_log.append(metrics['core_chain_accuracy_counter'])
         core_chain_mrr_log.append(metrics['core_chain_mrr_counter'])
 
         # Make shit interpretable
-        question = aux.id_to_word(log['question'], gloveid_to_word, embeddingid_to_gloveid, remove_pad=True)
-        true_path = aux.id_to_word(log['true_path'], gloveid_to_word, embeddingid_to_gloveid, remove_pad=True)
-        pred_path = aux.id_to_word(log['pred_path'], gloveid_to_word, embeddingid_to_gloveid, remove_pad=True)
+        question = aux.id_to_word(log['question'], gloveid_to_word, remove_pad=True)
+        true_path = aux.id_to_word(log['true_path'], gloveid_to_word, remove_pad=True)
+        pred_path = aux.id_to_word(log['pred_path'], gloveid_to_word, remove_pad=True)
 
         print("#%s" % index, "\t\bAcc: ", np.mean(core_chain_acc_log))
 

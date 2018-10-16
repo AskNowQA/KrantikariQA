@@ -261,7 +261,7 @@ def relation_table_lookup(lookup_str,glove_id_sf_to_glove_id_rel):
     return glove_id_sf_to_glove_id_rel[key]
 
 
-def relation_table_lookup_reverse(lookup_str,glove_id_sf_to_glove_id_rel,embeddingid_to_gloveid,gloveid_to_embeddingid):
+def relation_table_lookup_reverse_legacy(lookup_str,glove_id_sf_to_glove_id_rel,embeddingid_to_gloveid,gloveid_to_embeddingid):
     '''
         given an np array of durface form of relation it gives a glove id for the whole relation string(list)
     '''
@@ -273,6 +273,19 @@ def relation_table_lookup_reverse(lookup_str,glove_id_sf_to_glove_id_rel,embeddi
     key = str(list(lookup_str)[1:]) # 1 ownwards because first is the sign
     a = glove_id_sf_to_glove_id_rel[key]
     return [gloveid_to_embeddingid[a[0]]]
+
+def relation_table_lookup_reverse(lookup_str,glove_id_sf_to_glove_id_rel):
+    '''
+        given an np array of durface form of relation it gives a glove id for the whole relation string(list)
+    '''
+    if list(lookup_str)[0] == 0:
+        print(lookup_str)
+        return None
+
+    # lookup_str = [embeddingid_to_gloveid[i] for i in lookup_str]
+    key = str(list(lookup_str)[1:]) # 1 ownwards because first is the sign
+    a = glove_id_sf_to_glove_id_rel[key]
+    return a[0]
 
 def create_relation_lookup_table(COMMON_DATA_DIR):
     '''
@@ -363,7 +376,7 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
 
     except (EOFError, IOError) as e:
         with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset}, file)) as fp:
-            dataset = json.load(fp)[:100]
+            dataset = json.load(fp)
             glove_id_sf_to_glove_id_rel = create_relation_lookup_table(COMMON_DATA_DIR)
 
             ignored = []
@@ -750,9 +763,11 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
                 Extracting and padding the positive paths.
             '''
             if '?x' in datum['parsed-data']['constraints'].keys():
-                pos_path = "x + " + dbp.get_label(datum['parsed-data']['constraints']['?x'])
+                pos_path = " ".join(['x',dbp.get_label(datum['parsed-data']['constraints']['?x'])])
+                # pos_path = "x " + dbp.get_label(datum['parsed-data']['constraints']['?x'])
             elif '?uri' in datum['parsed-data']['constraints'].keys():
-                pos_path = "uri + " + dbp.get_label(datum['parsed-data']['constraints']['?uri'])
+                pos_path = " ".join(['uri', dbp.get_label(datum['parsed-data']['constraints']['?uri'])])
+                # pos_path = "uri " + dbp.get_label(datum['parsed-data']['constraints']['?uri'])
             else:
                 continue
             pos_path = embeddings_interface.vocabularize(nlutils.tokenize(pos_path))
@@ -768,7 +783,7 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
             unpadded_neg_path = datum["rdf-type-constraints"]
             unpadded_neg_path = remove_positive_path(pos_path, unpadded_neg_path)
             np.random.shuffle(unpadded_neg_path)
-            unpadded_neg_path = nlutils.pad_sequences(unpadded_neg_path,max_sequence_length)
+            unpadded_neg_path = nlutils.pad_sequence(unpadded_neg_path,max_sequence_length)
 
             '''
                 Remove positive path from negative paths.
@@ -791,7 +806,7 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
         questions = np.asarray(questions, dtype=np.int64)
 
         # questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
-        pos_paths = nlutils.pad_sequences(pos_paths, max_sequence_length)
+        pos_paths = nlutils.pad_sequence(pos_paths, max_sequence_length)
         neg_paths = np.asarray(neg_paths)
 
         # vocab, vectors = vocab_master.load()
@@ -845,13 +860,13 @@ def create_dataset_runtime(file,_dataset,_dataset_specific_data_dir,split_point=
         print("warning: Functionality for transfer-a,transfer-b,transfer-c and proper-tranfer-qald is not implemented.")
         id_data_test = []
 
-    vocab, vectors = vocab_master.load()
+    vectors = embeddings_interface.vectors
 
-    return id_data_test, vocab, vectors
+    return id_data_test, vectors
 
 
 
-def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
+def construct_paths(data, relations, qald=False):
     """
         For a given datanode, the function constructs positive and negative paths and prepares question uri.
         :param data: a data node of id_big_data
@@ -863,16 +878,18 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
     # questions = pad_sequences([question], maxlen=max_length, padding='post')
 
     # inverse id version of positive path and creating a numpy version
-    positive_path_id = data['parsed-data']['path_id']
+    positive_path_id = data['parsed-data']['path']   #change this
     no_positive_path = False
     if positive_path_id == [-1]:
         positive_path = np.asarray([-1])
         no_positive_path = True
     else:
         positive_path = []
-        for path in positive_path_id:
-            positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(path[0])]
-            positive_path += relations[int(path[1:])][3].tolist()
+        for p in positive_path_id:
+            if p in ['+', '-']:
+                positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
+            else:
+                positive_path += relations[int(p)][3].tolist()
         positive_path = np.asarray(positive_path)
     # padded_positive_path = pad_sequences([positive_path], maxlen=max_length, padding='post')
 
@@ -897,16 +914,16 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
     # remap all the id's to the continous id space.
 
     # passing all the elements through vocab
-    question = np.asarray([gloveid_to_embeddingid[key] for key in question])
-    if not no_positive_path:
-        positive_path = np.asarray([gloveid_to_embeddingid[key] for key in positive_path])
-    for i in range(0, len(negative_paths)):
-        # temp = []
-        for j in range(0, len(negative_paths[i])):
-            try:
-                negative_paths[i][j] = gloveid_to_embeddingid[negative_paths[i][j]]
-            except:
-                negative_paths[i][j] = gloveid_to_embeddingid[0]
+    # question = np.asarray([gloveid_to_embeddingid[key] for key in question])
+    # if not no_positive_path:
+    #     positive_path = np.asarray([gloveid_to_embeddingid[key] for key in positive_path])
+    # for i in range(0, len(negative_paths)):
+    #     # temp = []
+    #     for j in range(0, len(negative_paths[i])):
+    #         try:
+    #             negative_paths[i][j] = gloveid_to_embeddingid[negative_paths[i][j]]
+    #         except:
+    #             negative_paths[i][j] = gloveid_to_embeddingid[0]
                 # negative_paths[i] = np.asarray(temp)
                 # negative_paths[i] = np.asarray([vocab[key] for key in negative_paths[i] if key in vocab.keys()])
     if qald:

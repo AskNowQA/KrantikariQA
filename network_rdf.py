@@ -1,41 +1,23 @@
 # Shared Feature Extraction Layer
+'''
+
+    DELETE
+    DELETE
+    DELETE
+    DELETE
+    DELETE
+    DELETE
+    DELETE
+    DELETE
+
+'''
 from __future__ import absolute_import
 import os
-import pickle
 import sys
 import json
-import math
-from keras.preprocessing.sequence import pad_sequences
+
 import numpy as np
-import pandas as pd
-import keras.backend.tensorflow_backend as K
-from keras.layers.core import Layer  
-from keras import initializers, regularizers, constraints
-from keras.models import Model, Sequential
-from keras.layers import Input, Layer, Lambda
-from keras.layers import Dense, BatchNormalization
-from keras.layers import Dropout
-from keras.layers import Activation, RepeatVector, Reshape, Bidirectional, TimeDistributed
-from keras.layers.recurrent import LSTM
-from keras.layers.merge import concatenate, dot, subtract, maximum, multiply
-from keras.layers import merge
-from keras.activations import softmax
-from keras import optimizers, metrics
-from keras.callbacks import EarlyStopping, ModelCheckpoint
-from keras.utils import Sequence
-from keras.callbacks import Callback
-from keras.layers import InputSpec, Layer, Input, Dense, merge
-from keras.layers import Lambda, Activation, Dropout, Embedding, TimeDistributed
-from keras.layers import Bidirectional, GRU, LSTM
-from keras.layers.noise import GaussianNoise
-from keras.layers.advanced_activations import ELU
-from keras.models import Sequential, Model, model_from_json
-from keras.regularizers import l2
-from keras.optimizers import Adam
-from keras.layers.normalization import BatchNormalization
-from keras.layers.pooling import GlobalAveragePooling1D, GlobalMaxPooling1D
-from keras.layers import Merge
-from sklearn.utils import shuffle
+
 
 
 import network as n
@@ -57,14 +39,13 @@ BATCH_SIZE = 180 # Around 11 splits for full training dataset
 LEARNING_RATE = 0.001
 LOSS = 'categorical_crossentropy'
 NEGATIVE_SAMPLES = 270
-OPTIMIZER = optimizers.Adam(LEARNING_RATE)
 
 # Set up directories
 n.NEGATIVE_SAMPLES = 200
 n.BATCH_SIZE = BATCH_SIZE
 
 dbp = db_interface.DBPedia(_verbose=True, caching=False)
-
+embeddings_interface.__check_prepared__()
 
 def create_dataset():
     """
@@ -74,7 +55,6 @@ def create_dataset():
     :param max_sequence_length:
     :return:
     """
-    glove_embeddings = n.get_glove_embeddings()
 
     try:
 
@@ -125,7 +105,7 @@ def create_dataset():
                 unpadded_neg_path = datum["rdf-type-constraints"]
                 unpadded_neg_path = n.remove_positive_path(pos_path, unpadded_neg_path)
                 np.random.shuffle(unpadded_neg_path)
-                unpadded_neg_path = pad_sequences(unpadded_neg_path, maxlen=n.MAX_SEQ_LENGTH, padding='post')
+                unpadded_neg_path = nlutils.pad_sequence(unpadded_neg_path, max_length=n.MAX_SEQ_LENGTH)
 
                 '''
                     Remove positive path from negative paths.
@@ -148,7 +128,7 @@ def create_dataset():
             questions = np.asarray(questions, dtype=np.int64)
 
             # questions = pad_sequences(questions, maxlen=max_sequence_length, padding='post')
-            pos_paths = pad_sequences(pos_paths, maxlen=n.MAX_SEQ_LENGTH, padding='post')
+            pos_paths = nlutils.pad_sequence(pos_paths, max_length=n.MAX_SEQ_LENGTH)
             neg_paths = np.asarray(neg_paths)
 
             # '''
@@ -216,8 +196,8 @@ if __name__ == "__main__":
             assert DATASET in ['lcquad', 'qald']
             break
         except AssertionError:
-            gpu = raw_input("Did not understand which gpu to use. Please write it again: ")
-            DATASET = raw_input("Did not understand which Dataset to use. Please write it again: ")
+            gpu = input("Did not understand which gpu to use. Please write it again: ")
+            DATASET = input("Did not understand which Dataset to use. Please write it again: ")
 
     relations = n.load_relation()
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu

@@ -11,7 +11,7 @@ import progressbar
 # This code will NOT work locally.
 sys.path.append('/data/priyansh/conda/fastai')
 os.environ['QT_QPA_PLATFORM']='offscreen'
-from fastai.text import *
+# from fastai.text import *
 
 DEBUG = True
 vectors, vocab = [], {}
@@ -440,7 +440,9 @@ def phrase_similarity(_phrase_1, _phrase_2, embedding='glove'):
 def update_vocab(_words, _embedding=None):
     """
         Function to add new words to an existing vocab and save it to disk.
+        words = ['potato', 'gauravmaheshwari', 'rabbithole', 'bumhole', 'adnsakndksnadnsad']
 
+    :param _words: list of str (see above)
     :return: None
     """
     global vocab, vectors
@@ -456,3 +458,4 @@ def update_vocab(_words, _embedding=None):
     vectors = np.vstack((vectors, new_vectors))
 
     save()
+

@@ -185,7 +185,7 @@ def validation_accuracy_alter(valid_questions, valid_pos_paths, valid_neg_paths,
     return sum(precision) * 1.0 / len(precision)
 
 
-def id_to_word(path, gloveid_to_word, embeddingid_to_gloveid, remove_pad = True):
+def id_to_word(path, gloveid_to_word, remove_pad = True):
     '''
 
 
@@ -198,7 +198,7 @@ def id_to_word(path, gloveid_to_word, embeddingid_to_gloveid, remove_pad = True)
     sent = []
     for q in path:
         try:
-            w = gloveid_to_word[embeddingid_to_gloveid[q]]
+            w = gloveid_to_word[q]
             if w != '<MASK>' and remove_pad:
                 sent.append(w)
         except:
@@ -206,7 +206,31 @@ def id_to_word(path, gloveid_to_word, embeddingid_to_gloveid, remove_pad = True)
     return " ".join(sent)
 
 
-def load_embeddingid_gloveid():
+def load_embeddingid_gloveid(embedding='ulmfit'):
+    '''
+        Loads required dictionary files for id_to_word functionality
+    '''
+    location_gl = './resources/vocab_gl.pickle'
+    location_um = './resources/vocab_ul.pickle'
+    if embedding == 'ulmfit':
+        location = location_um
+    elif embedding == 'glove':
+        location = location_gl
+
+    if sys.version_info[0] == 3:
+
+        word_to_gloveid = pickle.load(open(location,'rb'),encoding='latin1')
+    else:
+        word_to_gloveid = pickle.load(open(location, 'rb'))
+
+    gloveid_to_word = {}
+    for keys in word_to_gloveid:
+        gloveid_to_word[word_to_gloveid[keys]] = keys
+    return word_to_gloveid, gloveid_to_word
+
+
+
+def load_embeddingid_gloveid_legacy():
     '''
         Loads required dictionary files for id_to_word functionality
     '''
@@ -228,7 +252,6 @@ def load_embeddingid_gloveid():
     for keys in word_to_gloveid:
         gloveid_to_word[word_to_gloveid[keys]] = keys
     return gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word
-
 
 def to_bool(value):
     if str(value) == 'true' or str(value) == 'True':

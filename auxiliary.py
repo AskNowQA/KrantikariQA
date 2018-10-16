@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pickle,os,torch
 import data_loader as dl
-import prepare_transfer_learning as ptl
+from utils import prepare_transfer_learning as ptl
 
 
 #Should be shifted to some other locations

@@ -1,5 +1,4 @@
-atire_puurula.txt
-glove_parsed.npy
-glove_vocab.pickle
-labels.pickle
-relations_multiple_forms.pickle
+resources/stopwords.txt
+resources/vectors_gl.npy
+resources/vocab_gl.pickle (either gl, ul or fa depending on desired )
+resources/labels.pickle

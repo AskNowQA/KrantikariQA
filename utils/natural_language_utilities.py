@@ -12,7 +12,7 @@ if sys.version[0] == '2': from urlparse import urlparse
 else: from urllib.parse import urlparse
 
 # SOME MACROS
-STOPWORDLIST = 'resources/atire_puurula.txt'
+STOPWORDLIST = 'resources/stopwords.txt'
 KNOWN_SHORTHANDS = ['dbo', 'dbp', 'rdf', 'rdfs', 'dbr', 'foaf', 'geo', 'res', 'dct']
 DBP_SHORTHANDS = {'dbo': 'http://dbpedia.org/ontology/', 'dbp': 'http://dbpedia.org/property/',
                   'dbr': 'http://dbpedia.org/resource/', 'res': 'http://dbpedia.org/resource/'}

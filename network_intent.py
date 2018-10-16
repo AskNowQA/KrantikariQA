@@ -3,10 +3,8 @@
 from __future__ import print_function
 
 # In-repo files
-from utils import prepare_vocab_continous as vocab_master
-from utils import tensor_utils as tu
 from utils import embeddings_interface as ei
-import data_loader as dl
+from utils import tensor_utils as tu
 import components as com
 import auxiliary as aux
 import network as net
@@ -15,20 +13,15 @@ import network as net
 import torch
 import torch.nn as nn
 from torch import optim
-from torch.utils.data import  DataLoader
 
-# Other libs
-# from qelos_core.scripts.lcquad.corerank import FlatEncoder
 
 import os
 import sys
 import time
 import json
 import numpy as np
-# import matplotlib.pyplot as plt
 if sys.version_info[0] == 3: import configparser as ConfigParser
 else: import ConfigParser
-# import pylab
 
 device = torch.device("cuda")
 np.random.seed(42)

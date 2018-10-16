@@ -35,7 +35,7 @@ except OSError:
 def random_indice_generator(_length,_false_path_length,content_counter):
 
 	indices = []
-	for i in xrange(_false_path_length):
+	for i in range(_false_path_length):
 		value = random.randint(0,_length)
 		if value == content_counter:
 			value = random.randint(0,_length)
@@ -69,13 +69,13 @@ for con in content:
 		value = dbp.get_answer(SPARQL %{'target_resource' : con[0]})
 		if value['label'] and value['entity']:
 			indices = random_indice_generator(len(content),FALSE_PATH_LENGTH,content_counter)
-			for i in xrange(len(indices)):
+			for i in range(len(indices)):
 				condition = True
 				while condition:
 					try:
 						a = content[i][1]
 					except:
-						print content
+						print(content)
 					if content[indices[i]][1] == con[1]:
 						indices[i] = random.randint(0,len(content))
 					if content[indices[i]][1] != con[1]:
@@ -91,7 +91,7 @@ for con in content:
 			y_vector = np.zeros(FALSE_PATH_LENGTH + 1)
 			final_data.append([question_vector,new_entity_vector,tokenized_false_path,y_vector])
 			periodic_counter = periodic_counter + 1
-			print "write counter is ", counter
+			print("write counter is ", counter)
 			counter = counter + 1
 			if periodic_counter > WRITE_INTERVAL:
 				with open(OUTPUT_DIR + "/" + str(content_counter) + ".pickle", 'w') as fp:
@@ -103,7 +103,7 @@ for con in content:
 				break
 		else:
 			content_counter = content_counter + 1
-			print content_counter
+			print(content_counter)
 	except:
 		content_counter = content_counter + 1
 		continue

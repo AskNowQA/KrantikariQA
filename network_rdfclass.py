@@ -39,7 +39,7 @@ pointwise = False
 #Loading relations file.
 COMMON_DATA_DIR = 'data/data/common'
 _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
-_relations = aux.load_relation(COMMON_DATA_DIR)
+_inv_relations = aux.load_inverse_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
 if __name__ == "__main__":
@@ -82,10 +82,10 @@ if __name__ == "__main__":
     dbp = db_interface.DBPedia(_verbose=True, caching=False)
 
     data = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
-                      _neg_paths_per_epoch_train,
-                      _neg_paths_per_epoch_validation, _relations,
-                      _index, _training_split, _validation_split,
-                      _model='rdf_class_pairwise',_pairwise=not pointwise, _debug=True, _rdf=True)
+                        _neg_paths_per_epoch_train,
+                        _neg_paths_per_epoch_validation, _inv_relations,
+                        _index, _training_split, _validation_split,
+                        _model='rdf_class_pairwise', _pairwise=not pointwise, _debug=True, _rdf=True)
 
     # if _dataset == 'lcquad':
     #     train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, \

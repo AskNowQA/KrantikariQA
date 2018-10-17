@@ -7,7 +7,7 @@ from utils import prepare_transfer_learning as ptl
 
 
 #Should be shifted to some other locations
-def load_relation(COMMON_DATA_DIR):
+def load_inverse_relation(COMMON_DATA_DIR):
     """
         Function used once to load the relations dictionary
         (which keeps the log of IDified relations, their uri and other things.)

@@ -294,10 +294,10 @@ def create_relation_lookup_table(COMMON_DATA_DIR):
     :param COMMON_DATA_DIR:
     :return:
     '''
-    relation = aux.load_relation(COMMON_DATA_DIR)
+    inv_relation = aux.load_inverse_relation(COMMON_DATA_DIR)
     glove_id_sf_to_glove_id_rel = {}
-    for keys in relation:
-        k = str(list(relation[keys][3]))
+    for keys in inv_relation:
+        k = str(list(inv_relation[keys][3]))
         #THIS MUST BE REPLACED REPLACE REPLACE REPALCE
         '''
             REPLACE
@@ -306,7 +306,7 @@ def create_relation_lookup_table(COMMON_DATA_DIR):
             REPLACE
             REPLACE
         '''
-        glove_id_sf_to_glove_id_rel[k] = list(relation[keys][-1])
+        glove_id_sf_to_glove_id_rel[k] = list(inv_relation[keys][-1])
 
     return glove_id_sf_to_glove_id_rel
 

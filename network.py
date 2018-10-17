@@ -927,6 +927,7 @@ class RelDetection(Model):
         _hp = self.encoder.init_hidden(ques_batch.shape[0], device=device)
         _hn = self.encoder.init_hidden(ques_batch.shape[0], device=device)
 
+        print('pos scores are !!!!!!!!!!!!!!!!!!!!!!', y_label)
         # Encoding all the data
         pos_scores = self.encoder(ques=ques_batch,
                                   path_word=pos_batch,

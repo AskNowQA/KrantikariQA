@@ -40,7 +40,7 @@ _train_over_validation = False
 #Loading relations file.
 COMMON_DATA_DIR = 'data/data/common'
 _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
-_relations = aux.load_relation(COMMON_DATA_DIR)
+_inv_relations = aux.load_inverse_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
 # gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
@@ -207,6 +207,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                     }
 
 
+
             loss = modeler.train(data=data_batch,
                               optimizer=optimizer,
                               loss_fn=loss_func,
@@ -346,8 +347,8 @@ if __name__ == "__main__":
     validate_every = parameter_dict['validate_every']
 
 
-    data = aux.load_data(_dataset=_dataset , _train_over_validation = _train_over_validation,
-              _parameter_dict=parameter_dict, _relations =  _relations, _pointwise=pointwise, _device=device)
+    data = aux.load_data(_dataset=_dataset, _train_over_validation = _train_over_validation,
+                         _parameter_dict=parameter_dict, _relations =  _inv_relations, _pointwise=pointwise, _device=device)
 
     if training_model == 'reldet':
         schema = 'reldet'

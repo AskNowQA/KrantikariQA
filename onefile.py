@@ -31,10 +31,10 @@ config = ConfigParser.ConfigParser()
 config.readfp(open('configs/macros.cfg'))
 
 #setting up device,model name and loss types.
-training_model = 'bilstm_dot'
-_dataset = 'lcquad'
-pointwise = False
-training_model_number =40
+training_model = 'decomposable_attention'
+_dataset = 'qald'
+pointwise = True
+training_model_number =1
 _debug = False
 
 #Loading relations file.
@@ -43,7 +43,7 @@ INTENTS = ['count', 'ask', 'list']
 RDFTYPES = ['x', 'uri', 'none']
 
 _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
-_relations = aux.load_relation(COMMON_DATA_DIR)
+_inv_relations = aux.load_inverse_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 glove_id_sf_to_glove_id_rel = dl.create_relation_lookup_table(COMMON_DATA_DIR)
 
@@ -68,13 +68,13 @@ parameter_dict['corechainmodel'] = training_model
 parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
 parameter_dict['intentmodel'] = 'bilstm_dense'
-parameter_dict['intentmodelnumber'] = '13'
+parameter_dict['intentmodelnumber'] = '10'
 
 parameter_dict['rdftypemodel'] = 'bilstm_dense'
-parameter_dict['rdftypemodelnumber'] = '9'
+parameter_dict['rdftypemodelnumber'] = '6'
 
 parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-parameter_dict['rdfclassmodelnumber'] = '13'
+parameter_dict['rdfclassmodelnumber'] = '9'
 
 
 class QuestionAnswering:
@@ -348,6 +348,7 @@ class QuestionAnswering:
 
         return score.detach().cpu().numpy()
 
+
 def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
     """
     :param data: a data node of id_big_data
@@ -420,6 +421,7 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
         return question, positive_path, negative_paths, no_positive_path
     return question, positive_path, negative_paths
 
+
 def prune_candidate_space(question, paths, k=None):
     """
         Boilerplate to reduce the number of valid paths.
@@ -430,6 +432,7 @@ def prune_candidate_space(question, paths, k=None):
     """
 
     return np.arange(len(paths))
+
 
 def create_sparql(log, data, embeddings_interface, relations):
     """
@@ -490,8 +493,6 @@ def create_rd_sp_paths(paths):
     paths_rel1_rd = [np.asarray(o) for o in paths_rel1_rd]
     paths_rel2_rd = [np.asarray(o) for o in paths_rel2_rd]
     return paths_rel1_sp,paths_rel2_sp,paths_rel1_rd,paths_rel2_rd
-
-
 
 
 def corechain_prediction(question, paths, positive_path, negative_paths, no_positive_path,model):
@@ -910,7 +911,7 @@ if __name__ == "__main__":
         log, metrics = answer_question(qa=qa,
                                        index=index,
                                        data=data,
-                                       relations=_relations,
+                                       relations=_inv_relations,
                                        parameter_dict=parameter_dict)
 
         #     log, metrics = answer_question(qa=None,
@@ -924,7 +925,7 @@ if __name__ == "__main__":
         sparql = create_sparql(log=log,
                                data=data,
                                embeddings_interface=embeddings_interface,
-                               relations=_relations)
+                               relations=_inv_relations)
 
         # metrics = eval(data, log, metrics)
 

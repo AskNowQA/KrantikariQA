@@ -20,27 +20,7 @@ from utils import dbpedia_interface as dbi
 from utils import natural_language_utilities as nlutils
 from utils import embeddings_interface as ei
 
-dataset = 'lcquad'
-_save_location_success = 'data/data/raw/%(dataset)s/success'
-_save_location_unsuccess = 'data/data/raw/%(dataset)s/unsuccess'
-relation_dict_location = 'data/data/common/relations.pickle'
-final_data_location = 'data/data/%(dataset)s/id_big_data.json'
 
-dbp = dbi.DBPedia(caching=True)
-
-'''
-    check if the relation dict exist and 
-        if it does
-            load it from disk
-        else
-            create a new one 
-'''
-
-if os.path.isfile(relation_dict_location):
-    relation_dict = pickle.load(open(relation_dict_location,'rb'))
-    #To dump -> pickle.dump(relation_dict,open('data/data/common/text.pickle','wb+'))
-else:
-    relation_dict = {}
 
 
 def collect_files(dir_location):
@@ -59,7 +39,7 @@ def collect_files(dir_location):
 
     return final_data
 
-def update_relation_dict(relation,relation_dict):
+def update_relation_dict(relation,relation_dict,dbp):
     '''
 
     Updates the relation dict if the relation doesn't exists
@@ -85,7 +65,7 @@ def update_relation_dict(relation,relation_dict):
 
     return rel_id,relation_dict
 
-def idfy_path(path,relation_dict):
+def idfy_path(path,relation_dict,dbp):
     '''
 
     :param path: ['+', 'http://dbpedia.org/property/services', '-','optinalpath']
@@ -96,11 +76,11 @@ def idfy_path(path,relation_dict):
     '''
 
     if len(path) == 2:
-        rel_id,relation_dict = update_relation_dict(relation=path[1],relation_dict=relation_dict)
+        rel_id,relation_dict = update_relation_dict(relation=path[1],relation_dict=relation_dict, dbp=dbp)
         return [path[0],rel_id],relation_dict
     else:
-        rel1_id,relation_dict = update_relation_dict(relation=path[1],relation_dict=relation_dict)
-        rel2_id,relation_dict = update_relation_dict(relation=path[3],relation_dict=relation_dict)
+        rel1_id,relation_dict = update_relation_dict(relation=path[1],relation_dict=relation_dict, dbp=dbp)
+        rel2_id,relation_dict = update_relation_dict(relation=path[3],relation_dict=relation_dict, dbp=dbp)
         return [path[0],rel1_id,path[2],rel2_id],relation_dict
 
 def idfy_const(const,relation_dict):
@@ -113,7 +93,7 @@ def idfy_const(const,relation_dict):
     return update_relation_dict(const,relation_dict)
 
 
-def idfy_relations_in_node(node,relation_dict):
+def idfy_relations_in_node(node,relation_dict,dbp):
     '''
 
     Given a node, idfy all the relation and if the relation doesn't exists in the relation
@@ -125,13 +105,13 @@ def idfy_relations_in_node(node,relation_dict):
     :return:
     '''
     if node['path']:
-        node['path'],relation_dict = idfy_path(node['path'],relation_dict)
+        node['path'],relation_dict = idfy_path(node['path'],relation_dict,dbp)
 
     for index,path in enumerate(node['hop1']):
-        node['hop1'][index],relation_dict = idfy_path(path,relation_dict)
+        node['hop1'][index],relation_dict = idfy_path(path,relation_dict,dbp)
 
     for index,path in enumerate(node['hop2']):
-        node['hop2'][index], relation_dict = idfy_path(path, relation_dict)
+        node['hop2'][index], relation_dict = idfy_path(path, relation_dict,dbp)
 
     for index,path in enumerate(node['rdf_constraint']['candidates']['uri']):
         node['rdf_constraint']['candidates']['uri'][index],relation_dict = idfy_const(path,relation_dict)
@@ -140,77 +120,99 @@ def idfy_relations_in_node(node,relation_dict):
         node['rdf_constraint']['candidates']['x'][index],relation_dict = idfy_const(path,relation_dict)
 
     return node,relation_dict
+if __name__ == 'main':
 
-combined_data = collect_files(_save_location_success % {'dataset':dataset})
-combined_data_un = collect_files(_save_location_unsuccess % {'dataset':dataset})
+    dataset = 'lcquad'
+    _save_location_success = 'data/data/raw/%(dataset)s/success'
+    _save_location_unsuccess = 'data/data/raw/%(dataset)s/unsuccess'
+    relation_dict_location = 'data/data/common/relations.pickle'
+    final_data_location = 'data/data/%(dataset)s/id_big_data.json'
 
-for index,node in enumerate(combined_data):
-    combined_data[index],relation_dict = idfy_relations_in_node(node,relation_dict=relation_dict)
+    dbp = dbi.DBPedia(caching=True)
 
+    '''
+        check if the relation dict exist and 
+            if it does
+                load it from disk
+            else
+                create a new one 
+    '''
 
+    if os.path.isfile(relation_dict_location):
+        relation_dict = pickle.load(open(relation_dict_location, 'rb'))
+        # To dump -> pickle.dump(relation_dict,open('data/data/common/text.pickle','wb+'))
+    else:
+        relation_dict = {}
+    combined_data = collect_files(_save_location_success % {'dataset':dataset})
+    combined_data_un = collect_files(_save_location_unsuccess % {'dataset':dataset})
 
-'''
-For hiearchial relation detection module one need all the relation (uri)
-have a randomly init vectors. 
-'''
-
-keys = list(relation_dict.keys())
-ei.update_vocab(keys)
-for rel in relation_dict:
-    relation_dict[rel].append(ei.vocabularize([rel]))
-
-print("done dumping relation")
-pickle.dump(relation_dict,open(relation_dict_location,'wb+'))
-
-'''
-    Consider dumping here. So that alsong with relationid file and this dump
-    one can do their own form of pre-processing
-'''
-
-#Vocabularize everything and then padding.
-'''
-    Things to vocabularize
-        >question
-        >path
-        >hop1
-        >hop2
-'''
-
-id_data = []
+    for index,node in enumerate(combined_data):
+        combined_data[index],relation_dict = idfy_relations_in_node(node,relation_dict=relation_dict,dbp=dbp)
 
 
-x_id = int(ei.vocabularize(['x'])[0])
-uri_id = int(ei.vocabularize(['uri'])[0])
 
-for index,node in enumerate(combined_data):
-    temp = {
-        'uri' : {
-            'question-id' : [int(id) for id in list(ei.vocabularize(nlutils.tokenize(node['node']['corrected_question'])))],
-            'hop-2-properties' : node['hop2'],
-            'hop-1-properties' : node['hop1']
-        },
-        'parsed-data' : {
-            'node':node['node'],
-            'parsed_sparql':node['parsed_sparql'],
-            'path':node['path'],
-            'entity':node['entity'],
-            'constraints':node['constraints'],
-            'updated_sparql':node['updated_sparql'],
-            'error_flag':node['error_flag']
-        },
-    'rdf-type-constraints' : []
-    }
+    '''
+    For hiearchial relation detection module one need all the relation (uri)
+    have a randomly init vectors. 
+    '''
 
-    rdf_candidates = []
-    for candidate_id in node['rdf_constraint']['candidates']['uri']:
-        rdf_candidates.append([uri_id,candidate_id])
-    for candidate_id in node['rdf_constraint']['candidates']['x']:
-        rdf_candidates.append([x_id, candidate_id])
-    temp['rdf-type-constraints'] = rdf_candidates
-    id_data.append(temp)
+    keys = list(relation_dict.keys())
+    ei.update_vocab(keys)
+    for rel in relation_dict:
+        relation_dict[rel].append(ei.vocabularize([rel]))
 
-#embedding interface update vocab here
-json.dump(id_data,open(final_data_location %{'dataset':dataset},'w+'))
+    print("done dumping relation")
+    pickle.dump(relation_dict,open(relation_dict_location,'wb+'))
+
+    '''
+        Consider dumping here. So that alsong with relationid file and this dump
+        one can do their own form of pre-processing
+    '''
+
+    #Vocabularize everything and then padding.
+    '''
+        Things to vocabularize
+            >question
+            >path
+            >hop1
+            >hop2
+    '''
+
+    id_data = []
+
+
+    x_id = int(ei.vocabularize(['x'])[0])
+    uri_id = int(ei.vocabularize(['uri'])[0])
+
+    for index,node in enumerate(combined_data):
+        temp = {
+            'uri' : {
+                'question-id' : [int(id) for id in list(ei.vocabularize(nlutils.tokenize(node['node']['corrected_question'])))],
+                'hop-2-properties' : node['hop2'],
+                'hop-1-properties' : node['hop1']
+            },
+            'parsed-data' : {
+                'node':node['node'],
+                'parsed_sparql':node['parsed_sparql'],
+                'path':node['path'],
+                'entity':node['entity'],
+                'constraints':node['constraints'],
+                'updated_sparql':node['updated_sparql'],
+                'error_flag':node['error_flag']
+            },
+        'rdf-type-constraints' : []
+        }
+
+        rdf_candidates = []
+        for candidate_id in node['rdf_constraint']['candidates']['uri']:
+            rdf_candidates.append([uri_id,candidate_id])
+        for candidate_id in node['rdf_constraint']['candidates']['x']:
+            rdf_candidates.append([x_id, candidate_id])
+        temp['rdf-type-constraints'] = rdf_candidates
+        id_data.append(temp)
+
+    #embedding interface update vocab here
+    json.dump(id_data,open(final_data_location %{'dataset':dataset},'w+'))
 
 
 

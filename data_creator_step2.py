@@ -119,6 +119,7 @@ def idfy_relations_in_node(node,relation_dict,dbp):
     for index,path in enumerate(node['rdf_constraint']['candidates']['x']):
         node['rdf_constraint']['candidates']['x'][index],relation_dict = idfy_const(path,relation_dict)
 
+
     return node,relation_dict
 if __name__ == 'main':
 

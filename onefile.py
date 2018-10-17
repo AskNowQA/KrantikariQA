@@ -501,7 +501,7 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
     '''
 
     # Remove if adding to class
-    global qa
+    global quesans
 
     mrr = 0
     best_path = ''
@@ -894,7 +894,7 @@ if __name__ == "__main__":
     Logging = parameter_dict.copy()
     Logging['runtime'] = []
 
-    qa = QuestionAnswering(parameter_dict, pointwise, _word_to_id, device, False)
+    quesans = QuestionAnswering(parameter_dict, pointwise, _word_to_id, device, False)
 
     # Some logs which run during runtime, not after.
     core_chain_acc_log = []
@@ -908,7 +908,7 @@ if __name__ == "__main__":
         print(data.keys())
         index += startindex
 
-        log, metrics = answer_question(qa=qa,
+        log, metrics = answer_question(qa=quesans,
                                        index=index,
                                        data=data,
                                        relations=_inv_relations,

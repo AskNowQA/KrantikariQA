@@ -21,7 +21,7 @@ warnings.formatwarning = better_warning
 sparql_1hop_template = {
     "-": '%(ask)s %(count)s WHERE { { ?uri <http://dbpedia.org/property/%(r1)s> <%(te1)s> } UNION '
          + '{ ?uri <http://dbpedia.org/ontology/%(r1)s> <%(te1)s> } UNION '
-         + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> }. %(rdf)s }',
+         + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> }. %(rdf)s } ',
     "+": '%(ask)s %(count)s WHERE { { <%(te1)s> <http://dbpedia.org/property/%(r1)s> ?uri } UNION '
          + '{ <%(te1)s> <http://dbpedia.org/ontology/%(r1)s> ?uri } UNION'
          + '{ ?uri <http://purl.org/dc/terms/%(r1)s> <%(te1)s> } . %(rdf)s }',
@@ -124,7 +124,6 @@ def rdf_type_candidates(data, path_id, relations):
             based on whether we want URI or X candidates
     :param data:
     :param path_id:
-    :param vocab:
     :param relations:
     :param reverse_vocab:
     :param core_chain:
@@ -433,6 +432,114 @@ def convert(_graph, relations, embeddings_interface):
     sparql = sparql_template % sparql_value
 
     return sparql
+
+
+def convert_runtime(_graph):
+    """
+        Expects a dict containing:
+            best_path,
+            intent,
+            rdf_constraint,
+            rdf_constraint_type,
+            rdf_best_path
+
+        Returns a composted SPARQL.
+
+        1. Convert everything to strings.
+
+    :param _graph: (see above)
+    :return: str: SPARQL.
+    """
+    sparql_value = {}
+
+    # Find entities
+    entities = _graph['entities']
+    best_path = _graph['best_path']
+
+
+    if len(best_path) == 2:
+        corechain_signs  = [best_path[0]]
+        corechain_uris = [best_path[1]]
+    else:
+        corechain_signs = [best_path[0],best_path[2]]
+        corechain_uris = [best_path[1],best_path[3]]
+
+
+
+    # Construct the stuff outside the where clause
+    sparql_value["ask"] = 'ASK' if _graph['intent'] == 'ask' else 'SELECT DISTINCT'
+    if _graph['intent'] == 'count':
+        sparql_value["count"] = 'COUNT(?uri)'
+    elif _graph['intent'] == 'ask':
+        sparql_value["count"] = ''
+    else:
+        sparql_value["count"] = '?uri'
+
+    # Check if we need an RDF constraint.
+    if _graph['rdf_constraint']:
+        try:
+            rdf_constraint_values = {}
+            rdf_constraint_values['var'] = _graph['rdf_constraint_type']
+            rdf_constraint_values['uri'] = _graph['rdf_best_path']
+
+            sparql_value["rdf"] = rdf_constraint_template % rdf_constraint_values
+        except IndexError:
+            sparql_value["rdf"] = ''
+
+    else:
+        sparql_value["rdf"] = ''
+
+    # Find the particular template based on the signs
+
+    """
+        Start putting stuff in template.
+        Note: if we're dealing with a count query, we append a 'c' to the query.
+            This does away with dbo/dbp union and goes ahead with whatever came in the question.
+
+        Note: In the case where its a 2hop query, with ask intent:
+            we only consider the first sign, an ignore the second one. Can lead to incorrect queries.
+    """
+    signs_key = ''.join(corechain_signs)
+
+    if _graph['intent'] == 'ask':
+        # Assuming that there is only single triple ASK queries.
+        sparql_value["te1"] = _graph['entities'][0]
+        try:
+            sparql_value["te2"] = _graph['entities'][1]
+            sparql_template = sparql_boolean_template['+']
+        except IndexError:
+            warnings.warn("Found a single entity boolean question")
+            sparql_template = sparql_boolean_template[signs_key[0] + 's']
+
+        sparql_value["r1"] = corechain_uris[0].split('/')[-1]
+
+    elif len(signs_key) == 1:
+        print("DEBUG:  ", signs_key)
+        # Single hop, non boolean.
+        sparql_template = sparql_1hop_template[signs_key + 'c' if _graph['intent'] == 'count' else signs_key]
+        sparql_value["te1"] = _graph['entities'][0]
+        sparql_value["r1"] = corechain_uris[0] if _graph['intent'] == 'count' else corechain_uris[0].split('/')[-1]
+
+    else:
+        # Double hop, non boolean.
+
+        sparql_value["r1"] = corechain_uris[0] if _graph['intent'] == 'count' else corechain_uris[0].split('/')[-1]
+        sparql_value["r2"] = corechain_uris[1] if _graph['intent'] == 'count' else corechain_uris[1].split('/')[-1]
+
+        # Check if entities are one or two
+        if len(_graph['entities']) == 1:
+            sparql_template = sparql_2hop_1ent_template[signs_key + 'c' if _graph['intent'] == 'count' else signs_key]
+            sparql_value["te1"] = _graph['entities'][0]
+        else:
+            sparql_template = sparql_2hop_2ent_template[signs_key + 'c' if _graph['intent'] == 'count' else signs_key]
+            sparql_value["te1"] = _graph['entities'][0]
+            sparql_value["te2"] = _graph['entities'][1]
+
+    # Now to put the magic together
+    sparql = sparql_template % sparql_value
+
+    return sparql
+
 
 
 def init(embedding_interface):

@@ -1,3 +1,33 @@
+
+'''
+    >File starts a simple bottle server which can then be used for accessing Krantikari.
+        >it inits the model as well as all other peripherals needed
+    >Takes three arguments
+        1 - URL
+        2 - PORT
+        3 - GPU number
+        Note - If GPU number is -1 then model is loaded on CPU instead of GPU
+    >urls
+        /answer -> returns answers to the user question
+        /sparql -> returns sparql formed for the user question
+    >template requests code
+        import requests
+        question = 'What is the capital of India ?'
+        headers = {'Accept': 'text/plain', 'Content-type': 'application/json'}
+        answer = requests.get('http://localhost:9000/answer',data={'question':question},headers=headers)
+        print answer.content
+    >possible error codes are
+        'no_entity' --> No entity returned by the entity linker
+        'no_best_path' --> No candidate paths created
+        'entity_server_error' --> server issues at entity linking server
+        '500' --> 'Internal Server Error'
+    >Curl request
+    curl -X 'GET' -H 'Accept: text/plain' -H 'Accept-Encoding: gzip, deflate' -H 'Connection: keep-alive' -H 'Content-Length: 41' -H 'Content-type: application/json' -H 'User-Agent: python-requests/2.18.4' -d 'question=What+is+the+capital+of+India+%3F' 'http://localhost:9000/answer'
+    >To receive sparql, instead of sending the request at /answer send it on /sparql . Currently ask queries are not supported.
+'''
+
+
+
 import os
 import sys
 import json
@@ -8,6 +38,8 @@ import warnings
 import requests
 import traceback
 import numpy as np
+from bottle import get, request, run, response, HTTPError
+
 
 import onefile as qa
 
@@ -50,26 +82,10 @@ def get_entities(question):
     return entity_list
 
 
-def convert_path_to_id(path):
-    """
 
 
-    :param path: ['+',2,'-',4] where 2 and 4 refers to relation key
-    :return:
-
-    """
-    idfy_path = []
-    for p in path:
-        if p in ['+', '-']:
-            idfy_path.append(ei.SPECIAL_CHARACTERS.index(p))
-        else:
-            idfy_path += inverse_relations[int(p)][3].tolist()
-
-    return idfy_path
-
-
-def run():
-    """
+def start():
+    '''
         Pulls the parameters from disk
         Instantiate QuestionAnswering class (onefile).
 
@@ -78,7 +94,7 @@ def run():
 
         CHANGE MAJOR CONFIGS HERE
     :return:
-    """
+    '''
     global quesans, dbp, subgraph_maker, relations, parameter_dict
 
     device =  torch.device("cpu")
@@ -118,8 +134,7 @@ def run():
     quesans = qa.QuestionAnswering(parameters=parameter_dict, pointwise=training_config,
                                         word_to_id=None, device=device, debug=False)
 
-
-
+    run(host=URL, port=PORT)
 
 
 def answer_question(question):
@@ -140,7 +155,9 @@ def answer_question(question):
         'intent' : "",
         'rdf_constraint':False,
         'rdf_constraint_type':'',
-        'rdf_best_path':''
+        'rdf_best_path':'',
+        'answers':[],
+        'sparql':''
     }
 
     # @TODO: put in type checks if needed here.
@@ -210,13 +227,47 @@ def answer_question(question):
 
 
     sparql = qgts.convert_runtime(_graph)
+    _graph['sparql'] = sparql
+
+    #@TODO: handle error
+    answers = qa.sparql_answer(sparql)
+    _graph['answers'] = answers
 
 
-    return intent,rdftype,best_path_sf,sparql
+    return _graph
+
+
+@get('/graph')
+def answer():
+    try:
+        question = request.forms['question']
+        _graph = answer_question(question)
+        return json.dumps(_graph)
+    except:
+        raise HTTPError(500, 'Internal Server Error')
 
 
 
 
-run()
-question = 'Who is the president of America ?'
-answer_question(question)
+
+if __name__ == 'main':
+    try:
+        URL = sys.argv[1]
+    except IndexError:
+        pass
+    try:
+        PORT = int(sys.argv[2])
+    except (IndexError, TypeError):
+        pass
+
+
+    print("About to start server on %(url)s:%(port)s" % {'url': URL, 'port': str(PORT), 'gpu': str(GPU)})
+    print("initilizing models and databases ... ")
+
+    start()
+    try:
+        question = 'Who is the president of America ?'
+        a = answer_question(question)
+    except:
+        print("few things are off")
+        print(traceback.print_exc())

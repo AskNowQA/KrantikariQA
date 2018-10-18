@@ -11,7 +11,7 @@ import progressbar
 # This code will NOT work locally.
 sys.path.append('/data/priyansh/conda/fastai')
 os.environ['QT_QPA_PLATFORM']='offscreen'
-# from fastai.text import *
+from fastai.text import *
 
 DEBUG = True
 vectors, vocab = [], {}

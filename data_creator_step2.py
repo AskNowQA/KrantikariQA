@@ -83,14 +83,14 @@ def idfy_path(path,relation_dict,dbp):
         rel2_id,relation_dict = update_relation_dict(relation=path[3],relation_dict=relation_dict, dbp=dbp)
         return [path[0],rel1_id,path[2],rel2_id],relation_dict
 
-def idfy_const(const,relation_dict):
+def idfy_const(const,relation_dict,dbp):
     '''
 
     :param const: 'http://dbpedia.org/property/services' constraint has no sign
     :param relation_dict:
     :return: idfy const,updated relation dict
     '''
-    return update_relation_dict(const,relation_dict)
+    return update_relation_dict(const,relation_dict,dbp)
 
 
 def idfy_relations_in_node(node,relation_dict,dbp):
@@ -114,14 +114,14 @@ def idfy_relations_in_node(node,relation_dict,dbp):
         node['hop2'][index], relation_dict = idfy_path(path, relation_dict,dbp)
 
     for index,path in enumerate(node['rdf_constraint']['candidates']['uri']):
-        node['rdf_constraint']['candidates']['uri'][index],relation_dict = idfy_const(path,relation_dict)
+        node['rdf_constraint']['candidates']['uri'][index],relation_dict = idfy_const(path,relation_dict,dbp)
 
     for index,path in enumerate(node['rdf_constraint']['candidates']['x']):
-        node['rdf_constraint']['candidates']['x'][index],relation_dict = idfy_const(path,relation_dict)
+        node['rdf_constraint']['candidates']['x'][index],relation_dict = idfy_const(path,relation_dict,dbp)
 
 
     return node,relation_dict
-if __name__ == 'main':
+if __name__ == '__main__':
 
     dataset = 'lcquad'
     _save_location_success = 'data/data/raw/%(dataset)s/success'

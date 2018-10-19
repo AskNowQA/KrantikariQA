@@ -1,10 +1,11 @@
 
 import re
 import sys
+import html
 import string
 import os.path
+import pathlib
 import warnings
-import html
 import validators
 import numpy as np
 
@@ -22,6 +23,11 @@ DBP_SHORTHANDS = {'dbo': 'http://dbpedia.org/ontology/', 'dbp': 'http://dbpedia.
 first_cap_re = re.compile('(.)([A-Z][a-z]+)')
 all_cap_re = re.compile('([a-z0-9])([A-Z])')
 stopwords = open(STOPWORDLIST).read().split('\n')
+
+
+
+# Checks if the location exists and if not create a new one.
+create_dir = lambda dir_location: pathlib.Path(dir_location).mkdir(parents=True, exist_ok=True)
 
 
 # Better warning formatting. Ignore.

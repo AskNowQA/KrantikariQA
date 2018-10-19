@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
 
     if dataset == 'lcquad':
-        _dataset = json.load(open('resources/unsucessfull.json'))
+        _dataset = json.load(open('resources/lcquad_data_set.json'))
 
     if end_index == -1:
         _dataset = _dataset[int(start_index):]

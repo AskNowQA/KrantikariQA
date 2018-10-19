@@ -43,7 +43,8 @@ def construct_sparql(path,topic_entity):
         sparql = sparql_template % {'te1':topic_entity[0],'r1':path[1]}
     else:
         sparql_key = path[0]+path[2]
-        if sparql_key in sparql_template_2:
+
+        if sparql_key in sparql_template_2 and len(topic_entity) == 1:
             sparql = sparql_template_2[sparql_key] % {'te1':topic_entity[0],'r1': path[1], 'r2': path[3]}
         else:
             sparql = sparql_template_3[sparql_key] % {'te1': topic_entity[0], 'r1': path[1], 'r2': path[3], 'te2':topic_entity[1]}
@@ -96,7 +97,7 @@ def generate_rdf_candidates(path,topic_entity,dbp):
     '''
     sparql = construct_sparql(path,topic_entity)
     sparql_x_constraints, sparql_uri_constraints = construct_sparql_with_constraints(sparql)
-    if len(path) > 2:
+    if len(path) > 2 and len(topic_entity) == 1:
         x_const = shoot_sparql(sparql = sparql_x_constraints, dbp=dbp, x=True)
         x_const = [rel.decode("utf-8") for rel in x_const if is_not_blacklisted(rel.decode('utf-8'))]
     else:

@@ -22,7 +22,6 @@ from utils import embeddings_interface as ei
 
 
 
-
 def collect_files(dir_location):
     '''
 
@@ -121,6 +120,16 @@ def idfy_relations_in_node(node,relation_dict,dbp):
 
 
     return node,relation_dict
+
+def sort_list1_wrt_list2(list1,list2):
+    idlist = {v['_id']: index for index, v in enumerate(list2)}
+
+    def getKey(node):
+        return idlist[node['node']['_id']]
+
+    return sorted(list1,key=getKey)
+
+
 if __name__ == '__main__':
 
     dataset = 'lcquad'
@@ -128,6 +137,7 @@ if __name__ == '__main__':
     _save_location_unsuccess = 'data/data/raw/%(dataset)s/unsuccess'
     relation_dict_location = 'data/data/common/relations.pickle'
     final_data_location = 'data/data/%(dataset)s/id_big_data.json'
+    final_data_location_combine = 'data/data/raw/%(dataset)s/combine'
 
     dbp = dbi.DBPedia(caching=True)
 
@@ -147,8 +157,21 @@ if __name__ == '__main__':
     combined_data = collect_files(_save_location_success % {'dataset':dataset})
     combined_data_un = collect_files(_save_location_unsuccess % {'dataset':dataset})
 
-    for index,node in enumerate(combined_data):
-        combined_data[index],relation_dict = idfy_relations_in_node(node,relation_dict=relation_dict,dbp=dbp)
+    nlutils.create_dir(final_data_location_combine % {'dataset':dataset})
+    json.dump(combined_data,open(os.path.join(final_data_location_combine % {'dataset':dataset},'success.json'),'w+'))
+    json.dump(combined_data_un,open(os.path.join(final_data_location_combine % {'dataset':dataset},'unsuccess.json'),'w+'))
+
+
+    final_combine_data = combined_data+combined_data_un
+    if dataset == 'lcquad':
+        final_combine_data = sort_list1_wrt_list2(final_combine_data,json.load(open('resources/lcquad_data_set.json')))
+
+    '''
+        The final_combine_data needs to be re-ordered so that it could be directly split into training-validation-testing
+    '''
+
+    for index,node in enumerate(final_combine_data):
+        final_combine_data[index],relation_dict = idfy_relations_in_node(node,relation_dict=relation_dict,dbp=dbp)
 
 
 
@@ -185,7 +208,7 @@ if __name__ == '__main__':
     x_id = int(ei.vocabularize(['x'])[0])
     uri_id = int(ei.vocabularize(['uri'])[0])
 
-    for index,node in enumerate(combined_data):
+    for index,node in enumerate(final_combine_data):
         temp = {
             'uri' : {
                 'question-id' : [int(id) for id in list(ei.vocabularize(nlutils.tokenize(node['node']['corrected_question'])))],

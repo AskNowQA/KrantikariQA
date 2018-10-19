@@ -14,7 +14,7 @@ class CreateSubgraph:
         self.K_1HOP_GLOVE = 200
         self.K_1HOP_MODEL = 5
         self.K_2HOP_GLOVE = 2000
-        self.K_2HOP_MODEL = 5
+        self.K_2HOP_MODEL = 50
         self.EMBEDDING = "ulmfit"
         self.TRAINING = True # for older system
         self.qald = qald #Dataset specific stuff. As the predicate blacklist would be differently handled when compared to LC-QuAD.

@@ -58,7 +58,7 @@ quesans, dbp, subgraph_maker, relations, parameter_dict = None, None, None, None
 
 # path --> 'http://dbpedia.org/property/stadium'
 vocabularize_relation = lambda path: ei.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
-vocabularize_specia_char = lambda char: [ei.SPECIAL_CHARACTERS.index(char)]
+# vocabularize_specia_char = lambda char: [ei.SPECIAL_CHARACTERS.index(char)]
 
 def get_entities(question):
     """
@@ -173,9 +173,9 @@ def answer_question(question):
 
 
 
-    _hop1 = [vocabularize_specia_char(h[0])+vocabularize_relation(h[1]) for h in hop1]
-    _hop2 = [vocabularize_specia_char(h[0])+vocabularize_relation(h[1])+
-              vocabularize_specia_char(h[2])+vocabularize_relation(h[3]) for h in hop2]
+    _hop1 = [vocabularize_relation(h[0])+vocabularize_relation(h[1]) for h in hop1]
+    _hop2 = [vocabularize_relation(h[0])+vocabularize_relation(h[1])+
+             vocabularize_relation(h[2])+vocabularize_relation(h[3]) for h in hop2]
     paths = _hop1+ _hop2
     paths_sf = hop1+hop2
 

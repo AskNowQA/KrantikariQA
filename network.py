@@ -1774,9 +1774,9 @@ class BiLstmDot_ulmfit(Model):
         op_p = self.encoder(tu.trim(pos_batch))
         op_n = self.encoder(tu.trim(neg_batch))
 
-        ques_batch_encoded = op_q[1][0][:,-1]
-        pos_batch_encoded = op_p[1][0][:,-1]
-        neg_batch_encoded = op_n[1][0][:,-1]
+        ques_batch_encoded = op_q[1][-1][:,-1]
+        pos_batch_encoded = op_p[1][-1][:,-1]
+        neg_batch_encoded = op_n[1][-1][:,-1]
 
         #Calculating dot score
         pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
@@ -1813,8 +1813,8 @@ class BiLstmDot_ulmfit(Model):
         op_q = self.encoder(tu.trim(ques_batch))
         op_p = self.encoder(tu.trim(path_batch))
 
-        ques_batch = op_q[1][0][:,-1]
-        pos_batch = op_p[1][0][:,-1]
+        ques_batch = op_q[1][-1][:,-1]
+        pos_batch = op_p[1][-1][:,-1]
 
         # Calculating dot score
         score = torch.sum(ques_batch * pos_batch, -1)
@@ -1849,8 +1849,8 @@ class BiLstmDot_ulmfit(Model):
             op_q = self.encoder(tu.trim(ques))
             op_p = self.encoder(tu.trim(paths))
 
-            question = op_q[0][0][:,-1]
-            paths = op_p[0][0][:,-1]
+            question = op_q[0][-1][:,-1]
+            paths = op_p[0][-1][:,-1]
 
             if self.pointwise:
                 # question = F.normalize(F.relu(question),p=1,dim=1)

@@ -478,6 +478,7 @@ if __name__ == "__main__":
                                              _device=device,_pointwise=pointwise, _debug=False)
 
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+
     if training_model == 'slotptr_common_encoder':
         print("*************",parameter_dict['bidirectional'])
 

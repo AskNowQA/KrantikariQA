@@ -5,6 +5,7 @@ from utils import query_graph_to_sparql as sparql_constructor
 from utils import dbpedia_interface as db_interface
 from utils import embeddings_interface
 from configs import config_loader as cl
+from utils import natural_language_utilities as nlutils
 import network_rdftype as net_rdftype
 import network_intent as net_intent
 import data_loader as dl
@@ -25,16 +26,17 @@ else: import ConfigParser
 device = torch.device("cuda")
 sparql_constructor.init(embeddings_interface)
 dbp = db_interface.DBPedia(_verbose=True, caching=True)
+vocabularize_relation = lambda path: embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
 
 #Reading and setting up config parser
 config = ConfigParser.ConfigParser()
 config.readfp(open('configs/macros.cfg'))
 
 #setting up device,model name and loss types.
-training_model = 'decomposable_attention'
-_dataset = 'qald'
-pointwise = True
-training_model_number =1
+training_model = 'slotptr'
+_dataset = 'lcquad'
+pointwise = False
+training_model_number =83
 _debug = False
 
 #Loading relations file.
@@ -68,13 +70,13 @@ parameter_dict['corechainmodel'] = training_model
 parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
 parameter_dict['intentmodel'] = 'bilstm_dense'
-parameter_dict['intentmodelnumber'] = '10'
+parameter_dict['intentmodelnumber'] = '15'
 
 parameter_dict['rdftypemodel'] = 'bilstm_dense'
-parameter_dict['rdftypemodelnumber'] = '6'
+parameter_dict['rdftypemodelnumber'] = '11'
 
 parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-parameter_dict['rdfclassmodelnumber'] = '9'
+parameter_dict['rdfclassmodelnumber'] = '15'
 
 
 class QuestionAnswering:
@@ -373,7 +375,7 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
         positive_path = []
         for p in positive_path_id:
             if p in ['+', '-']:
-                positive_path += [embeddings_interface.SPECIAL_CHARACTERS.index(p)]
+                positive_path += vocabularize_relation(p)
             else:
                 positive_path += relations[int(p)][3].tolist()
 
@@ -387,7 +389,8 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
         negative_path = []
         for path in neg_path:
             try:
-                negative_path += [embeddings_interface.SPECIAL_CHARACTERS.index(path)]
+                if path in embeddings_interface.SPECIAL_CHARACTERS:
+                    negative_path += vocabularize_relation(path)
             except ValueError:
                 negative_path += relations[int(path)][3].tolist()
         negative_paths.append(np.asarray(negative_path))
@@ -532,12 +535,12 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
             _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
             print("paths rel1 rd are loop1 ", paths_rel1_rd)
             print("paths rel2 rd are loop1 ", paths_rel2_rd)
-            output = qa._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
+            output = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
         elif model == 'slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
-            output = qa._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
+            output = quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
         else:
-            output = qa._predict_corechain(question, paths)
+            output = quesans._predict_corechain(question, paths)
         best_path_index = np.argmax(output)
         best_path = paths[best_path_index]
 
@@ -550,12 +553,12 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
             _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
             print("paths rel1 rd are loop2 ", paths_rel1_rd)
             print("paths rel2 rd are loop2 ", paths_rel2_rd)
-            output = qa._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
+            output = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
         elif model == 'slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
-            output = qa._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
+            output = quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
         else:
-            output = qa._predict_corechain(question, paths)
+            output = quesans._predict_corechain(question, paths)
         best_path_index = np.argmax(output)
         best_path = paths[best_path_index]
 

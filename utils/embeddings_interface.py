@@ -10,7 +10,7 @@ import progressbar
 
 # This code will NOT work locally.
 sys.path.append('/data/priyansh/conda/fastai')
-os.environ['QT_QPA_PLATFORM']='offscreen'
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 from fastai.text import *
 
 DEBUG = True
@@ -20,13 +20,13 @@ POSSIBLE_EMBEDDINGS = ['glove', 'fasttext', 'ulmfit']
 DEFAULT_EMBEDDING = POSSIBLE_EMBEDDINGS[2]
 SELECTED_EMBEDDING = None
 
-SPECIAL_CHARACTERS = ['_pad_', '_unk_', '+', '-', '/','uri','x']
+SPECIAL_CHARACTERS = ['_pad_', '_unk_', '+', '-', '/', 'uri', 'x']
 SPECIAL_EMBEDDINGS = [0, 0, 1, -1, 0.5, -2, 2]
 GLOVE_LENGTH = 2196017
 
 EMBEDDING_DIM = 400
 EMBEDDING_GLOVE_DIM = 300
-EMBEDDING_FASTAI_DIM = 300 # @TODO: fix
+EMBEDDING_FASTAI_DIM = 300  # @TODO: fix
 
 PREPARED = False
 
@@ -59,6 +59,7 @@ ulmfit_location = \
 # Better warning formatting. Ignore.
 def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
+
 
 class NotYetImplementedError(Exception):
     pass
@@ -238,43 +239,42 @@ def _parse_ulmfit_():
                                   map_location=lambda storage, loc: storage)
         ulmfit_vectors = to_np(ulmfit_model['encoder.weight'])
 
-        to_delete = []
-        to_delete_char = []
+        to_add_char = []
         for sp_char in SPECIAL_CHARACTERS:
             try:
                 sp_char_id = ulmfit_vocab[sp_char]
-                to_delete.append(sp_char_id)
-                to_delete_char.append(sp_char)
             except KeyError:
-                pass
-
-        print(to_delete)
+                ulmfit_vocab[sp_char_id] = len(ulmfit_vocab)
+                to_add_char.append(sp_char_id)
 
         if DEBUG:
+            print(to_add_char)
             print("Vocab :", len(ulmfit_vocab))
             print("Vectors: ", ulmfit_vectors.shape)
 
-        # Delete these things from vectors, vocab
-        ulmfit_vectors = np.delete(ulmfit_vectors, to_delete, 0)
-        for i in range(len(to_delete)):
-            id = to_delete[i]
-            char = to_delete_char[i]
-            ulmfit_vocab.pop(char)
+        if len(to_add_char) > 0:
+            # Add these things to vectors
+            new_vectors = []
+            for char in to_add_char:
+                newid = SPECIAL_CHARACTERS.index(char)
+                vec = np.repeat(SPECIAL_EMBEDDINGS[newid], EMBEDDING_DIM)
+                new_vectors.append(vec)
+
+            new_vectors = np.asarray(new_vectors)
+            print(new_vectors.shape, ulmfit_vectors.shape)
+            vectors = np.vstack((ulmfit_vectors, new_vectors))
+        else:
+            vectors = ulmfit_vectors
+
+        vocab = ulmfit_vocab
+
+        # Replace pad and unk tokens
+        vocab['_unk_'] = 1
+        vocab['_pad_'] = 0
+        vectors[[0, 1]] = vectors[[1, 0]]
 
         if DEBUG:
-            print("Vocab :", len(ulmfit_vocab))
-            print("Vectors: ", ulmfit_vectors.shape)
-
-        # Merge old vocab and ULMFiT vocab
-        for key, id in ulmfit_vocab.items():
-            vocab[key] = id + len(SPECIAL_CHARACTERS)
-
-        # Merge vectors
-        vectors = np.array(vectors)
-        vectors = np.vstack((vectors, ulmfit_vectors))
-
-        if DEBUG:
-            print("Vocab: ", len(vocab))
+            print("Vocab :", len(vocab))
             print("Vectors: ", vectors.shape)
 
         save()
@@ -401,7 +401,7 @@ def vectorize(_tokens, _report_unks=False, _case_sensitive=False, _embedding=Non
 
 def __congregate__(_vector_set, ignore=[]):
     if len(ignore) == 0:
-        return np.mean(_vector_set, axis = 0)
+        return np.mean(_vector_set, axis=0)
     else:
         return np.dot(np.transpose(_vector_set), ignore) / sum(ignore)
 
@@ -449,12 +449,12 @@ def update_vocab(_words, _embedding=None):
     __check_prepared__(_embedding=_embedding)
 
     old_len = len(vocab)
-    new_vocab = {word: vocab.get(word, len(vocab)+i) for i, word in enumerate(_words)}
+    new_vocab = {word: vocab.get(word, len(vocab) + i) for i, word in enumerate(_words)}
     vocab.update(new_vocab)
     new_len = len(vocab)
 
     # Need new vectors for all these new words.
-    new_vectors = np.random.randn(new_len-old_len, EMBEDDING_DIM)
+    new_vectors = np.random.randn(new_len - old_len, EMBEDDING_DIM)
     vectors = np.vstack((vectors, new_vectors))
 
     save()

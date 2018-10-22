@@ -36,7 +36,7 @@ config.readfp(open('configs/macros.cfg'))
 training_model = 'slotptr'
 _dataset = 'lcquad'
 pointwise = False
-training_model_number =83
+training_model_number =87
 _debug = False
 
 #Loading relations file.
@@ -70,13 +70,13 @@ parameter_dict['corechainmodel'] = training_model
 parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
 parameter_dict['intentmodel'] = 'bilstm_dense'
-parameter_dict['intentmodelnumber'] = '15'
+parameter_dict['intentmodelnumber'] = '16'
 
 parameter_dict['rdftypemodel'] = 'bilstm_dense'
-parameter_dict['rdftypemodelnumber'] = '11'
+parameter_dict['rdftypemodelnumber'] = '12'
 
 parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-parameter_dict['rdfclassmodelnumber'] = '15'
+parameter_dict['rdfclassmodelnumber'] = '16'
 
 
 class QuestionAnswering:
@@ -688,6 +688,7 @@ def answer_question(qa, index, data, relations, parameter_dict):
     rdftype_true = np.argmax(net_rdftype.get_y(data))
     rdftype_acc = 1 if rdftype_pred == rdftype_true else 0
     metrics['rdftype_accuracy_counter'] = rdftype_acc
+
     rdftype = RDFTYPES[rdftype_pred]
 
     log['true_rdf_type'] = RDFTYPES[rdftype_true]
@@ -706,6 +707,7 @@ def answer_question(qa, index, data, relations, parameter_dict):
     log['pred_rdf_class'] = None
     metrics['rdfclass_accuracy_counter'] = None
 
+    rdftype = "none"
     if rdftype == "none":
 
         pass
@@ -924,11 +926,11 @@ if __name__ == "__main__":
         #                                    relations=None,
         #                                    parameter_dict=None)
 
-        sparql = create_sparql(log=log,
-                               data=data,
-                               embeddings_interface=embeddings_interface,
-                               relations=_inv_relations)
-
+        # sparql = create_sparql(log=log,
+        #                        data=data,
+        #                        embeddings_interface=embeddings_interface,
+        #                        relations=_inv_relations)
+        sparql = ""
         # metrics = eval(data, log, metrics)
 
         # Update logs

@@ -352,7 +352,7 @@ if __name__ == "__main__":
 
     if training_model == 'reldet':
         schema = 'reldet'
-    elif training_model == 'slotptr' or training_model == 'slotptr_common_encoder':
+    elif training_model == 'slotptr' or training_model == 'slotptr_common_encoder' or training_model == 'slotptrortho':
         schema = 'slotptr'
     elif training_model == 'bilstm_dot_multiencoder':
         schema = 'default'
@@ -457,6 +457,22 @@ if __name__ == "__main__":
                                    list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
                                    weight_decay=0.0001,lr=0.0001)
             modeler.load_from(model_path)
+
+
+    if training_model == 'slotptrortho':
+
+        if not finetune:
+            modeler = net.QelosSlotPointerModelOrthogonal(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                _device=device, _pointwise=pointwise, _debug=False)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001)
+        else:
+            modeler = net.QelosSlotPointerModelOrthogonal(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                               _device=device, _pointwise=pointwise, _debug=False)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
+                                   weight_decay=0.0001,lr=0.0001)
+            # modeler.load_from(model_path)
 
 
     if training_model == 'bilstm_dot_skip':

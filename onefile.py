@@ -388,10 +388,9 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
     for neg_path in negative_paths_id:
         negative_path = []
         for path in neg_path:
-            try:
-                if path in embeddings_interface.SPECIAL_CHARACTERS:
-                    negative_path += vocabularize_relation(path)
-            except ValueError:
+            if path in embeddings_interface.SPECIAL_CHARACTERS:
+                negative_path += vocabularize_relation(path)
+            else:
                 negative_path += relations[int(path)][3].tolist()
         negative_paths.append(np.asarray(negative_path))
     negative_paths = np.asarray(negative_paths)

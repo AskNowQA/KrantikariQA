@@ -37,7 +37,9 @@ dbp = db_interface.DBPedia(_verbose=True, caching=False)
 COMMON_DATA_DIR = 'data/data/common'
 
 embeddings_interface.__check_prepared__()
-vocabularize_relation = lambda path: embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
+vocabularize_relation_old = lambda path: embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
+special_char_vec = [vocabularize_relation_old(i)for i in embeddings_interface.SPECIAL_CHARACTERS]
+vocabularize_relation = lambda path: special_char_vec[embeddings_interface.SPECIAL_CHARACTERS.index(path)]
 
 def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
               _neg_paths_per_epoch_train,
@@ -361,17 +363,17 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             dataset = np.load(data)
             questions, pos_paths, neg_paths, \
             pos_paths_rel1_sp, pos_paths_rel2_sp,neg_paths_rel1_sp, neg_paths_rel2_sp, \
-            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd = dataset['arr_0'][:100],\
-                                                                                         dataset['arr_1'][:100],\
-                                                                                         dataset['arr_2'][:100], \
-                                                                                         dataset['arr_3'][:100],\
-                                                                                         dataset['arr_4'][:100],\
-                                                                                         dataset['arr_5'][:100], \
-                                                                                         dataset['arr_6'][:100], \
-                                                                                         dataset['arr_7'][:100],\
-                                                                                         dataset['arr_8'][:100],\
-                                                                                         dataset['arr_9'][:100],\
-                                                                                         dataset['arr_10'][:100]
+            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd = dataset['arr_0'][:-1],\
+                                                                                         dataset['arr_1'][:-1],\
+                                                                                         dataset['arr_2'][:-1], \
+                                                                                         dataset['arr_3'][:-1],\
+                                                                                         dataset['arr_4'][:-1],\
+                                                                                         dataset['arr_5'][:-1], \
+                                                                                         dataset['arr_6'][:-1], \
+                                                                                         dataset['arr_7'][:-1],\
+                                                                                         dataset['arr_8'][:-1],\
+                                                                                         dataset['arr_9'][:-1],\
+                                                                                         dataset['arr_10'][:-1]
 
 
 
@@ -452,10 +454,9 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
                 for neg_path in negative_paths_id:
                     negative_path = []
                     for p in neg_path:
-                        try:
-                            if p in embeddings_interface.SPECIAL_CHARACTERS:
-                                negative_path += vocabularize_relation(p)
-                        except ValueError:
+                        if p in embeddings_interface.SPECIAL_CHARACTERS:
+                            negative_path += vocabularize_relation(p)
+                        else:
                             negative_path += relations[int(p)][3].tolist()
                     negative_paths.append(negative_path)
                 negative_paths = remove_positive_path(pos_paths[i], negative_paths)
@@ -753,12 +754,11 @@ def construct_paths(data, relations, qald=False):
     negative_paths = []
     for neg_path in negative_paths_id:
         negative_path = []
-        for path in neg_path:
-            try:
-                if path in embeddings_interface.SPECIAL_CHARACTERS:
-                    negative_path += vocabularize_relation(path)
-            except ValueError:
-                negative_path += relations[int(path)][3].tolist()
+        for p in neg_path:
+            if p in embeddings_interface.SPECIAL_CHARACTERS:
+                negative_path += vocabularize_relation(p)
+            else:
+                negative_path += relations[int(p)][3].tolist()
         negative_paths.append(np.asarray(negative_path))
     negative_paths = np.asarray(negative_paths)
     # negative paths padding
@@ -785,8 +785,6 @@ def construct_paths(data, relations, qald=False):
     if qald:
         return question, positive_path, negative_paths, no_positive_path
     return question, positive_path, negative_paths
-
-
 
 class TrainingDataGenerator(Dataset):
     def __init__(self, data, max_length, neg_paths_per_epoch, batch_size,total_negative_samples,pointwise=False,schema='default',snip=800):
@@ -954,8 +952,6 @@ class TrainingDataGenerator(Dataset):
         else:
             self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
                 shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
-
-
 
 class ValidationDataset(Dataset):
     def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size,total_negative_samples):

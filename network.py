@@ -7,6 +7,7 @@ import os, sys
 os.environ['QT_QPA_PLATFORM']='offscreen'
 
 import torch
+import traceback
 
 sys.path.append('/data/priyansh/conda/fastai')
 import fastai
@@ -1769,14 +1770,15 @@ class BiLstmDot_ulmfit(Model):
 
         optimizer.zero_grad()
         #Encoding all the data
+        print("input question legth is", ques_batch.shape)
 
-        op_q = self.encoder(tu.trim(ques_batch))
-        op_p = self.encoder(tu.trim(pos_batch))
-        op_n = self.encoder(tu.trim(neg_batch))
+        op_q = self.encoder(tu.trim(ques_batch).transpose(1,0))
+        op_p = self.encoder(tu.trim(pos_batch).transpose(1,0))
+        op_n = self.encoder(tu.trim(neg_batch).transpose(1,0))
 
-        ques_batch_encoded = op_q[1][-1][:,-1]
-        pos_batch_encoded = op_p[1][-1][:,-1]
-        neg_batch_encoded = op_n[1][-1][:,-1]
+        ques_batch_encoded = op_q[1][-1][-1,:]
+        pos_batch_encoded = op_p[1][-1][-1,:]
+        neg_batch_encoded = op_n[1][-1][-1,:]
 
         #Calculating dot score
         pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
@@ -1788,7 +1790,9 @@ class BiLstmDot_ulmfit(Model):
         try:
             loss = loss_fn(pos_scores, neg_scores, y_label)
         except RuntimeError:
+            traceback.print_exc()
             print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
+
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
         optimizer.step()
@@ -1810,11 +1814,11 @@ class BiLstmDot_ulmfit(Model):
         optimizer.zero_grad()
 
         # Encoding all the data
-        op_q = self.encoder(tu.trim(ques_batch))
-        op_p = self.encoder(tu.trim(path_batch))
+        op_q = self.encoder(tu.trim(ques_batch).transpose(1,0))
+        op_p = self.encoder(tu.trim(path_batch).transpose(1,0))
 
-        ques_batch = op_q[1][-1][:,-1]
-        pos_batch = op_p[1][-1][:,-1]
+        ques_batch = op_q[1][-1][-1,:]
+        pos_batch = op_p[1][-1][-1,:]
 
         # Calculating dot score
         score = torch.sum(ques_batch * pos_batch, -1)
@@ -1846,11 +1850,11 @@ class BiLstmDot_ulmfit(Model):
 
             self.encoder.eval()
             # Encoding all the data
-            op_q = self.encoder(tu.trim(ques))
-            op_p = self.encoder(tu.trim(paths))
+            op_q = self.encoder(tu.trim(ques).transpose(1,0))
+            op_p = self.encoder(tu.trim(paths).transpose(1,0))
 
-            question = op_q[0][-1][:,-1]
-            paths = op_p[0][-1][:,-1]
+            question = op_q[0][-1][-1,:]
+            paths = op_p[0][-1][-1,:]
 
             if self.pointwise:
                 # question = F.normalize(F.relu(question),p=1,dim=1)

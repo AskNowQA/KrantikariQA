@@ -130,6 +130,19 @@ def sort_list1_wrt_list2(list1,list2):
     return sorted(list1,key=getKey)
 
 
+def vectorize_entity(entity,dbp):
+    '''
+
+    :param entity: [e1,e2] where e is of the form 'http://dbpedia.org/resource/Bill_Finger'
+    :param dbp:
+    :return:
+    '''
+    vector_ent = []
+    for e in entity:
+        vector_ent = vector_ent + ei.vectorize(nlutils.tokenize(dbp.get_label(e)))
+
+    return vector_ent
+
 if __name__ == '__main__':
 
     dataset = 'lcquad'
@@ -213,7 +226,8 @@ if __name__ == '__main__':
             'uri' : {
                 'question-id' : [int(id) for id in list(ei.vocabularize(nlutils.tokenize(node['node']['corrected_question'])))],
                 'hop-2-properties' : node['hop2'],
-                'hop-1-properties' : node['hop1']
+                'hop-1-properties' : node['hop1'],
+                'entity-id':vectorize_entity(node['entity'],dbp)
             },
             'parsed-data' : {
                 'node':node['node'],

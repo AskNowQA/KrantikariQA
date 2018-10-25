@@ -298,6 +298,7 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
         data['test_neg_paths_rel2_rd'] = None
 
         data['test_questions'] = None
+        data['test_entity'] = None
 
     else:
         data['test_pos_paths'] = _a['test_pos_paths']
@@ -315,10 +316,12 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
 
 
         data['test_questions'] = _a['test_questions']
+        data['test_entity'] = _a['test_entity']
 
 
     if _train_over_validation:
         data['train_questions'] = np.vstack((_a['train_questions'], _a['valid_questions']))
+        data['train_entity'] = np.vstack((_a['train_entity'], _a['valid_entity']))
 
         data['train_pos_paths'] = np.vstack((_a['train_pos_paths'], _a['valid_pos_paths']))
         data['train_pos_paths_rel1_sp'] = np.vstack((_a['train_pos_paths_rel1_sp'],_a['valid_pos_paths_rel1_sp']))
@@ -335,6 +338,7 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
 
     else:
         data['train_questions'] = _a['train_questions']
+        data['train_entity'] = _a['train_entity']
 
         data['train_pos_paths'] = _a['train_pos_paths']
         data['train_pos_paths_rel1_sp'] = _a['train_pos_paths_rel1_sp']
@@ -351,6 +355,7 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
 
 
     data['valid_questions'] = _a['valid_questions']
+    data['valid_entity'] = _a['valid_entity']
 
     data['valid_pos_paths'] = _a['valid_pos_paths']
     data['valid_pos_paths_rel1_sp'] = _a['valid_pos_paths_rel1_sp']

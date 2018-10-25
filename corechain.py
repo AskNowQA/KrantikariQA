@@ -229,6 +229,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
         # Track training loss
         train_loss.append(sum(epoch_loss))
 
+        test_every = False
         if test_every:
             # Run on test set
             if epoch%test_every == 0:
@@ -263,12 +264,12 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                                           data['valid_neg_paths'],  modeler, device, data['valid_pos_paths_rel1_sp'],data['valid_pos_paths_rel2_sp'],
                                                              data['valid_neg_paths_rel1_sp'],data['valid_neg_paths_rel2_sp']))
                     else:
-                        valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
-                                                                      data['valid_neg_paths'], modeler, device,
-                                                                      data['valid_pos_paths_rel1_rd'],
-                                                                      data['valid_pos_paths_rel2_rd'],
-                                                                      data['valid_neg_paths_rel1_rd'],
-                                                                      data['valid_neg_paths_rel2_rd']))
+                        valid_accuracy.append(aux.validation_accuracy(data['valid_questions'][:-1], data['valid_pos_paths'][:-1],
+                                                                      data['valid_neg_paths'][:-1], modeler, device,
+                                                                      data['valid_pos_paths_rel1_rd'][:-1],
+                                                                      data['valid_pos_paths_rel2_rd'][:-1],
+                                                                      data['valid_neg_paths_rel1_rd'][:-1],
+                                                                      data['valid_neg_paths_rel2_rd'][:-1]))
                 else:
                     valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
                                                                   data['valid_neg_paths'], modeler, device))
@@ -493,7 +494,11 @@ if __name__ == "__main__":
         modeler = net.BiLstmDot_ulmfit( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
                                              _device=device,_pointwise=pointwise, _debug=False)
 
-        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())))
+        modeler.freeze_layer(modeler.encoder)
+        modeler.unfreeze_layer(modeler.encoder.rnns[-1])
+        # +
+        # list(filter(lambda p: p.requires_grad, modeler.linear.parameters()))
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())),lr=0.001)
 
     if training_model == 'slotptr_common_encoder':
         print("*************",parameter_dict['bidirectional'])

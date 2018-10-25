@@ -137,6 +137,15 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
     def testing_split(x):
         return x[int(_validation_split * len(x)):]
 
+
+    '''
+        DELETE
+        DELETE
+        DELETE
+        DELETE
+        DELETE
+    '''
+    entity = questions
     data['train_pos_paths'] = training_split(pos_paths)
     if not _rdf:
         data['train_pos_paths_rel1_sp'] = training_split(pos_paths_rel1_sp)
@@ -153,6 +162,8 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
 
     data['train_questions'] = training_split(questions)
 
+    if not _rdf:
+        data['train_entity'] = training_split(entity)
     data['valid_pos_paths'] = validation_split(pos_paths)
     if not _rdf:
         data['valid_pos_paths_rel1_sp'] = validation_split(pos_paths_rel1_sp)
@@ -169,6 +180,8 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
 
 
     data['valid_questions'] = validation_split(questions)
+    if not _rdf:
+       data['valid_entity'] = validation_split(entity)
 
     if not _index:
         data['test_pos_paths'] = testing_split(pos_paths)
@@ -187,6 +200,8 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
             data['test_neg_paths_rel2_rd'] = testing_split(neg_paths_rel2_rd)
 
         data['test_questions'] = testing_split(questions)
+        if not _rdf:
+            data['test_entity'] = testing_split(entity)
 
 
     data['dummy_y_train'] = np.zeros(len(data['train_questions']) * _neg_paths_per_epoch_train)
@@ -443,6 +458,9 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
             questions = nlutils.pad_sequence(questions,max_sequence_length)
 
+            entity = [i['uri']['entity-id'] for i in dataset if i not in ignored]
+            entity = nlutils.pad_sequence(entity,max_sequence_length)
+
             neg_paths = []
             for i in range(0, len(pos_paths)):
                 if i in ignored:
@@ -569,11 +587,11 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
                                    file + ".mapped.npz"), "wb+") as data:
                 np.savez(data, questions, pos_paths, neg_paths,
                          pos_paths_rel1_sp, pos_paths_rel2_sp, neg_paths_rel1_sp, neg_paths_rel2_sp,
-                         pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd
+                         pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd,entity
                          )
 
             return vectors, questions, pos_paths, neg_paths,pos_paths_rel1_sp, pos_paths_rel2_sp,neg_paths_rel1_sp, neg_paths_rel2_sp, \
-            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd
+            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd,entity
 
 
 
@@ -731,6 +749,7 @@ def construct_paths(data, relations, qald=False):
         :return: unpadded , continous id spaced question, positive path, negative paths
     """
     question = np.asarray(data['uri']['question-id'])
+    # entity = np.asarray(data['uri']['entity-id'])
     # questions = pad_sequences([question], maxlen=max_length, padding='post')
 
     # inverse id version of positive path and creating a numpy version

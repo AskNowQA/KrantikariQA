@@ -1,7 +1,6 @@
 import os
 import sys
 import torch
-import gensim
 import pickle
 import warnings
 import traceback

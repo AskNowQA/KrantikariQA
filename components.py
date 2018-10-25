@@ -1009,6 +1009,16 @@ class QelosSlotPtrQuestionEncoder(nn.Module):
         ret = torch.cat([summaries[:, 0, :], summaries[:, 1, :]], 1)
         return ret,scores
 
+
+class QelosSlotPtrQuestionEncoderEntity(QelosSlotPtrQuestionEncoder):
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional, device,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, residual=True, dropout_in=0., dropout_rec=0, debug=False):
+        super(QelosSlotPtrQuestionEncoderEntity, self).__init__()
+        self.linear = torch.nn.Linear([self.hidden_dim][-1] * (1 + self.bidirectional), 2)
+
+
 class CNN(nn.Module):
 
     def __init__(self, _vectors, _vocab_size, _embedding_dim, _output_dim,_debug):

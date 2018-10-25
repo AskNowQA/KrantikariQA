@@ -36,7 +36,7 @@ config.readfp(open('configs/macros.cfg'))
 training_model = 'slotptr'
 _dataset = 'lcquad'
 pointwise = False
-training_model_number =87
+training_model_number =88
 _debug = False
 
 #Loading relations file.
@@ -117,7 +117,7 @@ class QuestionAnswering:
 
         # Initialize the model
         m = self.parameters['corechainmodel']
-        # self.parameters['corechainmodel'] = 'slotptr_common_encoder'
+        # self.parameters['corechainmodel'] = 'slotptrortho'
         # self.parameters['bidirectional'] = False
         if self.parameters['corechainmodel'] == 'bilstm_dot':
             self.corechain_model = net.BiLstmDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
@@ -136,6 +136,9 @@ class QuestionAnswering:
                                                              _word_to_id=self._word_to_id,
                                                              _device=self.device, _pointwise=self.pointwise,
                                                              _debug=self.debug)
+        if self.parameters['corechainmodel'] == 'slotptrortho':
+            self.corechain_model = net.QelosSlotPointerModelOrthogonal(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
 
         if self.parameters['corechainmodel'] == 'reldet':
             self.corechain_model = net.RelDetection(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
@@ -273,6 +276,12 @@ class QuestionAnswering:
             print("path rel 2 main ", P2.shape)
 
             score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel2=P2, device=self.device)
+            #Visual stuff.
+            # score,attention_score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel2=P2, device=self.device,attention_value=True)
+            # score1 = attention_score.squeeze(-1)[0, :, 0]
+            # score2 = attention_score.squeeze(-1)[0, :, 1]
+            # return score.detach().cpu().numpy(), score1.detach().cpu().numpy(), score2.detach().cpu().numpy()
+
         else:
             score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
         return score.detach().cpu().numpy()
@@ -537,7 +546,7 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
             output = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
         elif model == 'slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
-            output = quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
+            output,score1,score2 = quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
         else:
             output = quesans._predict_corechain(question, paths)
         best_path_index = np.argmax(output)
@@ -550,9 +559,8 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         '''
         if model == 'reldet':
             _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
-            print("paths rel1 rd are loop2 ", paths_rel1_rd)
-            print("paths rel2 rd are loop2 ", paths_rel2_rd)
-            output = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
+
+            output,score1,score2 = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
         elif model == 'slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
             output = quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)

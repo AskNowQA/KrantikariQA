@@ -990,10 +990,11 @@ class QelosSlotPtrQuestionEncoder(nn.Module):
 
 
         # get attention scores
-        scores = self.linear(ys)
+        linear_scores = self.linear(ys)
         # s1 = scores
-        scores = scores + torch.log(mask[:, :ys.size(1)].float().unsqueeze(2))
-        scores = self.sm(scores)  # (batsize, seqlen, 2)
+        scorer = linear_scores + torch.log(mask[:, :ys.size(1)].float().unsqueeze(2))
+        scores = self.sm(scorer)  # (batsize, seqlen, 2)
+        # scores[:,:,0],scores[:,:,1] =
         # get summaries
         # region skipper
         skipadd = embs[:, :ys.size(1), :]

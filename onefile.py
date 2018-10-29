@@ -36,7 +36,8 @@ config.readfp(open('configs/macros.cfg'))
 training_model = 'slotptr'
 _dataset = 'lcquad'
 pointwise = False
-training_model_number =88
+#19 is performing the best
+training_model_number =27
 _debug = False
 
 #Loading relations file.
@@ -117,7 +118,7 @@ class QuestionAnswering:
 
         # Initialize the model
         m = self.parameters['corechainmodel']
-        # self.parameters['corechainmodel'] = 'slotptrortho'
+        self.parameters['corechainmodel'] = 'slotptrortho'
         # self.parameters['bidirectional'] = False
         if self.parameters['corechainmodel'] == 'bilstm_dot':
             self.corechain_model = net.BiLstmDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
@@ -506,7 +507,7 @@ def create_rd_sp_paths(paths):
     return paths_rel1_sp,paths_rel2_sp,paths_rel1_rd,paths_rel2_rd
 
 
-def corechain_prediction(question, paths, positive_path, negative_paths, no_positive_path,model):
+def corechain_prediction(question, paths, positive_path, negative_paths, no_positive_path,model,verbal_question=""):
     '''
         Why is path needed ?
     '''
@@ -560,10 +561,10 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         if model == 'reldet':
             _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
 
-            output,score1,score2 = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
+            output = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
         elif model == 'slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
-            output = quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
+            output= quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
         else:
             output = quesans._predict_corechain(question, paths)
         best_path_index = np.argmax(output)

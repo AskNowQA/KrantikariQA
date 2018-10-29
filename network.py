@@ -1992,9 +1992,13 @@ class QelosSlotPointerModelOrthogonal(Model):
         # Pass them to the comparison module
         pos_scores = torch.sum(ques_encoded * pos_encoded, dim=-1)
         neg_scores = torch.sum(ques_encoded * neg_encoded, dim=-1)
-        attention_scores = torch.sum(attention[:,:,0,:] * attention[:,:,0,:],dim=1) \
-                           + torch.sum(attention[:,:,1,:] * attention[:,:,1,:],dim=1) \
-                           + torch.sum(attention[:, :, 1, :] * attention[:, :, 0, :], dim=1)**2
+        attention_scores_a12 = torch.sum(attention[:, :, 0] * attention[:, :, 1], dim=1)
+        attention_scores_a11 = torch.sum(attention[:, :, 0] * attention[:, :, 0], dim=1)
+        attention_scores_a22 = torch.sum(attention[:, :, 1] * attention[:, :, 1], dim=1)
+        # attention_scores = torch.sum(torch.min(attention[:, :, 0, :] , attention[:, :, 1, :]))
+        # attention_scores = torch.sum(attention[:,:,0,:] * attention[:,:,0,:],dim=1) \
+        #                    + torch.sum(attention[:,:,1,:] * attention[:,:,1,:],dim=1) \
+        #                    + torch.sum(attention[:, :, 1, :] * attention[:, :, 0, :], dim=1)**2
 
         '''
             If `y == 1` then it assumed the first input should be ranked higher
@@ -2003,7 +2007,7 @@ class QelosSlotPointerModelOrthogonal(Model):
         loss = loss_fn(pos_scores, neg_scores, y_label)
         # print("shape of loss before adding attention", loss.shape)
         # print("shape of attention_scores before adding attention", attention_scores.shape)
-        loss = loss +  torch.mean(attention_scores,dim=0)
+        loss = loss + 2*torch.mean(attention_scores_a12,dim=0) - torch.mean(attention_scores_a22,dim=0) - torch.mean(attention_scores_a11,dim=0)
         # print("shape of loss after adding attention", loss.shape)
         loss.backward()
         optimizer.step()

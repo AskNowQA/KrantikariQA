@@ -229,7 +229,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
         # Track training loss
         train_loss.append(sum(epoch_loss))
 
-        test_every = False
+        # test_every = False
         if test_every:
             # Run on test set
             if epoch%test_every == 0:

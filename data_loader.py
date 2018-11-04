@@ -355,7 +355,7 @@ def remove_positive_path(positive_path, negative_paths):
 
 def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dataset_specific_data_dir,
                             _model_specific_data_dir
-                            , _model='core_chain_pairwise',schema='default'):
+                            , _model='core_chain_pairwise',k=-1):
     """
         This file is meant to create data for core-chain ranking ONLY.
 
@@ -378,17 +378,17 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             dataset = np.load(data)
             questions, pos_paths, neg_paths, \
             pos_paths_rel1_sp, pos_paths_rel2_sp,neg_paths_rel1_sp, neg_paths_rel2_sp, \
-            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd = dataset['arr_0'][:-1],\
-                                                                                         dataset['arr_1'][:-1],\
-                                                                                         dataset['arr_2'][:-1], \
-                                                                                         dataset['arr_3'][:-1],\
-                                                                                         dataset['arr_4'][:-1],\
-                                                                                         dataset['arr_5'][:-1], \
-                                                                                         dataset['arr_6'][:-1], \
-                                                                                         dataset['arr_7'][:-1],\
-                                                                                         dataset['arr_8'][:-1],\
-                                                                                         dataset['arr_9'][:-1],\
-                                                                                         dataset['arr_10'][:-1]
+            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd = dataset['arr_0'][:k],\
+                                                                                         dataset['arr_1'][:k],\
+                                                                                         dataset['arr_2'][:k], \
+                                                                                         dataset['arr_3'][:k],\
+                                                                                         dataset['arr_4'][:k],\
+                                                                                         dataset['arr_5'][:k], \
+                                                                                         dataset['arr_6'][:k], \
+                                                                                         dataset['arr_7'][:k],\
+                                                                                         dataset['arr_8'][:k],\
+                                                                                         dataset['arr_9'][:k],\
+                                                                                         dataset['arr_10'][:k]
 
 
 
@@ -458,8 +458,8 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             questions = [i['uri']['question-id'] for i in dataset if i not in ignored]
             questions = nlutils.pad_sequence(questions,max_sequence_length)
 
-            entity = [i['uri']['entity-id'] for i in dataset if i not in ignored]
-            entity = nlutils.pad_sequence(entity,max_sequence_length)
+            # entity = [i['uri']['entity-id'] for i in dataset if i not in ignored]
+            # entity = nlutils.pad_sequence(entity,max_sequence_length)
 
             neg_paths = []
             for i in range(0, len(pos_paths)):
@@ -587,11 +587,11 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
                                    file + ".mapped.npz"), "wb+") as data:
                 np.savez(data, questions, pos_paths, neg_paths,
                          pos_paths_rel1_sp, pos_paths_rel2_sp, neg_paths_rel1_sp, neg_paths_rel2_sp,
-                         pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd,entity
+                         pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd
                          )
 
             return vectors, questions, pos_paths, neg_paths,pos_paths_rel1_sp, pos_paths_rel2_sp,neg_paths_rel1_sp, neg_paths_rel2_sp, \
-            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd,entity
+            pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd
 
 
 

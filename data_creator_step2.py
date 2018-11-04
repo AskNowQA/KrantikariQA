@@ -14,7 +14,7 @@
 import pickle
 import json
 import os
-
+import numpy as np
 
 from utils import dbpedia_interface as dbi
 from utils import natural_language_utilities as nlutils
@@ -137,9 +137,10 @@ def vectorize_entity(entity,dbp):
     :param dbp:
     :return:
     '''
-    vector_ent = []
-    for e in entity:
-        vector_ent = vector_ent + ei.vectorize(nlutils.tokenize(dbp.get_label(e)))
+    vector_ent = ei.vectorize(nlutils.tokenize(dbp.get_label(entity[0])))
+    if len(entity) > 1:
+        for e in entity:
+            vector_ent = np.vstack((vector_ent , ei.vectorize(nlutils.tokenize(dbp.get_label(e)))))
 
     return vector_ent
 
@@ -149,8 +150,10 @@ if __name__ == '__main__':
     _save_location_success = 'data/data/raw/%(dataset)s/success'
     _save_location_unsuccess = 'data/data/raw/%(dataset)s/unsuccess'
     relation_dict_location = 'data/data/common/relations.pickle'
+    relation_dict_dir = 'data/data/common/'
     final_data_location = 'data/data/%(dataset)s/id_big_data.json'
     final_data_location_combine = 'data/data/raw/%(dataset)s/combine'
+    final_data_dir = 'data/data/%(dataset)s/'
 
     dbp = dbi.DBPedia(caching=True)
 
@@ -166,6 +169,7 @@ if __name__ == '__main__':
         relation_dict = pickle.load(open(relation_dict_location, 'rb'))
         # To dump -> pickle.dump(relation_dict,open('data/data/common/text.pickle','wb+'))
     else:
+        nlutils.create_dir(relation_dict_location)
         relation_dict = {}
     combined_data = collect_files(_save_location_success % {'dataset':dataset})
     combined_data_un = collect_files(_save_location_unsuccess % {'dataset':dataset})
@@ -227,7 +231,7 @@ if __name__ == '__main__':
                 'question-id' : [int(id) for id in list(ei.vocabularize(nlutils.tokenize(node['node']['corrected_question'])))],
                 'hop-2-properties' : node['hop2'],
                 'hop-1-properties' : node['hop1'],
-                'entity-id':vectorize_entity(node['entity'],dbp)
+                # 'entity-id':vectorize_entity(node['entity'],dbp)
             },
             'parsed-data' : {
                 'node':node['node'],
@@ -250,6 +254,7 @@ if __name__ == '__main__':
         id_data.append(temp)
 
     #embedding interface update vocab here
+    nlutils.create_dir(final_data_dir %{'dataset':dataset})
     json.dump(id_data,open(final_data_location %{'dataset':dataset},'w+'))
 
 

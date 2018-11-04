@@ -32,14 +32,16 @@ def load_inverse_relation(COMMON_DATA_DIR):
 
 #Loads word list from given COMMON_DATA_DIR. To be used by FlatEncoder.
 def load_word_list(COMMON_DATA_DIR):
-    if sys.version_info[0] == 3:
-        word_list = pickle.load(open(COMMON_DATA_DIR + '/glove.300d.words','rb'), encoding='bytes')
-    else:
-        word_list = pickle.load(open(COMMON_DATA_DIR + '/glove.300d.words','rb'))
-    word_to_id = {}
-    for index, word in enumerate(word_list):
-        word_to_id[word] = index
-    return word_to_id
+    print("NOT IMPLEMENTED FUNCTIONALITY NOT IMPLEMENTED FUNCTIONALITY !!!")
+    return {}
+    # if sys.version_info[0] == 3:
+    #     word_list = pickle.load(open(COMMON_DATA_DIR + '/glove.300d.words','rb'), encoding='bytes')
+    # else:
+    #     word_list = pickle.load(open(COMMON_DATA_DIR + '/glove.300d.words','rb'))
+    # word_to_id = {}
+    # for index, word in enumerate(word_list):
+    #     word_to_id[word] = index
+    # return word_to_id
 
 
 def save_location(problem, model_name, dataset):
@@ -298,7 +300,7 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
         data['test_neg_paths_rel2_rd'] = None
 
         data['test_questions'] = None
-        data['test_entity'] = None
+        # data['test_entity'] = None
 
     else:
         data['test_pos_paths'] = _a['test_pos_paths']
@@ -316,12 +318,12 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
 
 
         data['test_questions'] = _a['test_questions']
-        data['test_entity'] = _a['test_entity']
-
+        # data['test_entity'] = _a['test_entity']
+    #
 
     if _train_over_validation:
         data['train_questions'] = np.vstack((_a['train_questions'], _a['valid_questions']))
-        data['train_entity'] = np.vstack((_a['train_entity'], _a['valid_entity']))
+        # data['train_entity'] = np.vstack((_a['train_entity'], _a['valid_entity']))
 
         data['train_pos_paths'] = np.vstack((_a['train_pos_paths'], _a['valid_pos_paths']))
         data['train_pos_paths_rel1_sp'] = np.vstack((_a['train_pos_paths_rel1_sp'],_a['valid_pos_paths_rel1_sp']))
@@ -338,7 +340,7 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
 
     else:
         data['train_questions'] = _a['train_questions']
-        data['train_entity'] = _a['train_entity']
+        # data['train_entity'] = _a['train_entity']
 
         data['train_pos_paths'] = _a['train_pos_paths']
         data['train_pos_paths_rel1_sp'] = _a['train_pos_paths_rel1_sp']
@@ -355,7 +357,7 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
 
 
     data['valid_questions'] = _a['valid_questions']
-    data['valid_entity'] = _a['valid_entity']
+    # data['valid_entity'] = _a['valid_entity']
 
     data['valid_pos_paths'] = _a['valid_pos_paths']
     data['valid_pos_paths_rel1_sp'] = _a['valid_pos_paths_rel1_sp']

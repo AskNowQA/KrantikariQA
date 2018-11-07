@@ -262,7 +262,7 @@ def to_bool(value):
         return False
 
 
-def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _pointwise,_device):
+def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _pointwise,_device,k=-1):
 
 
     TEMP = data_loading_parameters(_dataset, _parameter_dict)
@@ -273,7 +273,7 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
     _a = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
                       _neg_paths_per_epoch_train,
                       _neg_paths_per_epoch_validation, _relations,
-                      _index, _training_split, _validation_split, _model='core_chain_pairwise', _pairwise=not _pointwise, _debug=True, _rdf=False)
+                      _index, _training_split, _validation_split, _model='core_chain_pairwise', _pairwise=not _pointwise, _debug=True, _rdf=False,k=k)
 
     data = {}
 

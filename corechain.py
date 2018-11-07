@@ -349,7 +349,7 @@ if __name__ == "__main__":
 
 
     data = aux.load_data(_dataset=_dataset, _train_over_validation = _train_over_validation,
-                         _parameter_dict=parameter_dict, _relations =  _inv_relations, _pointwise=pointwise, _device=device)
+                         _parameter_dict=parameter_dict, _relations =  _inv_relations, _pointwise=pointwise, _device=device,k=-1)
 
     if training_model == 'reldet':
         schema = 'reldet'

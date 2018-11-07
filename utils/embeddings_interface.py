@@ -13,10 +13,10 @@ os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 from fastai.text import *
 
 DEBUG = True
-vectors, vocab = [], {}
+vectors, vocab, temp_vocab_id = [], {}, {}
 
 POSSIBLE_EMBEDDINGS = ['glove', 'fasttext', 'ulmfit']
-DEFAULT_EMBEDDING = POSSIBLE_EMBEDDINGS[2]
+DEFAULT_EMBEDDING = POSSIBLE_EMBEDDINGS[0]
 SELECTED_EMBEDDING = None
 
 SPECIAL_CHARACTERS = ['_pad_', '_unk_', '+', '-', '/', 'uri', 'x']
@@ -361,6 +361,53 @@ def vocabularize(_tokens, _report_unks=False, _case_sensitive=False, _embedding=
     return (np.asarray(op), unks) if _report_unks else np.asarray(op)
 
 
+def vocabularize_idspace(_tokens, _unk=True, _case_sensitive=False, _embedding=None):
+    """
+        Given a list of strings (list of tokens), this returns a list of integers (vectorspace ids)
+        based on whatever embedding is called in the function, or is the SELECTED EMBEDDING
+
+        :param _tokens: The sentence you want vocabbed. Tokenized (list of str)
+        :param _vocab: A dictionary containing word and an id of that word.
+        :param _report_unks: Whether or not to return the list of out of vocab tokens
+        :param _case_sensitive: Whether or not return to lowercase everything.
+        :param _embedding: Which embeddings do you want to use in this process.
+        :return: Numpy tensor of n, [OPTIONAL] List(str) of tokens out of vocabulary.
+    """
+    # __check_prepared__(_embedding=_embedding)
+
+    global temp_vocab_id
+    op = []
+
+
+    for token in _tokens:
+
+        # Small cap everything
+        token = token.lower() if not _case_sensitive else token
+
+        try:
+
+            try:
+
+                token_id = temp_vocab_id[token][0]
+
+            except KeyError:
+                '''
+                    It doesn't exist, give it the _unk_ token, add log it to unks.
+                '''
+                token_id = len(temp_vocab_id)
+                temp_vocab_id[token] = (token_id,_unk)
+
+            finally:
+
+                op += [token_id]
+        except:
+
+            "This here is to prevent some unknown mishaps, which stops a real long process, and sends me hate mail."
+            print(traceback.print_exc())
+            print(token)
+
+    return np.asarray(op)
+
 def vectorize(_tokens, _report_unks=False, _case_sensitive=False, _embedding=None):
     """
         Function to embed a sentence and return it as a list of vectors.
@@ -444,17 +491,77 @@ def update_vocab(_words, _embedding=None):
     :param _words: list of str (see above)
     :return: None
     """
+
+
     global vocab, vectors
     __check_prepared__(_embedding=_embedding)
+
 
     old_len = len(vocab)
     new_vocab = {word: vocab.get(word, len(vocab) + i) for i, word in enumerate(_words)}
     vocab.update(new_vocab)
     new_len = len(vocab)
 
+
     # Need new vectors for all these new words.
     new_vectors = np.random.randn(new_len - old_len, EMBEDDING_DIM)
+    print("shape of new_vectors is ", new_vectors.shape)
+    print("shape of vectors is ", vectors.shape)
     vectors = np.vstack((vectors, new_vectors))
 
     save()
+
+
+def align_id_space():
+    global temp_vocab_id, vocab, vectors
+
+    new_vectors = []
+    new_vocab = {}
+
+    rev = {v[0]:k for k,v in temp_vocab_id.items()}
+
+
+    for id in range(len(rev)):
+        token = rev[id]
+        value = temp_vocab_id[token]
+
+        new_vocab[token] = value[0]
+
+        try:
+
+            vec = vectors[vocab[token]]
+
+        except KeyError:
+            '''
+                It doesn't exist, give it the _unk_ token, add log it to unks.
+            '''
+            if value[1]:
+                vec = vectors[vocab['_unk_']]
+            else:
+                vec = np.random.randn(EMBEDDING_DIM)
+
+        finally:
+
+            new_vectors.append(vec)
+
+    #converting to numpy
+    new_vectors = np.asarray(new_vectors)
+
+    #save them somewhere
+    if SELECTED_EMBEDDING == 'glove':
+        locs = glove_location
+    elif SELECTED_EMBEDDING == 'ulmfit':
+        locs = ulmfit_location
+    elif SELECTED_EMBEDDING == 'fasttext':
+        raise NotYetImplementedError
+
+    if DEBUG:
+        print("Saving %(emb)s in %(loc)s" % {'emb': SELECTED_EMBEDDING, 'loc': parsed_location})
+
+    # Save vectors
+    np.save(os.path.join(parsed_location, locs['vec']), new_vectors)
+
+    # Save vocab
+    pickle.dump(new_vocab, open(os.path.join(parsed_location, locs['voc']), 'wb+'))
+
 

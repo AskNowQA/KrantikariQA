@@ -45,7 +45,7 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
               _neg_paths_per_epoch_train,
               _neg_paths_per_epoch_validation, _relations,
               _index, _training_split, _validation_split, _model='core_chain_pairwise',_pairwise=True, _debug=True,_rdf=False,
-              _schema = 'default'):
+              _schema = 'default',k=-1):
     '''
 
 
@@ -79,7 +79,7 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
         if not _rdf:
             vectors, questions, pos_paths, neg_paths, pos_paths_rel1_sp, pos_paths_rel2_sp, neg_paths_rel1_sp, neg_paths_rel2_sp, \
             pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd = create_dataset_pairwise(file=_file, max_sequence_length=_max_sequence_length, relations=_relations, _dataset=_dataset, _dataset_specific_data_dir=_dataset_specific_data_dir,
-            _model_specific_data_dir = _model_specific_data_dir, _model = 'core_chain_pairwise')
+            _model_specific_data_dir = _model_specific_data_dir, _model = 'core_chain_pairwise',k=k)
 
 
         else:

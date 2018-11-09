@@ -123,176 +123,182 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
     if curtail_padding_rel and dataset == 'lcquad':
         data = curatail_padding(data, parameter_dict)
 
-    for epoch in range(parameter_dict['epochs']):
+    try:
 
-        # Epoch start print
-        print("Epoch: ", epoch, "/", parameter_dict['epochs'])
+        for epoch in range(parameter_dict['epochs']):
 
-        # Bookkeeping variables
-        epoch_loss = []
-        epoch_time = time.time()
+            # Epoch start print
+            print("Epoch: ", epoch, "/", parameter_dict['epochs'])
 
-        # Loop for one batch
-        # tqdm_loop = tqdm(enumerate(train_loader))
-        for i_batch, sample_batched in enumerate(train_loader):
+            # Bookkeeping variables
+            epoch_loss = []
+            epoch_time = time.time()
 
-            # Bookkeeping and data preparation
-            batch_time = time.time()
+            # Loop for one batch
+            # tqdm_loop = tqdm(enumerate(train_loader))
+            for i_batch, sample_batched in enumerate(train_loader):
 
-            if not pointwise:
-                ques_batch = torch.tensor(np.reshape(sample_batched[0][0], (-1, parameter_dict['max_length'])),
-                                          dtype=torch.long, device=device)
-                pos_batch = torch.tensor(np.reshape(sample_batched[0][1], (-1, parameter_dict['max_length'])),
-                                         dtype=torch.long, device=device)
-                neg_batch = torch.tensor(np.reshape(sample_batched[0][2], (-1, parameter_dict['max_length'])),
-                                         dtype=torch.long, device=device)
+                # Bookkeeping and data preparation
+                batch_time = time.time()
 
-                data['dummy_y'] = torch.ones(ques_batch.shape[0], device=device)
-                if parameter_dict['schema'] != 'default':
-                    pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
-                                                  dtype=torch.long, device=device)
-                    pos_rel2_batch = torch.tensor(np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
-                                                  dtype=torch.long, device=device)
-                    neg_rel1_batch = torch.tensor(np.reshape(sample_batched[0][5], (-1, parameter_dict['max_length'])),
-                                                  dtype=torch.long, device=device)
-                    neg_rel2_batch = torch.tensor(np.reshape(sample_batched[0][6], (-1, parameter_dict['max_length'])),
-                                                  dtype=torch.long, device=device)
+                if not pointwise:
+                    ques_batch = torch.tensor(np.reshape(sample_batched[0][0], (-1, parameter_dict['max_length'])),
+                                              dtype=torch.long, device=device)
+                    pos_batch = torch.tensor(np.reshape(sample_batched[0][1], (-1, parameter_dict['max_length'])),
+                                             dtype=torch.long, device=device)
+                    neg_batch = torch.tensor(np.reshape(sample_batched[0][2], (-1, parameter_dict['max_length'])),
+                                             dtype=torch.long, device=device)
+
+                    data['dummy_y'] = torch.ones(ques_batch.shape[0], device=device)
+                    if parameter_dict['schema'] != 'default':
+                        pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
+                                                      dtype=torch.long, device=device)
+                        pos_rel2_batch = torch.tensor(np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
+                                                      dtype=torch.long, device=device)
+                        neg_rel1_batch = torch.tensor(np.reshape(sample_batched[0][5], (-1, parameter_dict['max_length'])),
+                                                      dtype=torch.long, device=device)
+                        neg_rel2_batch = torch.tensor(np.reshape(sample_batched[0][6], (-1, parameter_dict['max_length'])),
+                                                      dtype=torch.long, device=device)
 
 
-                    data_batch = {
-                        'ques_batch': ques_batch,
-                        'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
-                        'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
-                        'y_label': data['dummy_y'],
-                        'pos_rel1_batch': pos_rel1_batch[:,:parameter_dict['rel1_pad']],
-                        'pos_rel2_batch':pos_rel2_batch[:,:parameter_dict['rel1_pad']],
-                        'neg_rel1_batch':neg_rel1_batch[:,:parameter_dict['rel1_pad']],
-                        'neg_rel2_batch' : neg_rel2_batch[:,:parameter_dict['rel1_pad']]
-                    }
+                        data_batch = {
+                            'ques_batch': ques_batch,
+                            'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
+                            'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
+                            'y_label': data['dummy_y'],
+                            'pos_rel1_batch': pos_rel1_batch[:,:parameter_dict['rel1_pad']],
+                            'pos_rel2_batch':pos_rel2_batch[:,:parameter_dict['rel1_pad']],
+                            'neg_rel1_batch':neg_rel1_batch[:,:parameter_dict['rel1_pad']],
+                            'neg_rel2_batch' : neg_rel2_batch[:,:parameter_dict['rel1_pad']]
+                        }
+
+                    else:
+
+                        data_batch = {
+                            'ques_batch': ques_batch,
+                            'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
+                            'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
+                            'y_label': data['dummy_y']}
 
                 else:
+                    ques_batch = torch.tensor(np.reshape(sample_batched[0][0], (-1, parameter_dict['max_length'])),
+                                              dtype=torch.long, device=device)
+                    path_batch = torch.tensor(np.reshape(sample_batched[0][1], (-1, parameter_dict['max_length'])),
+                                             dtype=torch.long, device=device)
+                    y = torch.tensor(sample_batched[1],dtype = torch.float,device=device).view(-1)
 
-                    data_batch = {
-                        'ques_batch': ques_batch,
-                        'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
-                        'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
-                        'y_label': data['dummy_y']}
 
+                    if parameter_dict['schema'] != 'default':
+                        path_rel1_batch = torch.tensor(np.reshape(sample_batched[0][2], (-1, parameter_dict['max_length'])),
+                                                      dtype=torch.long, device=device)
+                        path_rel2_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
+                                                      dtype=torch.long, device=device)
+
+                        data_batch = {
+                            'ques_batch': ques_batch,
+                            'path_batch': path_batch[:,:parameter_dict['rel_pad']],
+                            'y_label': y,
+                            'path_rel1_batch': path_rel1_batch[:,:parameter_dict['rel1_pad']],
+                            'path_rel2_batch': path_rel2_batch[:,:parameter_dict['rel1_pad']]
+                        }
+                    else:
+                        data_batch = {
+                            'ques_batch': ques_batch,
+                            'path_batch': path_batch[:,:parameter_dict['rel_pad']],
+                            'y_label': y
+                        }
+
+
+
+                loss = modeler.train(data=data_batch,
+                                  optimizer=optimizer,
+                                  loss_fn=loss_func,
+                                  device=device)
+
+                # Bookkeep the training loss
+                epoch_loss.append(loss.item())
+
+                # tqdm_loop.desc("#"+str(i_batch)+"\tLoss:" + str(loss.item())[:min(5, len(str(loss.item())))])
+
+                print("Batch:\t%d" % i_batch, "/%d\t: " % (parameter_dict['batch_size']),
+                      "%s" % (time.time() - batch_time),
+                      "\t%s" % (time.time() - epoch_time),
+                      "\t%s" % (str(loss.item())),
+                      end=None if i_batch + 1 == int(int(i_batch) / parameter_dict['batch_size']) else "\n")
+
+            # EPOCH LEVEL
+
+            # Track training loss
+            train_loss.append(sum(epoch_loss))
+
+            # test_every = False
+            if test_every:
+                # Run on test set
+                if epoch%test_every == 0:
+                    if parameter_dict['schema'] != 'default':
+                        if parameter_dict['schema']  == 'slotptr':
+                            test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
+                                                             data['test_neg_paths'],modeler, device,data['test_pos_paths_rel1_sp'],data['test_pos_paths_rel2_sp'],
+                                                                 data['test_neg_paths_rel1_sp'],data['test_neg_paths_rel2_sp']))
+                        else:
+                            test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
+                                                                         data['test_neg_paths'], modeler, device,
+                                                                         data['test_pos_paths_rel1_rd'],
+                                                                         data['test_pos_paths_rel2_rd'],
+                                                                         data['test_neg_paths_rel1_rd'],
+                                                                         data['test_neg_paths_rel2_rd']))
+                    else:
+                        test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
+                                                                     data['test_neg_paths'], modeler, device))
+                    if test_accuracy[-1] >= best_test_accuracy:
+                        best_test_accuracy = test_accuracy[-1]
+                        aux_save_information['test_accuracy'] = best_test_accuracy
             else:
-                ques_batch = torch.tensor(np.reshape(sample_batched[0][0], (-1, parameter_dict['max_length'])),
-                                          dtype=torch.long, device=device)
-                path_batch = torch.tensor(np.reshape(sample_batched[0][1], (-1, parameter_dict['max_length'])),
-                                         dtype=torch.long, device=device)
-                y = torch.tensor(sample_batched[1],dtype = torch.float,device=device).view(-1)
+                test_accuracy.append(0)
+                best_test_accuracy = 0
 
-
-                if parameter_dict['schema'] != 'default':
-                    path_rel1_batch = torch.tensor(np.reshape(sample_batched[0][2], (-1, parameter_dict['max_length'])),
-                                                  dtype=torch.long, device=device)
-                    path_rel2_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
-                                                  dtype=torch.long, device=device)
-
-                    data_batch = {
-                        'ques_batch': ques_batch,
-                        'path_batch': path_batch[:,:parameter_dict['rel_pad']],
-                        'y_label': y,
-                        'path_rel1_batch': path_rel1_batch[:,:parameter_dict['rel1_pad']],
-                        'path_rel2_batch': path_rel2_batch[:,:parameter_dict['rel1_pad']]
-                    }
-                else:
-                    data_batch = {
-                        'ques_batch': ques_batch,
-                        'path_batch': path_batch[:,:parameter_dict['rel_pad']],
-                        'y_label': y
-                    }
-
-
-
-            loss = modeler.train(data=data_batch,
-                              optimizer=optimizer,
-                              loss_fn=loss_func,
-                              device=device)
-
-            # Bookkeep the training loss
-            epoch_loss.append(loss.item())
-
-            # tqdm_loop.desc("#"+str(i_batch)+"\tLoss:" + str(loss.item())[:min(5, len(str(loss.item())))])
-
-            print("Batch:\t%d" % i_batch, "/%d\t: " % (parameter_dict['batch_size']),
-                  "%s" % (time.time() - batch_time),
-                  "\t%s" % (time.time() - epoch_time),
-                  "\t%s" % (str(loss.item())),
-                  end=None if i_batch + 1 == int(int(i_batch) / parameter_dict['batch_size']) else "\n")
-
-        # EPOCH LEVEL
-
-        # Track training loss
-        train_loss.append(sum(epoch_loss))
-
-        # test_every = False
-        if test_every:
-            # Run on test set
-            if epoch%test_every == 0:
-                if parameter_dict['schema'] != 'default':
-                    if parameter_dict['schema']  == 'slotptr':
-                        test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
-                                                         data['test_neg_paths'],modeler, device,data['test_pos_paths_rel1_sp'],data['test_pos_paths_rel2_sp'],
-                                                             data['test_neg_paths_rel1_sp'],data['test_neg_paths_rel2_sp']))
+            # Run on validation set
+            if validate_every:
+                if epoch%validate_every == 0:
+                    if parameter_dict['schema'] != 'default':
+                        if parameter_dict['schema'] == 'slotptr':
+                            valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
+                                                              data['valid_neg_paths'],  modeler, device, data['valid_pos_paths_rel1_sp'],data['valid_pos_paths_rel2_sp'],
+                                                                 data['valid_neg_paths_rel1_sp'],data['valid_neg_paths_rel2_sp']))
+                        else:
+                            valid_accuracy.append(aux.validation_accuracy(data['valid_questions'][:-1], data['valid_pos_paths'][:-1],
+                                                                          data['valid_neg_paths'][:-1], modeler, device,
+                                                                          data['valid_pos_paths_rel1_rd'][:-1],
+                                                                          data['valid_pos_paths_rel2_rd'][:-1],
+                                                                          data['valid_neg_paths_rel1_rd'][:-1],
+                                                                          data['valid_neg_paths_rel2_rd'][:-1]))
                     else:
-                        test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
-                                                                     data['test_neg_paths'], modeler, device,
-                                                                     data['test_pos_paths_rel1_rd'],
-                                                                     data['test_pos_paths_rel2_rd'],
-                                                                     data['test_neg_paths_rel1_rd'],
-                                                                     data['test_neg_paths_rel2_rd']))
-                else:
-                    test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
-                                                                 data['test_neg_paths'], modeler, device))
-                if test_accuracy[-1] >= best_test_accuracy:
-                    best_test_accuracy = test_accuracy[-1]
-                    aux_save_information['test_accuracy'] = best_test_accuracy
-        else:
-            test_accuracy.append(0)
-            best_test_accuracy = 0
-
-        # Run on validation set
-        if validate_every:
-            if epoch%validate_every == 0:
-                if parameter_dict['schema'] != 'default':
-                    if parameter_dict['schema'] == 'slotptr':
                         valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
-                                                          data['valid_neg_paths'],  modeler, device, data['valid_pos_paths_rel1_sp'],data['valid_pos_paths_rel2_sp'],
-                                                             data['valid_neg_paths_rel1_sp'],data['valid_neg_paths_rel2_sp']))
-                    else:
-                        valid_accuracy.append(aux.validation_accuracy(data['valid_questions'][:-1], data['valid_pos_paths'][:-1],
-                                                                      data['valid_neg_paths'][:-1], modeler, device,
-                                                                      data['valid_pos_paths_rel1_rd'][:-1],
-                                                                      data['valid_pos_paths_rel2_rd'][:-1],
-                                                                      data['valid_neg_paths_rel1_rd'][:-1],
-                                                                      data['valid_neg_paths_rel2_rd'][:-1]))
-                else:
-                    valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
-                                                                  data['valid_neg_paths'], modeler, device))
-                if valid_accuracy[-1] > best_validation_accuracy:
-                    print("MODEL WEIGHTS RIGHT NOW: ", modeler.get_parameter_sum())
-                    best_validation_accuracy = valid_accuracy[-1]
-                    aux_save_information['epoch'] = epoch
-                    aux_save_information['validation_accuracy'] = best_validation_accuracy
-                    aux.save_model(model_save_location, modeler, model_name='model.torch'
-                               , epochs=epoch, optimizer=optimizer, accuracy=best_validation_accuracy, aux_save_information=aux_save_information)
+                                                                      data['valid_neg_paths'], modeler, device))
+                    if valid_accuracy[-1] > best_validation_accuracy:
+                        print("MODEL WEIGHTS RIGHT NOW: ", modeler.get_parameter_sum())
+                        best_validation_accuracy = valid_accuracy[-1]
+                        aux_save_information['epoch'] = epoch
+                        aux_save_information['validation_accuracy'] = best_validation_accuracy
+                        aux.save_model(model_save_location, modeler, model_name='model.torch'
+                                   , epochs=epoch, optimizer=optimizer, accuracy=best_validation_accuracy, aux_save_information=aux_save_information)
 
-        # Resample new negative paths per epoch and shuffle all data
-        train_loader.dataset.shuffle()
+            # Resample new negative paths per epoch and shuffle all data
+            train_loader.dataset.shuffle()
 
-        # Epoch level prints
-        print("Time: %s\t" % (time.time() - epoch_time),
-              "Loss: %s\t" % (sum(epoch_loss)),
-              "Valdacc: %s\t" % (valid_accuracy[-1]),
-                "Testacc: %s\n" % (test_accuracy[-1]),
-              "BestValidAcc: %s\n" % (best_validation_accuracy),
-              "BestTestAcc: %s\n" % (best_test_accuracy))
+            # Epoch level prints
+            print("Time: %s\t" % (time.time() - epoch_time),
+                  "Loss: %s\t" % (sum(epoch_loss)),
+                  "Valdacc: %s\t" % (valid_accuracy[-1]),
+                    "Testacc: %s\n" % (test_accuracy[-1]),
+                  "BestValidAcc: %s\n" % (best_validation_accuracy),
+                  "BestTestAcc: %s\n" % (best_test_accuracy))
 
-    return train_loss, modeler, valid_accuracy, test_accuracy
+        return train_loss, modeler, valid_accuracy, test_accuracy
+
+    except KeyboardInterrupt:
+        print('-' * 89)
+        return train_loss, modeler, valid_accuracy, test_accuracy
 
 if __name__ == "__main__":
 

@@ -160,9 +160,9 @@ if __name__ == "__main__":
                                                                                device=device,
                                                                                test_every=5,
                                                                                validate_every=5,
-                                                                                pointwise=pointwise,
+                                                                               pointwise=pointwise,
                                                                                problem='rdf_class',
-                                                                                curtail_padding_rel=False)
+                                                                               curtail_padding_rel=False)
 
     print(valid_accuracy)
     print(test_accuracy)

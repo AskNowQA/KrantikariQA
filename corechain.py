@@ -210,6 +210,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
 
 
+
                 loss = modeler.train(data=data_batch,
                                   optimizer=optimizer,
                                   loss_fn=loss_func,
@@ -566,3 +567,23 @@ if __name__ == "__main__":
      # rsync -avz --progress auxiliary.py priyansh@sda-srv04:/data/priyansh/new_kranti
      # rsync -avz --progress components.py priyansh@sda-srv04:/data/priansh/new_kranti
      # rsync -avz --progress network.py priyansh@sda-srv04:/data/priyansh/new_kranti
+
+    # [0.16, 0.19, 0.24, 0.24, 0.28, 0.3, 0.25, 0.27, 0.29, 0.27, 0.26, 0.28, 0.27, 0.3, 0.32, 0.29, 0.31, 0.3, 0.31,
+    #  0.28, 0.31, 0.32, 0.29, 0.31, 0.32, 0.34, 0.32, 0.31, 0.32, 0.33, 0.33, 0.32, 0.33, 0.32, 0.32, 0.33, 0.32, 0.33,
+    #  0.32, 0.37, 0.35, 0.34, 0.33, 0.34, 0.34, 0.36, 0.39]
+    # [0.2, 0.235, 0.25, 0.29, 0.3, 0.325, 0.28, 0.315, 0.29, 0.325, 0.305, 0.33, 0.35, 0.315, 0.335, 0.315, 0.35, 0.345,
+    #  0.325, 0.365, 0.335, 0.35, 0.36, 0.385, 0.37, 0.355, 0.35, 0.375, 0.345, 0.345, 0.36, 0.385, 0.4, 0.375, 0.38,
+    #  0.35, 0.395, 0.385, 0.38, 0.39, 0.365, 0.4, 0.395, 0.39, 0.39, 0.4, 0.4]
+    # validation
+    # accuracy is, 0.39
+    # maximum
+    # test
+    # accuracy is, 0.4
+    # correct
+    # test
+    # accuracy
+    # i.e
+    # test
+    # accuracy
+    # where
+    # validation is highest is 0.4

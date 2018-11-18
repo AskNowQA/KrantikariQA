@@ -13,7 +13,8 @@ os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 from fastai.text import *
 
 DEBUG = True
-vectors, vocab, temp_vocab_id = [], {}, {}
+vectors, vocab, temp_vocab_id = [], {}, {'_pad_':(0,False), '_unk_':(1,False), '+':(2,False), '-':(3,False),
+                                         '/':(4,False), 'uri':(5,False), 'x':(6,False)}
 
 POSSIBLE_EMBEDDINGS = ['glove', 'fasttext', 'ulmfit']
 DEFAULT_EMBEDDING = POSSIBLE_EMBEDDINGS[0]

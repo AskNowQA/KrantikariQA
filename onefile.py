@@ -37,7 +37,7 @@ training_model = 'slotptr'
 _dataset = 'lcquad'
 pointwise = False
 #19 is performing the best
-training_model_number =27
+training_model_number =34
 _debug = False
 
 #Loading relations file.
@@ -70,6 +70,17 @@ parameter_dict['_model_dir'] = './data/models/'
 parameter_dict['corechainmodel'] = training_model
 parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
+# parameter_dict['intentmodel'] = 'bilstm_dense'
+# parameter_dict['intentmodelnumber'] = '2'
+#
+# parameter_dict['rdftypemodel'] = 'bilstm_dense'
+# parameter_dict['rdftypemodelnumber'] = '0'
+#
+# parameter_dict['rdfclassmodel'] = 'bilstm_dot'
+# parameter_dict['rdfclassmodelnumber'] = '0'
+
+
+# params for ULMFit
 parameter_dict['intentmodel'] = 'bilstm_dense'
 parameter_dict['intentmodelnumber'] = '16'
 
@@ -78,8 +89,6 @@ parameter_dict['rdftypemodelnumber'] = '12'
 
 parameter_dict['rdfclassmodel'] = 'bilstm_dot'
 parameter_dict['rdfclassmodelnumber'] = '16'
-
-
 class QuestionAnswering:
     """
         Usage:

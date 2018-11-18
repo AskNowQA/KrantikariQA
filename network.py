@@ -1992,7 +1992,8 @@ class QelosSlotPointerModelOrthogonal(Model):
         # Pass them to the comparison module
         pos_scores = torch.sum(ques_encoded * pos_encoded, dim=-1)
         neg_scores = torch.sum(ques_encoded * neg_encoded, dim=-1)
-        attention_scores_a12 = torch.sum(attention[:, :, 0] * attention[:, :, 1], dim=1)
+        attention_scores_a12 = torch.sum(attention[:, :, 0] * attention[:, :, 1], dim=1)/\
+                               (torch.norm(attention[:, :, 1])*torch.norm(attention[:, :, 0]))
         attention_scores_a11 = torch.sum(attention[:, :, 0] * attention[:, :, 0], dim=1)
         attention_scores_a22 = torch.sum(attention[:, :, 1] * attention[:, :, 1], dim=1)
         # attention_scores = torch.sum(torch.min(attention[:, :, 0, :] , attention[:, :, 1, :]))
@@ -2007,7 +2008,10 @@ class QelosSlotPointerModelOrthogonal(Model):
         loss = loss_fn(pos_scores, neg_scores, y_label)
         # print("shape of loss before adding attention", loss.shape)
         # print("shape of attention_scores before adding attention", attention_scores.shape)
-        loss = loss + 2*torch.mean(attention_scores_a12,dim=0) - torch.mean(attention_scores_a22,dim=0) - torch.mean(attention_scores_a11,dim=0)
+        # loss = loss + 2*torch.mean(attention_scores_a12,dim=0) - torch.mean(attention_scores_a22,dim=0) - torch.mean(attention_scores_a11,dim=0)
+        # print(attention_scores_a12)
+        # print(attention_scores_a12.shape)
+        loss = loss + 0.3*(torch.mean(attention_scores_a12,dim=0))
         # print("shape of loss after adding attention", loss.shape)
         loss.backward()
         optimizer.step()
@@ -2126,9 +2130,9 @@ class QelosSlotPointerModelOrthogonalEntity(Model):
             return self._train_pairwise_(data, optimizer, loss_fn, device)
 
     def _train_pairwise_(self, data, optimizer, loss_fn, device):
-        ques_batch, pos_1_batch, pos_2_batch, neg_1_batch, neg_2_batch, entity, y_label = \
+        ques_batch, pos_1_batch, pos_2_batch, neg_1_batch, neg_2_batch, y_label = \
             data['ques_batch'], data['pos_rel1_batch'], data['pos_rel2_batch'], \
-            data['neg_rel1_batch'], data['neg_rel2_batch'], data['y_label'],data['entity_batch']
+            data['neg_rel1_batch'], data['neg_rel2_batch'], data['y_label']
 
         optimizer.zero_grad()
 
@@ -2136,36 +2140,32 @@ class QelosSlotPointerModelOrthogonalEntity(Model):
         # If not, we have to pad everything up with zeros, or even call a limited part of the comparison module.
         pos_2_batch = tu.no_one_left_behind(pos_2_batch)
         neg_2_batch = tu.no_one_left_behind(neg_2_batch)
-        entity_2_batch = tu.no_one_left_behind(entity)
-
 
         # assert torch.mean((torch.sum(pos_2_batch, dim=-1) != 0).float()) == 1
         # assert torch.mean((torch.sum(pos_1_batch, dim=-1) != 0).float()) == 1
 
         # Encoding all the data
-        ques_encoded,attention = self.encoder_q(tu.trim(ques_batch))
+        ques_encoded, attention = self.encoder_q(tu.trim(ques_batch))
         pos_encoded = self.encoder_p(tu.trim(pos_1_batch), tu.trim(pos_2_batch))
         neg_encoded = self.encoder_p(tu.trim(neg_1_batch), tu.trim(neg_2_batch))
-        entity_encoded = self.encoder_p(tu.trim(entity), tu.trim(entity_2_batch))
 
         # Pass them to the comparison module
         pos_scores = torch.sum(ques_encoded * pos_encoded, dim=-1)
         neg_scores = torch.sum(ques_encoded * neg_encoded, dim=-1)
-        entity_score = torch.sum(ques_encoded * entity_encoded, dim=-1)
-
-        attention_scores = torch.sum(attention[:,:,0,:]*attention[:,:,1,:],dim=1) + \
-                           torch.sum(attention[:, :, 0, :] * attention[:, :, 2, :], dim=1) + \
-                           torch.sum(attention[:, :, 1, :] * attention[:, :, 2, :], dim=1)
 
         '''
             If `y == 1` then it assumed the first input should be ranked higher
             (have a larger value) than the second input, and vice-versa for `y == -1`
         '''
-        loss = loss_fn(pos_scores, neg_scores, y_label)
-        # print("shape of loss before adding attention", loss.shape)
-        # print("shape of attention_scores before adding attention", attention_scores.shape)
-        loss = loss + 0.5*torch.mean(attention_scores,dim=0)
-        # print("shape of loss after adding attention", loss.shape)
+
+        attention_scores_a12 = (torch.sum(attention[:, :, 0] * attention[:, :, 1], dim=1)) / (
+                    torch.norm(attention[:, :, 1]) * torch.norm(attention[:, :, 0]))
+        attention_scores_a11 = torch.sum(attention[:, :, 0] * attention[:, :, 0], dim=1)
+        attention_scores_a22 = torch.sum(attention[:, :, 1] * attention[:, :, 1], dim=1)
+        #         ascore = 0.5*torch.mean(attention_scores_a12,dim=0) + 0.5*torch.mean(torch.ones_like(attention_scores_a11) - attention_scores_a11,dim=0) + 0.5*torch.mean(torch.ones_like(attention_scores_a11) - attention_scores_a22,dim=0)
+        ascore = 0.5 * (torch.mean(attention_scores_a12, dim=0))
+        #         ascore = 0
+        loss = loss_fn(pos_scores, neg_scores, y_label) + ascore
         loss.backward()
         optimizer.step()
 

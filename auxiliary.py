@@ -4,7 +4,9 @@ import numpy as np
 import pickle,os,torch
 import data_loader as dl
 from utils import prepare_transfer_learning as ptl
+from utils import embeddings_interface as ei
 
+ei.__check_prepared__()
 
 #Should be shifted to some other locations
 def load_inverse_relation(COMMON_DATA_DIR):
@@ -212,18 +214,20 @@ def load_embeddingid_gloveid(embedding='ulmfit'):
     '''
         Loads required dictionary files for id_to_word functionality
     '''
-    location_gl = './resources/vocab_gl.pickle'
-    location_um = './resources/vocab_ul.pickle'
-    if embedding == 'ulmfit':
-        location = location_um
-    elif embedding == 'glove':
-        location = location_gl
 
-    if sys.version_info[0] == 3:
-
-        word_to_gloveid = pickle.load(open(location,'rb'),encoding='latin1')
-    else:
-        word_to_gloveid = pickle.load(open(location, 'rb'))
+    word_to_gloveid = ei.vocab
+    # location_gl = './resources/vocab_gl.pickle'
+    # location_um = './resources/vocab_ul.pickle'
+    # if embedding == 'ulmfit':
+    #     location = location_um
+    # elif embedding == 'glove':
+    #     location = location_gl
+    #
+    # if sys.version_info[0] == 3:
+    #
+    #     word_to_gloveid = pickle.load(open(location,'rb'),encoding='latin1')
+    # else:
+    #     word_to_gloveid = pickle.load(open(location, 'rb'))
 
     gloveid_to_word = {}
     for keys in word_to_gloveid:

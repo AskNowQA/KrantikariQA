@@ -11,6 +11,13 @@ from utils import data_preparation_rdf_type as drt
 from utils import dbpedia_interface as db_interface
 from utils import natural_language_utilities as nlutils
 
+
+from utils import  embeddings_interface as ei
+ei.__check_prepared__()
+vocab = ei.vocab
+plus_id = vocab['+']
+minus_id = vocab['-']
+
 def better_warning(message, category, filename, lineno, file=None, line=None):
     return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
 warnings.formatwarning = better_warning
@@ -111,7 +118,7 @@ dbp, reverse_rdf_type = None, None
 
 
 def return_sign(sign):
-    if sign == 2:
+    if sign == plus_id:
         return '+'
     else:
         return '-'
@@ -184,15 +191,15 @@ def id_to_path(path_id, relations, core_chain = True):
             The assumption is '+' is 2 and '-' is 3
         '''
         rel_length = 1
-        if 2 in path_id[1:].tolist() or 3 in path_id[1:].tolist():
+        if plus_id in path_id[1:].tolist() or minus_id in path_id[1:].tolist():
             rel_length = 2
 
         if rel_length == 2:
             sign_1 = path_id[0]
             try:
-                index_sign_2 = path_id[1:].tolist().index(2) + 1
+                index_sign_2 = path_id[1:].tolist().index(plus_id) + 1
             except ValueError:
-                index_sign_2 = path_id[1:].tolist().index(3) + 1
+                index_sign_2 = path_id[1:].tolist().index(minus_id) + 1
             rel_1 ,rel_2 = path_id[1:index_sign_2] ,path_id[index_sign_2 +1:]
             rel_1 = rel_id_to_rel(rel_1 ,relations)
             rel_2 = rel_id_to_rel(rel_2 ,relations)

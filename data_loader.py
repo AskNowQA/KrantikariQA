@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import math
+import pickle
 import traceback
 import numpy as np
 from sklearn.utils import shuffle
@@ -40,6 +41,9 @@ embeddings_interface.__check_prepared__()
 vocabularize_relation_old = lambda path: embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
 special_char_vec = [vocabularize_relation_old(i)for i in embeddings_interface.SPECIAL_CHARACTERS]
 vocabularize_relation = lambda path: special_char_vec[embeddings_interface.SPECIAL_CHARACTERS.index(path)]
+
+rel_dict = pickle.load(open('data/data/common/relations.pickle','rb'))
+inv_rel_dict = {v[0]: k for k, v in rel_dict.items()}
 
 def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
               _neg_paths_per_epoch_train,
@@ -265,10 +269,7 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
     #                             test_pos_paths_rel1_rd, test_pos_paths_rel2_rd, test_neg_paths_rel1_rd, test_neg_paths_rel2_rd
 
 
-
-
-
-def relation_table_lookup(lookup_str,glove_id_sf_to_glove_id_rel):
+def relation_table_lookup(lookup_str, glove_id_sf_to_glove_id_rel):
     '''
         given an np array of durface form of relation it gives a glove id for the whole relation string(list)
     '''
@@ -279,40 +280,44 @@ def relation_table_lookup(lookup_str,glove_id_sf_to_glove_id_rel):
     return glove_id_sf_to_glove_id_rel[key]
 
 
-def relation_table_lookup_reverse_legacy(lookup_str,glove_id_sf_to_glove_id_rel,embeddingid_to_gloveid,gloveid_to_embeddingid):
-    '''
+def relation_table_lookup_reverse_legacy(lookup_str, glove_id_sf_to_glove_id_rel,
+                                         embeddingid_to_gloveid, gloveid_to_embeddingid):
+    """
         given an np array of durface form of relation it gives a glove id for the whole relation string(list)
-    '''
+    """
     if list(lookup_str)[0] == 0:
         print(lookup_str)
         return None
 
     lookup_str = [embeddingid_to_gloveid[i] for i in lookup_str]
-    key = str(list(lookup_str)[1:]) # 1 ownwards because first is the sign
+    key = str(list(lookup_str)[1:])  # 1 onwards because first is the sign
     a = glove_id_sf_to_glove_id_rel[key]
     return [gloveid_to_embeddingid[a[0]]]
 
-def relation_table_lookup_reverse(lookup_str,glove_id_sf_to_glove_id_rel):
-    '''
-        given an np array of durface form of relation it gives a glove id for the whole relation string(list)
-    '''
+
+def relation_table_lookup_reverse(lookup_str, glove_id_sf_to_glove_id_rel):
+    """
+        given an np array of surface form of relation it gives a glove id for the whole relation string(list)
+    """
     if list(lookup_str)[0] == 0:
         print(lookup_str)
         return None
 
     # lookup_str = [embeddingid_to_gloveid[i] for i in lookup_str]
-    key = str(list(lookup_str)[1:]) # 1 ownwards because first is the sign
+    key = str(list(lookup_str)[1:])  # 1 ownwards because first is the sign
     a = glove_id_sf_to_glove_id_rel[key]
     return a[0]
 
+
 def create_relation_lookup_table(COMMON_DATA_DIR):
-    '''
+    """
 
         Creates a lookup table with key being
             glove id of the surface form of relation (str(list(numpy))) and the whole relation id
     :param COMMON_DATA_DIR:
     :return:
-    '''
+    """
+
     inv_relation = aux.load_inverse_relation(COMMON_DATA_DIR)
     glove_id_sf_to_glove_id_rel = {}
     for keys in inv_relation:
@@ -328,14 +333,6 @@ def create_relation_lookup_table(COMMON_DATA_DIR):
         glove_id_sf_to_glove_id_rel[k] = list(inv_relation[keys][-1])
 
     return glove_id_sf_to_glove_id_rel
-
-
-def get_glove_embeddings():
-    from utils.embeddings_interface import __check_prepared__
-    __check_prepared__('glove')
-
-    from utils.embeddings_interface import glove_embeddings
-    return glove_embeddings
 
 
 def remove_positive_path(positive_path, negative_paths):
@@ -354,8 +351,7 @@ def remove_positive_path(positive_path, negative_paths):
 
 
 def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dataset_specific_data_dir,
-                            _model_specific_data_dir
-                            , _model='core_chain_pairwise',k=-1):
+                            _model_specific_data_dir, _model='core_chain_pairwise',k=-1):
     """
         This file is meant to create data for core-chain ranking ONLY.
 
@@ -594,7 +590,6 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
             pos_paths_rel1_rd, pos_paths_rel2_rd, neg_paths_rel1_rd, neg_paths_rel2_rd
 
 
-
 def break_path(path,special_chars):
     '''
         Given a path which always starts with special characters . Give two paths.
@@ -619,8 +614,7 @@ def break_path(path,special_chars):
 
 
 def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_data_dir,
-                            _model_specific_data_dir
-                            , _model='core_chain_pairwise',_coomon_dir='data/data/common'):
+                            _model_specific_data_dir, _model='core_chain_pairwise',_coomon_dir='data/data/common'):
     with open(os.path.join(_dataset_specific_data_dir % {'dataset': _dataset, 'model': _model},
                            file)) as data:
         dataset = json.load(data)
@@ -629,7 +623,7 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
         pos_paths = []
         neg_paths = []
 
-        for i in range(len(dataset[:int(.80 * len(dataset))])):
+        for i in range(len(dataset[:int(len(dataset))])):
 
             datum = dataset[i]
 
@@ -656,6 +650,10 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
             # Negative Path
             unpadded_neg_path = datum["rdf-type-constraints"]
             unpadded_neg_path = remove_positive_path(pos_path, unpadded_neg_path)
+            for i_neg, path in enumerate(unpadded_neg_path):
+                assert len(path) == 2
+                path = [path[0]] + inv_rel_dict[path[1]][3]
+                unpadded_neg_path[i_neg] = path
             np.random.shuffle(unpadded_neg_path)
             unpadded_neg_path = nlutils.pad_sequence(unpadded_neg_path,max_sequence_length)
 
@@ -683,34 +681,7 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
         pos_paths = nlutils.pad_sequence(pos_paths, max_sequence_length)
         neg_paths = np.asarray(neg_paths)
 
-        # vocab, vectors = vocab_master.load()
-
-
         vectors = embeddings_interface.vectors
-        exception_counter = 0
-        #Legacy stuff
-        # Map everything
-        # for i in range(len(questions)):
-        #     questions[i] = np.asarray([vocab[key] for key in questions[i]])
-        #
-        #     # pos_paths[i] = np.asarray([vocab[key] for key in pos_paths[i]])
-        #     for t in range(len(pos_paths[i])):
-        #         try:
-        #             pos_paths[i][t] = vocab[pos_paths[i][t]]
-        #         except KeyError:
-        #             print("key error")
-        #     #     try:
-        #     #         if pos_paths[i][t] == 36418:
-        #     #             print ("ola")
-        #     #         pos_paths[i][t] = vocab[pos_paths[i][t]]
-        #     #     except KeyError:
-        #     #         exception_counter = exception_counter + 1
-        #     #         print(exception_counter)
-        #     # print(exception_counter)
-        #     # raise Exception
-        #     # pos_paths[i] = np.asarray(pos_paths[i])
-        #     for j in range(len(neg_paths[i])):
-        #         neg_paths[i][j] = np.asarray([vocab[key] for key in neg_paths[i][j]])
 
         return vectors, questions, pos_paths, neg_paths
 

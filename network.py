@@ -190,8 +190,6 @@ class BiLstmDot(Model):
         if self.debug:
             print("Init Models")
 
-
-
         self.encoder = com.NotSuchABetterEncoder(
             number_of_layer=self.parameter_dict['number_of_layer'],
             bidirectional=self.parameter_dict['bidirectional'],
@@ -227,18 +225,17 @@ class BiLstmDot(Model):
         ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
 
         optimizer.zero_grad()
-        #Encoding all the data
 
+        # Encoding all the data
         hidden = self.encoder.init_hidden(ques_batch.shape[0],self.device)
         _, ques_batch_encoded, _, _ = self.encoder(tu.trim(ques_batch), hidden)
         _, pos_batch_encoded, _, _ = self.encoder(tu.trim(pos_batch), hidden)
         _, neg_batch_encoded, _, _  = self.encoder(tu.trim(neg_batch), hidden)
 
-
-
-        #Calculating dot score
+        # Calculating dot score
         pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
         neg_scores = torch.sum(ques_batch_encoded * neg_batch_encoded, -1)
+
         '''
             If `y == 1` then it assumed the first input should be ranked higher
             (have a larger value) than the second input, and vice-versa for `y == -1`

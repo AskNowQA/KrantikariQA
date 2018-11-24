@@ -143,7 +143,7 @@ if __name__ == "__main__":
 
 
     if not pointwise:
-        loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
+        loss_func = nn.MarginRankingLoss(margin=1, size_average=False)
     else:
         loss_func = nn.MSELoss()
         training_model += '_pointwise'

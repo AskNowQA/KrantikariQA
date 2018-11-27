@@ -475,12 +475,13 @@ if __name__ == "__main__":
             optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
                                    list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001)
         else:
+            model_path = 'data/models/core_chain/slotptr/lcquad/94/model.torch'
             modeler = net.QelosSlotPointerModelOrthogonal(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                                                _device=device, _pointwise=pointwise, _debug=False)
             optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
                                    list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
                                    weight_decay=0.0001,lr=0.0001)
-            # modeler.load_from(model_path)
+            modeler.load_from(model_path)
 
 
     if training_model == 'bilstm_dot_skip':

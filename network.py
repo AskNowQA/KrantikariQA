@@ -1735,29 +1735,44 @@ class BiLstmDot_ulmfit(Model):
         pretrained_weights = torch.load('./ulmfit/wt103/fwd_wt103_enc.h5', map_location= lambda storage, loc: storage)
         new_vectors = self.parameter_dict['vectors']
         pretrained_weights['encoder.weight'] = T(new_vectors)
-        pretrained_weights['encoder_with_dropout.embed.weight'] = T(np.copy(new_vectors))
+        pretrained_weights.pop('encoder_with_dropout.embed.weight')
 
-        # self.encoder = fastai.old.lm_rnn.RNN_Encoder(ntoken=new_vectors.shape[0], emb_sz=400, n_hid=1150, n_layers=1, pad_token=0,qrnn=False).to(self.device)
-        # self.encoder.load_state_dict(pretrained_weights)
-        # fastai.RNNTrainer
-        # self.encoder = com.NotSuchABetterEncoder(
-        #     number_of_layer=self.parameter_dict['number_of_layer'],
-        #     bidirectional=self.parameter_dict['bidirectional'],
-        #     embedding_dim=self.parameter_dict['embedding_dim'],
-        #     max_length = self.parameter_dict['max_length'],
-        #     hidden_dim=self.parameter_dict['hidden_size'],
-        #     vocab_size=self.parameter_dict['vocab_size'],
-        #     dropout=self.parameter_dict['dropout'],
-        #     vectors=self.parameter_dict['vectors'],
-        #     enable_layer_norm=False,
-        #     mode = 'LSTM',
-        #     debug = self.debug).to(self.device)
+        self.encoder = com.awdencoder(rnn_type='LSTM',
+                                       ntoken=self.parameter_dict['vectors'].shape[0],
+                                       ninp=400,
+                                       nhid=1150,
+                                       nlayers=3,
+                                       dropout=0.1,
+                                       dropouth=0.5,
+                                       dropouti=0.5,
+                                       dropoute=0.5,
+                                       wdrop=0,
+                                       tie_weights=True)
+        self.encoder.encoder.padding_idx = 0
 
-        self.encoder = fastai.lm_rnn.RNN_Encoder(ntoken=self.parameter_dict['vectors'].shape[0], emb_sz=400,
-                                                 n_hid=1150, n_layers=3, pad_token=0, qrnn=False).to(self.device)
+        key_mapping = {
+            'encoder.weight': 'encoder.weight',
+            'rnns.0.module.weight_ih_l0': 'rnns.0.weight_ih_l0',
+            'rnns.0.module.bias_ih_l0': 'rnns.0.bias_ih_l0',
+            'rnns.0.module.bias_hh_l0': 'rnns.0.bias_hh_l0',
+            'rnns.0.module.weight_hh_l0_raw': 'rnns.0.weight_hh_l0',
+            'rnns.1.module.weight_ih_l0': 'rnns.1.weight_ih_l0',
+            'rnns.1.module.bias_ih_l0': 'rnns.1.bias_ih_l0',
+            'rnns.1.module.bias_hh_l0': 'rnns.1.bias_hh_l0',
+            'rnns.1.module.weight_hh_l0_raw': 'rnns.1.weight_hh_l0',
+            'rnns.2.module.weight_ih_l0': 'rnns.2.weight_ih_l0',
+            'rnns.2.module.bias_ih_l0': 'rnns.2.bias_ih_l0',
+            'rnns.2.module.bias_hh_l0': 'rnns.2.bias_hh_l0',
+            'rnns.2.module.weight_hh_l0_raw': 'rnns.2.weight_hh_l0',
+        }
+
+        for k, v in key_mapping.items():
+            pretrained_weights[v] = pretrained_weights.pop(k)
+
+        self.encoder = self.encoder.to(self.device)
         self.encoder.load_state_dict(pretrained_weights)
 
-        # self.linear = torch.nn.Linear(1150,256).to(self.device)
+        self.encoder.reset()
 
 
 
@@ -1779,38 +1794,44 @@ class BiLstmDot_ulmfit(Model):
 
             returns loss
         '''
-
+        self.encoder.train()
         # Unpacking the data and model from args
-        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data['y_label']
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data[
+            'y_label']
 
         optimizer.zero_grad()
-        #Encoding all the data
-        # if True:
-        #     print("ques_batch shape is ", ques_batch.shape)
-        #     print("pos_batch shape is ", pos_batch.shape)
-        #     print("neg_batch shape is ", neg_batch.shape)
-        #     print("transposed ques bathc is ", ques_batch.transpose(1,0).shape)
+        # Encoding all the data
 
-        op_q = self.encoder(ques_batch.transpose(1,0))
-        op_p = self.encoder(pos_batch.transpose(1,0))
-        op_n = self.encoder(neg_batch.transpose(1,0))
+        h = self.encoder.init_hidden(ques_batch.shape[0])
+        op_q = self.encoder(tu.trim(ques_batch).transpose(1, 0), h)[1][-1][0].squeeze()
+        op_p = self.encoder(tu.trim(pos_batch).transpose(1, 0), h)[1][-1][0].squeeze()
+        op_n = self.encoder(tu.trim(neg_batch).transpose(1, 0), h)[1][-1][0].squeeze()
 
-        ques_batch_encoded = op_q[1][-1][-1]
-        pos_batch_encoded = op_p[1][-1][-1]
-        neg_batch_encoded = op_n[1][-1][-1]
 
-        #Calculating dot score
-        pos_scores = torch.sum(ques_batch_encoded * pos_batch_encoded, -1)
-        neg_scores = torch.sum(ques_batch_encoded * neg_batch_encoded, -1)
+        # Calculating dot score
+        pos_scores = torch.sum(op_q * op_p, -1)
+        neg_scores = torch.sum(op_q * op_n, -1)
+
+        #         if True:
+        #             print("ques_batch shape is ", ques_batch.shape)
+        #             print("pos_batch shape is ", pos_batch.shape)
+        #             print("neg_batch shape is ", neg_batch.shape)
+        #             print("transposed ques bathc is ", ques_batch.transpose(1,0).shape)
+        #             for o in op_p[1]:
+        #                 print("o shape is ", o.shape)
+        #             print("encoded pos batch shape is ", op_p[1][-1][-1].shape)
+
+        #             print("pos_score is", pos_scores.shape)
         '''
             If `y == 1` then it assumed the first input should be ranked higher
             (have a larger value) than the second input, and vice-versa for `y == -1`
         '''
+        #         raise ValueError
         try:
             loss = loss_fn(pos_scores, neg_scores, y_label)
         except RuntimeError:
             traceback.print_exc()
-            print(pos_scores.shape, neg_scores.shape, y_label.shape,  ques_batch.shape, pos_batch.shape, neg_batch.shape)
+            print(pos_scores.shape, neg_scores.shape, y_label.shape, ques_batch.shape, pos_batch.shape, neg_batch.shape)
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
@@ -1833,23 +1854,15 @@ class BiLstmDot_ulmfit(Model):
         optimizer.zero_grad()
 
         # Encoding all the data
-        op_q = self.encoder(tu.trim(ques_batch).transpose(1,0))
-        op_p = self.encoder(tu.trim(path_batch).transpose(1,0))
+        h = self.encoder.init_hidden(ques_batch.shape[0])
+        ques_batch = self.encoder(tu.trim(ques_batch).transpose(1,0),h)[1][-1][0].squeeze()
+        pos_batch = self.encoder(tu.trim(path_batch).transpose(1,0),h)[1][-1][0].squeeze()
 
-        ques_batch = op_q[1][0][-1]
-        pos_batch = op_p[1][0][-1]
+
 
         # Calculating dot score
         score = torch.sum(ques_batch * pos_batch, -1)
-        # score = score.div(norm_ques_batch*norm_pos_batch).div_(2.0).add_(0.5)
-            # print("shape of score is,", score.shape)
-            # print("score is , ", score)
-            #
-            #
-            # print("shape of y label is ", y_label.shape)
-            # print("value of y label is ", y_label)
 
-        # raise ValueError
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
@@ -1869,11 +1882,9 @@ class BiLstmDot_ulmfit(Model):
 
             self.encoder.eval()
             # Encoding all the data
-            op_q = self.encoder(ques.transpose(1,0))
-            op_p = self.encoder(paths.transpose(1,0))
-
-            question = op_q[1][-1][-1]
-            paths = op_p[1][-1][-1]
+            h = self.encoder.init_hidden(ques.shape[0])
+            question = self.encoder(tu.trim(ques).transpose(1,0),h)[1][-1][0].squeeze()
+            paths = self.encoder(tu.trim(paths).transpose(1,0),h)[1][-1][0].squeeze()
 
             if self.pointwise:
                 # question = F.normalize(F.relu(question),p=1,dim=1)

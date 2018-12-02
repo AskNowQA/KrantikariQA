@@ -43,7 +43,8 @@ special_char_vec = [vocabularize_relation_old(i)for i in embeddings_interface.SP
 vocabularize_relation = lambda path: special_char_vec[embeddings_interface.SPECIAL_CHARACTERS.index(path)]
 
 rel_dict = pickle.load(open('data/data/common/relations.pickle','rb'))
-inv_rel_dict = {v[0]: k for k, v in rel_dict.items()}
+# inv_rel_dict = {v[0]: k for k, v in rel_dict.items()}
+inv_rel_dict = {v[0]: [k]+v[1:] for k, v in rel_dict.items()}
 
 def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
               _neg_paths_per_epoch_train,
@@ -658,8 +659,10 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
             unpadded_neg_path = datum["rdf-type-constraints"]
             unpadded_neg_path = remove_positive_path(pos_path, unpadded_neg_path)
             for i_neg, path in enumerate(unpadded_neg_path):
+                # print(unpadded_neg_path)
                 assert len(path) == 2
-                path = [path[0]] + inv_rel_dict[path[1]][3]
+                # print([path[0]] , inv_rel_dict[path[1]][3],inv_rel_dict[path[1]],path[1])
+                path = [path[0]] + inv_rel_dict[path[1]][3].tolist()
                 unpadded_neg_path[i_neg] = path
             np.random.shuffle(unpadded_neg_path)
             unpadded_neg_path = nlutils.pad_sequence(unpadded_neg_path,max_sequence_length)

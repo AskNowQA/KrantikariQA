@@ -144,9 +144,10 @@ def vectorize_entity(entity,dbp):
 
     return vector_ent
 
-if __name__ == '__main__':
 
-    dataset = 'lcquad'
+def run(dataset):
+
+    dataset = dataset
     _save_location_success = 'data/data/raw/%(dataset)s/success'
     _save_location_unsuccess = 'data/data/raw/%(dataset)s/unsuccess'
     relation_dict_location = 'data/data/common/relations.pickle'
@@ -214,7 +215,7 @@ if __name__ == '__main__':
     '''
 
     #Vocabularize everything and then padding.
-    '''
+    '''location
         Things to vocabularize
             >question
             >path
@@ -260,19 +261,14 @@ if __name__ == '__main__':
     nlutils.create_dir(final_data_dir %{'dataset':dataset})
     json.dump(id_data,open(final_data_location %{'dataset':dataset},'w+'))
 
+if __name__ == '__main__':
+    run('lcquad')
+    run('qald')
 
 #update the vector file and the vocab file
 #vocab file is word,index and the vector file is just vectors
 ei.align_id_space()
-
-
-
-
-
-
-
-
-
+ei.__check_prepared__()
 
 
 

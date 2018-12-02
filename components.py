@@ -787,6 +787,13 @@ class NotSuchABetterEncoder(nn.Module):
         else:
             return o_unsort, h_unsort[0].transpose(1,0).contiguous().view(h_unsort[0].shape[1], -1) , h_unsort, mask
 
+    @property
+    def layers(self):
+        return torch.nn.ModuleList([
+            torch.nn.ModuleList([self.embedding_layer, self.rnn, self.dropout]),
+        ])
+
+
 
 class QelosFlatEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
@@ -1272,12 +1279,12 @@ class NotSuchABetterEncoder_v2(nn.Module):
             return o_unsort, h_unsort[0].transpose(1,0).contiguous().view(h_unsort[0].shape[1], -1) , h_unsort, mask
 
 
-class awdencoder(nn.Module):
+class Awdencoder(nn.Module):
     """Container module with an encoder, a recurrent module, and a decoder."""
 
     def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.5, dropouth=0.5, dropouti=0.5, dropoute=0.1,
                  wdrop=0, tie_weights=False):
-        super(RNNModel, self).__init__()
+        super(Awdencoder, self).__init__()
         self.lockdrop = LockedDropout()
         self.idrop = nn.Dropout(dropouti)
         self.hdrop = nn.Dropout(dropouth)
@@ -1403,6 +1410,16 @@ class awdencoder(nn.Module):
             return [weight.new(1, bsz, self.nhid if l != self.nlayers - 1 else (
                 self.ninp if self.tie_weights else self.nhid)).zero_()
                     for l in range(self.nlayers)]
+
+    @property
+    def layers(self):
+        return torch.nn.ModuleList([
+            torch.nn.ModuleList([self.lockdrop,self.idrop,self.hdrop,self.drop]),
+            torch.nn.ModuleList([self.encoder]),
+            torch.nn.ModuleList([self.rnns[0]]),
+            torch.nn.ModuleList([self.rnns[1]]),
+            torch.nn.ModuleList([self.rnns[2]])
+        ])
 
 
 if __name__ == "__main__":

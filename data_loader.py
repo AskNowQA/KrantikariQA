@@ -513,10 +513,17 @@ def create_dataset_pairwise(file, max_sequence_length, relations, _dataset, _dat
                 for npp in npps:
                     p1, p2 = break_path(npp, special_char)
                     temp_neg_paths_rel1_sp.append(p1)
-                    temp_neg_paths_rel1_rd.append(relation_table_lookup(p1,glove_id_sf_to_glove_id_rel))
+                    try:
+                        temp_neg_paths_rel1_rd.append(relation_table_lookup(p1,glove_id_sf_to_glove_id_rel))
+                    except:
+                        print()
+                        print(p1,p2,i)
                     if p2 is not None:
                         temp_neg_paths_rel2_sp.append(p2)
-                        temp_neg_paths_rel2_rd.append(relation_table_lookup(p2, glove_id_sf_to_glove_id_rel))
+                        try:
+                            temp_neg_paths_rel2_rd.append(relation_table_lookup(p2, glove_id_sf_to_glove_id_rel))
+                        except:
+                            print(p1, p2, i)
                     else:
                         temp_neg_paths_rel2_sp.append(dummy_path)
                         temp_neg_paths_rel2_rd.append(dummy_path)
@@ -726,7 +733,7 @@ def construct_paths(data, relations, qald=False):
     # inverse id version of positive path and creating a numpy version
     positive_path_id = data['parsed-data']['path']   #change this
     no_positive_path = False
-    if positive_path_id == [-1]:
+    if positive_path_id == -1:
         positive_path = np.asarray([-1])
         no_positive_path = True
     else:

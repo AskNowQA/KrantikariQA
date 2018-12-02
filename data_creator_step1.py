@@ -15,8 +15,19 @@ create_dir = lambda dir_location: pathlib.Path(dir_location).mkdir(parents=True,
 
 _save_location_success = 'data/data/raw/%(dataset)s/success'
 _save_location_unsuccess = 'data/data/raw/%(dataset)s/unsuccess'
-_save_location = 'data/data/raw/lcquad'
+
 file_name = '.json'
+
+
+def convert_qald_to_lcquad(dataset):
+    dataset = dataset['questions']
+    new_dataset = []
+    for index,node in enumerate(dataset):
+        d = dict(corrected_question=node['question'][0]['string'], verbalized_question=node['question'][0]['string'],
+                 _id=index, sparql_query=node['query']['sparql'].replace('\n', ' '), sparql_template_id=999)
+        new_dataset.append(d)
+    return new_dataset
+
 
 def run(_dataset,_save_location_success,_save_location_unsuccess,
         _file_name,_predicate_blacklist,_relation_file,return_data,_qald=False):
@@ -49,6 +60,7 @@ def run(_dataset,_save_location_success,_save_location_unsuccess,
         }
     '''
 
+
     #creating dir, if it doesn't exists
     create_dir(_save_location_success)
     create_dir(_save_location_unsuccess)
@@ -78,11 +90,22 @@ def run(_dataset,_save_location_success,_save_location_unsuccess,
         print ("done with, ", counter)
         counter = counter + 1
 
+    if _qald:
+        new_unsuccessful_data = []
+        for u in unsuccessful_data:
+            try:
+                if u['error_flag']['path_found_in_data_generated'] == False:
+                    new_unsuccessful_data.append(u)
+            except:
+                continue
+
+        unsuccessful_data = new_unsuccessful_data
+
     json.dump(successful_data,open(fullpath_success,'w+'))
     json.dump(unsuccessful_data,open(fullpath_unsuccess,'w+'))
-
     print("the len of successfull data is ", len(successful_data))
     print("the len of unsuccessfull data is ", len(unsuccessful_data))
+
     if return_data:
         return successful_data,unsuccessful_data
 
@@ -90,6 +113,14 @@ if __name__ == "__main__":
     start_index = sys.argv[1]
     end_index = sys.argv[2]
     dataset = sys.argv[3]
+
+
+
+
+    if dataset == 'lcquad':
+        _save_location = 'data/data/raw/lcquad'
+    else:
+        _save_location = 'data/data/raw/qald'
 
     file_name = start_index+file_name
 
@@ -102,15 +133,13 @@ if __name__ == "__main__":
 
 
 
-    if dataset == 'qald':
-        '''
-            Functionality not supported
-        '''
-        print("this functionality is not supported yet")
-
 
     if dataset == 'lcquad':
         _dataset = json.load(open('resources/lcquad_data_set.json'))
+    elif dataset == 'qald':
+        qald_train = json.load(open('resources/qald-7-train-multilingual.json'))
+        _dataset = convert_qald_to_lcquad(qald_train)
+
 
     if end_index == -1:
         _dataset = _dataset[int(start_index):]
@@ -123,6 +152,12 @@ if __name__ == "__main__":
             , _save_location_unsuccess=_save_location_unsuccess,
             _file_name=file_name,
             _predicate_blacklist=pb, _relation_file={}, return_data=False, _qald=False)
+
+    if dataset == 'qald':
+        run(_dataset=_dataset, _save_location_success=_save_location_success
+            , _save_location_unsuccess=_save_location_unsuccess,
+            _file_name=file_name,
+            _predicate_blacklist=pb, _relation_file={}, return_data=False, _qald=True)
 
 
 

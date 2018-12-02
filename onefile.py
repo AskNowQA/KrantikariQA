@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-
 from utils import query_graph_to_sparql as sparql_constructor
 from utils import dbpedia_interface as db_interface
 from utils import embeddings_interface
@@ -33,17 +32,19 @@ config = ConfigParser.ConfigParser()
 config.readfp(open('configs/macros.cfg'))
 
 #setting up device,model name and loss types.
-training_model = 'slotptr'
-_dataset = 'lcquad'
+training_model = 'bilstm_dot'
+_dataset = 'qald'
 pointwise = False
+
 #19 is performing the best
-training_model_number =34
+training_model_number = 14
 _debug = False
 
 #Loading relations file.
 COMMON_DATA_DIR = 'data/data/common'
 INTENTS = ['count', 'ask', 'list']
 RDFTYPES = ['x', 'uri', 'none']
+
 
 _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 _inv_relations = aux.load_inverse_relation(COMMON_DATA_DIR)
@@ -71,13 +72,13 @@ parameter_dict['corechainmodel'] = training_model
 parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
 # parameter_dict['intentmodel'] = 'bilstm_dense'
-# parameter_dict['intentmodelnumber'] = '2'
+# parameter_dict['intentmodelnumber'] = '3'
 #
 # parameter_dict['rdftypemodel'] = 'bilstm_dense'
-# parameter_dict['rdftypemodelnumber'] = '0'
+# parameter_dict['rdftypemodelnumber'] = '1'
 #
 # parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-# parameter_dict['rdfclassmodelnumber'] = '0'
+# parameter_dict['rdfclassmodelnumber'] = '2'
 
 
 # params for ULMFit
@@ -89,6 +90,8 @@ parameter_dict['rdftypemodelnumber'] = '12'
 
 parameter_dict['rdfclassmodel'] = 'bilstm_dot'
 parameter_dict['rdfclassmodelnumber'] = '16'
+
+
 class QuestionAnswering:
     """
         Usage:
@@ -127,7 +130,7 @@ class QuestionAnswering:
 
         # Initialize the model
         m = self.parameters['corechainmodel']
-        self.parameters['corechainmodel'] = 'slotptrortho'
+        # self.parameters['corechainmodel'] = 'slotptrortho'
         # self.parameters['bidirectional'] = False
         if self.parameters['corechainmodel'] == 'bilstm_dot':
             self.corechain_model = net.BiLstmDot(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
@@ -387,7 +390,8 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
     # inverse id version of positive path and creating a numpy version
     positive_path_id = data['parsed-data']['path']
     no_positive_path = False
-    if positive_path_id == [-1]:
+    print("**", positive_path_id)
+    if positive_path_id == -1:
         positive_path = np.asarray([-1])
         no_positive_path = True
     else:
@@ -756,12 +760,14 @@ def answer_question(qa, index, data, relations, parameter_dict):
 
     return log, metrics
 
+
 def sparql_answer(sparql):
     test_answer = []
     interface_test_answer = dbp.get_answer(sparql)
     for key in interface_test_answer:
         test_answer = test_answer + interface_test_answer[key]
     return list(set(test_answer))
+
 
 def _evaluate_sparqls_(test_sparql, true_sparql, type, ground_type):
     # @TODO: If the type of test and true are differnt code would return an error.

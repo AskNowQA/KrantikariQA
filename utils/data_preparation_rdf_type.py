@@ -32,7 +32,8 @@ sparql_template_3 = {
 }
 
 sparql_template_ask = {
-	"+" : 'SELECT DISTINCT ?uri WHERE { <%(te1)s> <%(r1)s> <%(te2)s> . }'
+	"+" : 'SELECT DISTINCT ?uri WHERE { <%(te1)s> <%(r1)s> <%(te2)s> . }',
+    "-" : 'SELECT DISTINCT ?uri WHERE { <%(te1)s> <%(r1)s> <%(te2)s> . }'
 }
 
 x_const = '  ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?cons_x . } '

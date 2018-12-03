@@ -933,7 +933,6 @@ class RelDetection(Model):
         _hp = self.encoder.init_hidden(ques_batch.shape[0], device=device)
         _hn = self.encoder.init_hidden(ques_batch.shape[0], device=device)
 
-        print('pos scores are !!!!!!!!!!!!!!!!!!!!!!', y_label)
         # Encoding all the data
         pos_scores = self.encoder(ques=ques_batch,
                                   path_word=pos_batch,
@@ -1104,9 +1103,9 @@ class QelosSlotPointerModel(Model):
         ques_batch, path_1_batch, path_2_batch, y_label = \
             data['ques_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
 
-        path_2_batch = tu.no_one_left_behind(path_2_batch)
 
         optimizer.zero_grad()
+        path_2_batch = tu.no_one_left_behind(path_2_batch)
 
         # Encoding all the data
         ques_encoded,_ = self.encoder_q(tu.trim(ques_batch))
@@ -1115,7 +1114,7 @@ class QelosSlotPointerModel(Model):
         score = torch.sum(ques_encoded * pos_encoded, dim=-1)
 
         '''
-            Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.
+            Binary Cross Entropy loss function. 
         '''
         loss = loss_fn(score, y_label)
         loss.backward()
@@ -1277,16 +1276,28 @@ class SlotPointerModel(Model):
 
         # Encoding all the data
         ques_batch_encoded, _, _, ques_mask, ques_batch_embedded, _ = self.encoder_q(tu.trim(ques_batch), hidden)
-        _, pos_1_encoded, _, _, _, pos_1_embedded = self.encoder_p(path_1_batch, hidden)
-        _, pos_2_encoded, _, _, _, pos_2_embedded = self.encoder_p(path_2_batch, hidden)
+        _, pos_1_encoded, _, pos_1_mask, pos_1_embedded, _ = self.encoder_p(path_1_batch, hidden)
+        _, pos_2_encoded, _, pos_2_mask, pos_2_embedded, _ = self.encoder_p(path_2_batch, hidden)
+        # _, pos_1_encoded, _, _, _, pos_1_embedded = self.encoder_p(path_1_batch, hidden)
+        # _, pos_2_encoded, _, _, _, pos_2_embedded = self.encoder_p(path_2_batch, hidden)
+
+        # score = self.comparer(ques_enc=ques_batch_encoded,
+        #                            ques_emb=ques_batch_embedded,
+        #                            ques_mask=ques_mask,
+        #                            path_1_enc=pos_1_encoded,
+        #                            path_1_emb=pos_1_embedded,
+        #                            path_2_enc=pos_2_encoded,
+        #                            path_2_emb=pos_2_embedded)
 
         score = self.comparer(ques_enc=ques_batch_encoded,
                                    ques_emb=ques_batch_embedded,
                                    ques_mask=ques_mask,
                                    path_1_enc=pos_1_encoded,
                                    path_1_emb=pos_1_embedded,
+                                   path_1_mask=pos_1_mask,
                                    path_2_enc=pos_2_encoded,
-                                   path_2_emb=pos_2_embedded)
+                                   path_2_emb=pos_2_embedded,
+                                   path_2_mask=pos_2_mask)
 
         '''
             Binary Cross Entropy loss function. @TODO: Check if we can give it 1/0 labels.

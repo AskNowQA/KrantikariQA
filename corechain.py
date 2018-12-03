@@ -99,7 +99,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
     aux_save_information = {
         'epoch' : 0,
         'test_accuracy':0.0,
-        'validation_accura""cy':0.0,
+        'validation_accuracy':0.0,
         'parameter_dict':parameter_dict
     }
     train_loss = []
@@ -150,6 +150,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                              dtype=torch.long, device=device)
 
                     data['dummy_y'] = torch.ones(ques_batch.shape[0], device=device)
+
                     if parameter_dict['schema'] != 'default':
                         pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
                                                       dtype=torch.long, device=device)
@@ -173,6 +174,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                         }
 
                     else:
+
 
                         data_batch = {
                             'ques_batch': ques_batch,
@@ -239,7 +241,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                     if parameter_dict['schema'] != 'default':
                         if parameter_dict['schema']  == 'slotptr':
                             test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
-                                                             data['test_neg_paths'],modeler, device,data['test_pos_paths_rel1_sp'],data['test_pos_paths_rel2_sp'],
+                                                             data['test_neg_paths'],modeler, device, data['test_pos_paths_rel1_sp'],data['test_pos_paths_rel2_sp'],
                                                                  data['test_neg_paths_rel1_sp'],data['test_neg_paths_rel2_sp']))
                         else:
                             test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
@@ -309,10 +311,10 @@ if __name__ == "__main__":
                         help='dataset includes lcquad,qald',default = 'lcquad')
 
     parser.add_argument('-model', action='store', dest='model',
-                        help='name of the model to use',default='bilstm_dot')
+                        help='name of the model to use',default='slotptr')
 
     parser.add_argument('-pointwise', action='store', dest='pointwise',
-                        help='to use pointwise training procedure make it true',default=False)
+                        help='to use pointwise training procedure make it true',default=True)
 
     parser.add_argument('-train_valid', action='store', dest='train_over_validation',
                         help='train over validation', default=False)
@@ -356,7 +358,7 @@ if __name__ == "__main__":
 
 
     data = aux.load_data(_dataset=_dataset, _train_over_validation = _train_over_validation,
-                         _parameter_dict=parameter_dict, _relations =  _inv_relations, _pointwise=pointwise, _device=device,k=-1)
+                         _parameter_dict=parameter_dict, _relations =  _inv_relations, _pointwise=pointwise, _device=device,k=1000)
 
     if training_model == 'reldet':
         schema = 'reldet'

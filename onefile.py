@@ -32,12 +32,12 @@ config = ConfigParser.ConfigParser()
 config.readfp(open('configs/macros.cfg'))
 
 #setting up device,model name and loss types.
-training_model = 'slotptr'
-_dataset = 'lcquad'
+training_model = 'decomposable_attention'
+_dataset = 'qald'
 pointwise = False
 
 #19 is performing the best
-training_model_number = 19
+training_model_number = 0
 _debug = False
 
 #Loading relations file.
@@ -259,7 +259,9 @@ class QuestionAnswering:
             P[i, :min(len(_p[i]), self.parameters['max_length'])] = _p[i][:min(len(_p[i]), self.parameters['max_length'])]
 
         if _p1:
+            # print(_p1)
             for i in range(len(_p)):
+                # print(type(_p1[i]),_p1[i],_p1[:5])
                 P1[i, :min(len(_p1[i]), self.parameters['max_length'])] = _p1[i][
                                                                         :min(len(_p1[i]), self.parameters['max_length'])]
                 P2[i, :min(len(_p2[i]), self.parameters['max_length'])] = _p2[i][
@@ -506,10 +508,10 @@ def create_rd_sp_paths(paths):
             >>>>IMPLEMENT THIS<<<<
             >>>>IMPLEMENT THIS<<<<
         '''
-        paths_rel1_rd.append(dl.relation_table_lookup_reverse(p1,glove_id_sf_to_glove_id_rel))
+        paths_rel1_rd.append([dl.relation_table_lookup_reverse(p1,glove_id_sf_to_glove_id_rel)])
         if p2 is not None:
             paths_rel2_sp.append(p2)
-            paths_rel2_rd.append(dl.relation_table_lookup_reverse(p2,glove_id_sf_to_glove_id_rel))
+            paths_rel2_rd.append([dl.relation_table_lookup_reverse(p2,glove_id_sf_to_glove_id_rel)])
         else:
             paths_rel2_sp.append(dummy_path)
             paths_rel2_rd.append(dummy_path)
@@ -555,12 +557,12 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         '''
         if model == 'reldet':
             _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
-            print("paths rel1 rd are loop1 ", paths_rel1_rd)
-            print("paths rel2 rd are loop1 ", paths_rel2_rd)
+            # print("paths rel1 rd are loop1 ", paths_rel1_rd)
+            # print("paths rel2 rd are loop1 ", paths_rel2_rd)
             output = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
         elif model == 'slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
-            output,score1,score2 = quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
+            output= quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
         else:
             output = quesans._predict_corechain(question, paths)
         best_path_index = np.argmax(output)
@@ -572,11 +574,16 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
             path = positive_path + negative_paths    
         '''
         if model == 'reldet':
+
             _, _, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
+            # print("paths rel1 rd are loop1 ", paths_rel1_rd)
+            # print("paths rel2 rd are loop1 ", paths_rel2_rd)
 
             output = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
         elif model == 'slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
+            # print("paths rel1 rd are loop1 ", paths_rel1_sp)
+            # print("paths rel2 rd are loop1 ", paths_rel2_sp)
             output= quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
         else:
             output = quesans._predict_corechain(question, paths)

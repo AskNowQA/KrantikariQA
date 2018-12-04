@@ -776,7 +776,7 @@ def construct_paths(data, relations, qald=False):
     # for i in range(0, len(negative_paths)):
     #     # temp = []
     #     for j in range(0, len(negative_paths[i])):
-    #         try:
+    #         try:0.65
     #             negative_paths[i][j] = gloveid_to_embeddingid[negative_paths[i][j]]
     #         except:
     #             negative_paths[i][j] = gloveid_to_embeddingid[0]

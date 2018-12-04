@@ -297,11 +297,11 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                   "BestValidAcc: %s\n" % (best_validation_accuracy),
                   "BestTestAcc: %s\n" % (best_test_accuracy))
 
-        return train_loss, modeler, valid_accuracy, test_accuracy
+        return train_loss, modeler, valid_accuracy, test_accuracy, model_save_location
 
     except KeyboardInterrupt:
         print('-' * 89)
-        return train_loss, modeler, valid_accuracy, test_accuracy
+        return train_loss, modeler, valid_accuracy, test_accuracy, model_save_location
 
 if __name__ == "__main__":
 
@@ -540,7 +540,7 @@ if __name__ == "__main__":
         training_model += '_pointwise'
 
 
-    train_loss, modeler, valid_accuracy, test_accuracy = training_loop(training_model = training_model,
+    train_loss, modeler, valid_accuracy, test_accuracy,model_save_location = training_loop(training_model = training_model,
                                                                                parameter_dict = parameter_dict,
                                                                                modeler = modeler,
                                                                                train_loader = train_loader,
@@ -559,7 +559,7 @@ if __name__ == "__main__":
     print("validation accuracy is , ", max(valid_accuracy))
     print("maximum test accuracy is , ", max(test_accuracy))
     print("correct test accuracy i.e test accuracy where validation is highest is ", test_accuracy[valid_accuracy.index(max(valid_accuracy))])
-    #
+    print("model saved at, " , model_save_location )
     # rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
     # rsync -avz --progress auxiliary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
     # rsync -avz --progress network.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/

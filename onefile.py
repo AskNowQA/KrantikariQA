@@ -22,65 +22,10 @@ from progressbar import ProgressBar
 if sys.version_info[0] == 3: import configparser as ConfigParser
 else: import ConfigParser
 
-device = torch.device("cuda")
-sparql_constructor.init(embeddings_interface)
-dbp = db_interface.DBPedia(_verbose=True, caching=True)
-vocabularize_relation = lambda path: embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
-
-#Reading and setting up config parser
-config = ConfigParser.ConfigParser()
-config.readfp(open('configs/macros.cfg'))
-
-#setting up device,model name and loss types.
-training_model = 'decomposable_attention'
-_dataset = 'qald'
-pointwise = False
-
-#19 is performing the best
-training_model_number = 0
-_debug = False
-
-#Loading relations file.
+# Loading relations file.
 COMMON_DATA_DIR = 'data/data/common'
 INTENTS = ['count', 'ask', 'list']
 RDFTYPES = ['x', 'uri', 'none']
-
-
-_dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
-_inv_relations = aux.load_inverse_relation(COMMON_DATA_DIR)
-_word_to_id = aux.load_word_list(COMMON_DATA_DIR)
-glove_id_sf_to_glove_id_rel = dl.create_relation_lookup_table(COMMON_DATA_DIR)
-
-# Model specific paramters
-    # #Model specific paramters
-if pointwise:
-    training_config = 'pointwise'
-else:
-    training_config = 'pairwise'
-
-parameter_dict = cl.runtime_parameters(dataset=_dataset,training_model=training_model,
-                                         training_config=training_config,config_file='configs/macros.cfg')
-
-if training_model == 'cnn_dot':
-    parameter_dict['output_dim'] = int(config.get(_dataset, 'output_dim'))
-
-# Update parameters
-parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
-parameter_dict['_model_dir'] = './data/models/'
-
-parameter_dict['corechainmodel'] = training_model
-parameter_dict['corechainmodelnumber'] = str(training_model_number)
-
-parameter_dict['intentmodel'] = 'bilstm_dense'
-parameter_dict['intentmodelnumber'] = '4'
-
-parameter_dict['rdftypemodel'] = 'bilstm_dense'
-parameter_dict['rdftypemodelnumber'] = '3'
-
-parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-parameter_dict['rdfclassmodelnumber'] = '4'
-
-
 # params for ULMFit
 # parameter_dict['intentmodel'] = 'bilstm_dense'
 # parameter_dict['intentmodelnumber'] = '16'
@@ -105,7 +50,7 @@ class QuestionAnswering:
             print("rdfclass: ", qa._predict_rdfclass(q, p))
     """
 
-    def __init__(self, parameters, pointwise, word_to_id, device, debug):
+    def __init__(self, parameters, pointwise, word_to_id, device, _dataset,debug):
 
         self.parameters = parameters
         self.pointwise = pointwise
@@ -114,7 +59,7 @@ class QuestionAnswering:
         self._word_to_id = word_to_id
 
         # Load models
-        # self.parameters['dataset'] = 'transfer-b'
+        self.parameters['dataset'] = 'transfer-a'
         self._load_corechain_model()
         '''
             since all auxilary components perform really bad if just trained on QALD
@@ -166,6 +111,10 @@ class QuestionAnswering:
 
         if self.parameters['corechainmodel'] == 'bilstm_dot_multiencoder':
             self.corechain_model = net.BiLstmDot_multiencoder(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+
+        if self.parameters['corechainmodel'] == 'ulmfit_slotptr':
+            self.corechain_model = net.ULMFITQelosSlotPointerModel(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
                                                  _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
         # Make the model path
         model_path = os.path.join(self.parameters['_model_dir'], 'core_chain')
@@ -522,13 +471,13 @@ def create_rd_sp_paths(paths):
     return paths_rel1_sp,paths_rel2_sp,paths_rel1_rd,paths_rel2_rd
 
 
-def corechain_prediction(question, paths, positive_path, negative_paths, no_positive_path,model,verbal_question=""):
+def corechain_prediction(question, paths, positive_path, negative_paths, no_positive_path,model,quesans, verbal_question=""):
     '''
         Why is path needed ?
     '''
 
     # Remove if adding to class
-    global quesans
+    # global quesans
 
     mrr = 0
     best_path = ''
@@ -686,7 +635,7 @@ def answer_question(qa, index, data, relations, parameter_dict):
 
     cc_mrr, best_path, cc_acc = corechain_prediction(question,
                                                      paths, positive_path,
-                                                     negative_paths, no_positive_path,parameter_dict['corechainmodel'])
+                                                     negative_paths, no_positive_path,parameter_dict['corechainmodel'],qa)
 
     log['pred_path'] = best_path
     metrics['core_chain_accuracy_counter'] = cc_acc
@@ -884,6 +833,65 @@ def evaluate(_logging):
 
 
 if __name__ == "__main__":
+
+    device = torch.device("cuda")
+    sparql_constructor.init(embeddings_interface)
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)
+    vocabularize_relation = lambda path: embeddings_interface.vocabularize(
+        nlutils.tokenize(dbp.get_label(path))).tolist()
+
+    # Reading and setting up config parser
+    config = ConfigParser.ConfigParser()
+    config.readfp(open('configs/macros.cfg'))
+
+    # setting up device,model name and loss types.
+    training_model = 'slotptr'
+    _dataset = 'qald'
+    pointwise = False
+
+    # 19 is performing the best
+    training_model_number = 0
+    _debug = False
+
+    # Loading relations file.
+    COMMON_DATA_DIR = 'data/data/common'
+    INTENTS = ['count', 'ask', 'list']
+    RDFTYPES = ['x', 'uri', 'none']
+
+    _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
+    _inv_relations = aux.load_inverse_relation(COMMON_DATA_DIR)
+    _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
+    glove_id_sf_to_glove_id_rel = dl.create_relation_lookup_table(COMMON_DATA_DIR)
+
+    # Model specific paramters
+    # #Model specific paramters
+    if pointwise:
+        training_config = 'pointwise'
+    else:
+        training_config = 'pairwise'
+
+    parameter_dict = cl.runtime_parameters(dataset=_dataset, training_model=training_model,
+                                           training_config=training_config, config_file='configs/macros.cfg')
+
+    if training_model == 'cnn_dot':
+        parameter_dict['output_dim'] = int(config.get(_dataset, 'output_dim'))
+
+    # Update parameters
+    parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
+    parameter_dict['_model_dir'] = './data/models/'
+
+    parameter_dict['corechainmodel'] = training_model
+    parameter_dict['corechainmodelnumber'] = str(training_model_number)
+
+    parameter_dict['intentmodel'] = 'bilstm_dense'
+    parameter_dict['intentmodelnumber'] = '4'
+
+    parameter_dict['rdftypemodel'] = 'bilstm_dense'
+    parameter_dict['rdftypemodelnumber'] = '3'
+
+    parameter_dict['rdfclassmodel'] = 'bilstm_dot'
+    parameter_dict['rdfclassmodelnumber'] = '4'
+
     TEMP = aux.data_loading_parameters(_dataset, parameter_dict, runtime=True)
 
     _dataset_specific_data_dir, _model_specific_data_dir, _file, \
@@ -929,7 +937,7 @@ if __name__ == "__main__":
     Logging = parameter_dict.copy()
     Logging['runtime'] = []
 
-    quesans = QuestionAnswering(parameter_dict, pointwise, _word_to_id, device, False)
+    quesans = QuestionAnswering(parameter_dict, pointwise, _word_to_id, device,_dataset, False)
 
     # Some logs which run during runtime, not after.
     core_chain_acc_log = []

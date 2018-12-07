@@ -69,6 +69,7 @@ def save_location(problem, model_name, dataset):
     if not dir_name:
         new_path_dir = path + '/' + str(0)
         os.mkdir(new_path_dir)
+        new_model = 0
     else:
         dir_name = max(dir_name)
         new_model = dir_name + 1
@@ -140,14 +141,20 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  mode
 
     precision = []
     with torch.no_grad():
+        print(len(valid_questions))
         for i in range(len(valid_questions)):
-            question = np.repeat(valid_questions[i].reshape(1, -1), len(valid_neg_paths[i]) + 1,
-                                 axis=0)  # +1 for positive path
-            # paths = np.vstack((valid_pos_paths[i].reshape(1, -1), valid_neg_paths[i]))
-            paths = np.vstack((valid_neg_paths[i],valid_pos_paths[i].reshape(1, -1)))
+
+            vnp,valid_index = np.unique(valid_neg_paths[i],axis=0,return_index=True)
             if path_rel:
-                paths_rel1 = np.vstack((valid_neg_paths_rel1[i],valid_pos_paths_rel1[i].reshape(1, -1)))
-                paths_rel2 = np.vstack((valid_neg_paths_rel2[i],valid_pos_paths_rel2[i].reshape(1, -1)))
+                vnr1 = [valid_neg_paths_rel1[i][ind] for ind in valid_index ]
+                vnr2 = [valid_neg_paths_rel2[i][ind] for ind in valid_index ]
+            # paths = np.vstack((valid_pos_paths[i].reshape(1, -1), valid_neg_paths[i]))
+            paths = np.vstack((vnp,valid_pos_paths[i].reshape(1, -1)))
+            question = np.repeat(valid_questions[i].reshape(1, -1), len(vnp) + 1,
+                                 axis=0)  # +1 for positive path
+            if path_rel:
+                paths_rel1 = np.vstack((vnr1,valid_pos_paths_rel1[i].reshape(1, -1)))
+                paths_rel2 = np.vstack((vnr2,valid_pos_paths_rel2[i].reshape(1, -1)))
                 paths_rel1 = torch.tensor(paths_rel1, dtype=torch.long, device=device)
                 paths_rel2 = torch.tensor(paths_rel2, dtype=torch.long, device=device)
 
@@ -163,6 +170,7 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  mode
                 precision.append(1)
             else:
                 precision.append(0)
+        print(precision)
     return sum(precision) * 1.0 / len(precision)
 
 

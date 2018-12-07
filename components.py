@@ -1303,15 +1303,13 @@ class Awdencoder(nn.Module):
             if wdrop:
                 self.rnns = [WeightDrop(rnn, ['weight_hh_l0'], dropout=wdrop) for rnn in self.rnns]
         elif rnn_type == 'QRNN':
-            print("Not implemented yet")
-            raise NotImplementedError
-            # from torchqrnn import QRNNLayer
-            # self.rnns = [QRNNLayer(input_size=ninp if l == 0 else nhid,
-            #                        hidden_size=nhid if l != nlayers - 1 else (ninp if tie_weights else nhid),
-            #                        save_prev_x=True, zoneout=0, window=2 if l == 0 else 1, output_gate=True) for l in
-            # #              range(nlayers)]
-            # for rnn in self.rnns:
-            #     rnn.linear = WeightDrop(rnn.linear, ['weight'], dropout=wdrop)
+            from torchqrnn import QRNNLayer
+            self.rnns = [QRNNLayer(input_size=ninp if l == 0 else nhid,
+                                   hidden_size=nhid if l != nlayers - 1 else (ninp if tie_weights else nhid),
+                                   save_prev_x=True, zoneout=0, window=2 if l == 0 else 1, output_gate=True) for l in
+                         range(nlayers)]
+            for rnn in self.rnns:
+                rnn.linear = WeightDrop(rnn.linear, ['weight'], dropout=wdrop)
         print(self.rnns)
         self.rnns = torch.nn.ModuleList(self.rnns)
         #         self.decoder = nn.Linear(nhid, ntoken)
@@ -1349,7 +1347,7 @@ class Awdencoder(nn.Module):
     #         self.decoder.bias.data.fill_(0)
     #         self.decoder.weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, input, hidden, return_h=False):
+    def forward(self, input, hidden, return_h=False, also_raw=False):
         nlayers = self.nlayers
         mask = tu.compute_mask(input.transpose(1, 0))
 
@@ -1392,11 +1390,21 @@ class Awdencoder(nn.Module):
 
         output = self.lockdrop(emb_sort, self.dropout)
         outputs.append(output)
-        result = output.view(output.size(0) * output.size(1), output.size(2))
+        outputs = [output.index_select(1, idx_unsort) for output in outputs]
 
-        if return_h:
-            return result, hidden, raw_outputs, outputs
-        return result, hidden
+        if also_raw:
+            final_activations = torch.stack([raw_outputs[-1].transpose(1, 0)[i, l - 1] for i, l in enumerate(lengths)])
+        final_activations_dropped = torch.stack([outputs[-1].transpose(1, 0)[i, l - 1] for i, l in enumerate(lengths)])
+
+        result = output.view(output.size(0) * output.size(1), output.size(2))
+        #         print([x.shape for x in outputs])
+        #         outputs = torch.stack(outputs)
+
+        if return_h and also_raw:
+            return outputs, hidden, emb, final_activations, final_activations_dropped
+        elif return_h:
+            return outputs, hidden, emb, final_activations_dropped
+        return result, hidden, emb
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
@@ -1414,12 +1422,297 @@ class Awdencoder(nn.Module):
     @property
     def layers(self):
         return torch.nn.ModuleList([
-            torch.nn.ModuleList([self.lockdrop,self.idrop,self.hdrop,self.drop]),
+            torch.nn.ModuleList([self.lockdrop, self.idrop, self.hdrop, self.drop]),
             torch.nn.ModuleList([self.encoder]),
             torch.nn.ModuleList([self.rnns[0]]),
             torch.nn.ModuleList([self.rnns[1]]),
             torch.nn.ModuleList([self.rnns[2]])
         ])
+
+
+class ULMFITQelosFlatEncoder(torch.nn.Module):
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional, device,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, residual=False, dropout_in=0., dropout_rec=0, debug=False, encoder=False):
+        '''
+               :param max_length: Max length of the sequence.
+               :param hidden_dim: dimension of the output of the LSTM.
+               :param number_of_layer: Number of LSTM to be stacked.
+               :param embedding_dim: The output dimension of the embedding layer/ important only if vectors=none
+               :param vocab_size: Size of vocab / number of rows in embedding matrix
+               :param bidirectional: boolean - if true creates BIdir LStm
+               :param vectors: embedding matrix
+               :param debug: Bool/ prints shapes and some other meta data.
+               :param enable_layer_norm: Bool/ layer normalization.
+               :param mode: LSTM/GRU.
+               :param residual: Bool/ return embedded state of the input.
+
+           TODO: Implement multilayered shit someday.
+        '''
+        super(ULMFITQelosFlatEncoder, self).__init__()
+
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = \
+            int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)
+        self.enable_layer_norm = enable_layer_norm
+        self.number_of_layer = number_of_layer
+        self.bidirectional = bidirectional
+        self.dropout = dropout
+        self.dropout_in, self.dropout_rec = dropout_in, dropout_rec
+        self.debug = debug
+        self.mode = mode
+        self.residual = residual
+        self.device = device
+
+        if not encoder:
+            self.lstm = Awdencoder(rnn_type='LSTM',
+                                        ntoken=vectors.shape[0],
+                                        ninp=400,
+                                        nhid=1150,
+                                        nlayers=3,
+                                        dropout=0.05,
+                                        dropouth=0.2,
+                                        dropouti=0.2,
+                                        dropoute=0.05,
+                                        wdrop=0,
+                                        tie_weights=True)
+            self.lstm.encoder.padding_idx = 0
+        else:
+            self.lstm = encoder
+        key_mapping = {
+            'encoder.weight': 'encoder.weight',
+            'rnns.0.module.weight_ih_l0': 'rnns.0.weight_ih_l0',
+            'rnns.0.module.bias_ih_l0': 'rnns.0.bias_ih_l0',
+            'rnns.0.module.bias_hh_l0': 'rnns.0.bias_hh_l0',
+            'rnns.0.module.weight_hh_l0_raw': 'rnns.0.weight_hh_l0',
+            'rnns.1.module.weight_ih_l0': 'rnns.1.weight_ih_l0',
+            'rnns.1.module.bias_ih_l0': 'rnns.1.bias_ih_l0',
+            'rnns.1.module.bias_hh_l0': 'rnns.1.bias_hh_l0',
+            'rnns.1.module.weight_hh_l0_raw': 'rnns.1.weight_hh_l0',
+            'rnns.2.module.weight_ih_l0': 'rnns.2.weight_ih_l0',
+            'rnns.2.module.bias_ih_l0': 'rnns.2.bias_ih_l0',
+            'rnns.2.module.bias_hh_l0': 'rnns.2.bias_hh_l0',
+            'rnns.2.module.weight_hh_l0_raw': 'rnns.2.weight_hh_l0',
+        }
+
+        # Load the pre-trained model
+        # pretrained_weights = torch.load('./resources/unsup_model_enc.torch', map_location= lambda storage, loc: storage)
+        # pretrained_weights = torch.load('./resources/pretr_model_enc.torch', map_location= lambda storage, loc: storage)
+        pretrained_weights = torch.load('./ulmfit/wt103/fwd_wt103_enc.h5', map_location=lambda storage, loc: storage)
+        # pretrained_weights = torch.load(LM_DIR /'unsup_model_enc.torch', map_location= lambda storage, loc: storage)
+
+        new_vectors = vectors
+        pretrained_weights['encoder.weight'] = torch.tensor(new_vectors)
+        pretrained_weights.pop('encoder_with_dropout.embed.weight')
+
+        self.adapt_lin = None  # Make layer if dims mismatch
+        if residual and self.hidden_dim * 2 != self.embedding_dim:
+            self.adapt_lin = torch.nn.Linear(self.embedding_dim, self.hidden_dim * 2, bias=False)
+
+    @property
+    def layers(self):
+        return self.lstm.layers
+
+    def forward(self, x):
+        # embs = self.embedding_layer(x)
+        # mask = tu.compute_mask(x)
+
+        #         h = self.lstm.init_hidden(x.shape[0],self.device)
+
+        #         if self.residual:
+        #             _, final_state, _, mask, embs, _ = self.lstm(x, h)
+        #         else:
+        #             _, final_state, _, mask = self.lstm(x, h)
+
+        h = self.lstm.init_hidden(x.shape[0])
+        op = self.lstm(x.transpose(1, 0), h, return_h=True)
+        final_state = op[3]
+        #         print(f"final state shape is, {final_state.shape}")
+
+        #         print([(x[0].shape, x[1].shape) for x in final_state])
+        # final_state = self.lstm.y_n[-1]
+        final_state = final_state.contiguous().view(x.size(0), -1)
+
+        # if self.residual:
+        #     if self.adapt_lin is not None:
+        #         embs = self.adapt_lin(embs)
+        #     meanpool = embs.sum(0)
+        #     masksum = mask.float().sum(1).unsqueeze(1)
+        #     meanpool = meanpool / masksum
+        #     final_state = final_state + meanpool
+        return final_state
+
+
+class ULMFITQelosSlotPtrChainEncoder(torch.nn.Module):
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional, device,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, residual=False, dropout_in=0., dropout_rec=0, debug=False, encoder=False):
+        '''
+               :param max_length: Max length of the sequence.
+               :param hidden_dim: dimension of the output of the LSTM.
+               :param number_of_layer: Number of LSTM to be stacked.
+               :param embedding_dim: The output dimension of the embedding layer/ important only if vectors=none
+               :param vocab_size: Size of vocab / number of rows in embedding matrix
+               :param bidirectional: boolean - if true creates BIdir LStm
+               :param vectors: embedding matrix
+               :param debug: Bool/ prints shapes and some other meta data.
+               :param enable_layer_norm: Bool/ layer normalization.
+               :param mode: LSTM/GRU.
+               :param residual: Bool/ return embedded state of the input.
+
+           TODO: Implement multilayered shit someday.
+        '''
+        super(ULMFITQelosSlotPtrChainEncoder, self).__init__()
+
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = \
+            int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)
+        self.enable_layer_norm = enable_layer_norm
+        self.number_of_layer = number_of_layer
+        self.bidirectional = bidirectional
+        self.dropout = dropout
+        self.dropout_in, self.dropout_rec = dropout_in, dropout_rec
+        self.debug = debug
+        self.mode = mode
+        self.residual = residual
+        self.device = device
+
+        self.enc = ULMFITQelosFlatEncoder(max_length, hidden_dim, number_of_layer,
+                                    embedding_dim, vocab_size, bidirectional, device, dropout=0.5, mode='LSTM',
+                                    enable_layer_norm=False, vectors=vectors, residual=self.residual,
+                                    dropout_in=self.dropout_in, dropout_rec=self.dropout_rec, debug=False,
+                                    encoder=encoder)  # .to(device)
+
+    def forward(self, firstrels, secondrels):
+        #         if True:
+        #             print(firstrels.shape,secondrels.shape)
+        #             print(f"first and secod respectively, {firstrels.shape},{secondrels.shape}")
+        firstrels_enc = self.enc(firstrels)
+        secondrels_enc = self.enc(secondrels)
+        #         print(f"first and secod respectively, {firstrels_enc.shape},{secondrels_enc.shape}")
+        # cat???? # TODO
+        enc = torch.cat([firstrels_enc, secondrels_enc], 1)
+        return enc
+
+    @property
+    def layers(self):
+        return self.enc.layers
+
+
+class ULMFITQelosSlotPtrQuestionEncoder(nn.Module):
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional, device,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, residual=True, dropout_in=0., dropout_rec=0, debug=False):
+
+        super(ULMFITQelosSlotPtrQuestionEncoder, self).__init__()
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = \
+            int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)
+        self.enable_layer_norm = enable_layer_norm
+        self.number_of_layer = number_of_layer
+        self.bidirectional = bidirectional
+        self.dropout = dropout
+        self.dropout_in, self.dropout_rec = dropout_in, dropout_rec
+        self.debug = debug
+        self.mode = mode
+        self.residual = residual
+        self.device = device
+
+        self.lstm = Awdencoder(rnn_type='LSTM',
+                                    ntoken=vectors.shape[0],
+                                    ninp=400,
+                                    nhid=1150,
+                                    nlayers=3,
+                                    dropout=0.05,
+                                    dropouth=0.2,
+                                    dropouti=0.2,
+                                    dropoute=0.05,
+                                    wdrop=0,
+                                    tie_weights=True)
+        self.lstm.encoder.padding_idx = 0
+
+        key_mapping = {
+            'encoder.weight': 'encoder.weight',
+            'rnns.0.module.weight_ih_l0': 'rnns.0.weight_ih_l0',
+            'rnns.0.module.bias_ih_l0': 'rnns.0.bias_ih_l0',
+            'rnns.0.module.bias_hh_l0': 'rnns.0.bias_hh_l0',
+            'rnns.0.module.weight_hh_l0_raw': 'rnns.0.weight_hh_l0',
+            'rnns.1.module.weight_ih_l0': 'rnns.1.weight_ih_l0',
+            'rnns.1.module.bias_ih_l0': 'rnns.1.bias_ih_l0',
+            'rnns.1.module.bias_hh_l0': 'rnns.1.bias_hh_l0',
+            'rnns.1.module.weight_hh_l0_raw': 'rnns.1.weight_hh_l0',
+            'rnns.2.module.weight_ih_l0': 'rnns.2.weight_ih_l0',
+            'rnns.2.module.bias_ih_l0': 'rnns.2.bias_ih_l0',
+            'rnns.2.module.bias_hh_l0': 'rnns.2.bias_hh_l0',
+            'rnns.2.module.weight_hh_l0_raw': 'rnns.2.weight_hh_l0',
+        }
+
+        # Load the pre-trained model
+        # pretrained_weights = torch.load('./resources/unsup_model_enc.torch', map_location= lambda storage, loc: storage)
+        # pretrained_weights = torch.load('./resources/pretr_model_enc.torch', map_location= lambda storage, loc: storage)
+        pretrained_weights = torch.load('./ulmfit/wt103/fwd_wt103_enc.h5', map_location=lambda storage, loc: storage)
+        # pretrained_weights = torch.load(LM_DIR /'unsup_model_enc.torch', map_location= lambda storage, loc: storage)
+
+        new_vectors = vectors
+        pretrained_weights['encoder.weight'] = torch.tensor(new_vectors)
+        pretrained_weights.pop('encoder_with_dropout.embed.weight')
+
+        for k, v in key_mapping.items():
+            pretrained_weights[v] = pretrained_weights.pop(k)
+
+        self.lstm.load_state_dict(pretrained_weights)
+
+        dims = [200]
+        self.linear = torch.nn.Linear(dims[-1] * (1 + self.bidirectional), 2)
+        self.sm = torch.nn.Softmax(1)
+        # for adapter
+        outdim = dims[-1] * (1 + self.bidirectional)
+        self.adapt_lin = None
+
+        if outdim != self.embedding_dim:
+            self.adapt_lin = torch.nn.Linear(self.embedding_dim, outdim, bias=False)
+
+    @property
+    def layers(self):
+        layers = [x for x in self.lstm.layers]
+        layers.append(torch.nn.ModuleList([self.linear]))
+        return torch.nn.ModuleList(layers)
+
+    def return_encoder(self):
+        return self.lstm
+
+    def forward(self, x):
+
+        x = tu.trim(x)
+
+        h = self.lstm.init_hidden(x.shape[0])
+        ys, _, embs, _ = self.lstm(x.transpose(1, 0), h, return_h=True)
+        mask = tu.compute_mask(x)
+
+        ys = ys[-1].transpose(1, 0)
+
+        # Get attention scores
+        linear_scores = self.linear(ys)
+
+        scorer = linear_scores + torch.log(mask[:, :ys.size(1)].float().unsqueeze(2))
+        scores = self.sm(scorer)  # (batsize, seqlen, 2)
+
+        # get summaries
+        # region skipper
+        skipadd = embs[:, :ys.size(1), :]
+        if self.adapt_lin is not None:
+            skipadd = self.adapt_lin(skipadd)
+        if not self.residual:
+            ys = ys + skipadd
+        # endregion
+
+        ys = ys.unsqueeze(2)  # (batsize, seqlen, 1, dim)
+        scores = scores.unsqueeze(3)  # (batsize, seqlen, 2, 1)
+        b = ys * scores  # (batsize, seqlen, 2, dim)
+        summaries = b.sum(1)  # (batsize, 2, dim)
+        ret = torch.cat([summaries[:, 0, :], summaries[:, 1, :]], 1)
+        return ret, scores
+
 
 
 if __name__ == "__main__":

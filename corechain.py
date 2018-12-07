@@ -18,16 +18,27 @@ from torch.utils.data import  DataLoader
 import data_loader as dl
 import auxiliary as aux
 import network as net
+from configs import config_loader as cl
+from utils import query_graph_to_sparql as sparql_constructor
+from utils import dbpedia_interface as db_interface
+from utils import embeddings_interface
+from utils import natural_language_utilities as nlutils
+import network_rdftype as net_rdftype
+import network_intent as net_intent
+import onefile as one
 
 # Other libs
 import numpy as np
 import argparse
 import time
+import os
+import sys
+import pickle
+from pprint import pprint
+from progressbar import ProgressBar
 
-from configs import config_loader as cl
-
-
-
+if sys.version_info[0] == 3: import configparser as ConfigParser
+else: import ConfigParser
 
 #setting up device,model name and loss types.
 device = torch.device("cpu")
@@ -42,6 +53,11 @@ COMMON_DATA_DIR = 'data/data/common'
 _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 _inv_relations = aux.load_inverse_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
+
+#onefile stuff
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
+vocabularize_relation = lambda path: embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
+sparql_constructor.init(embeddings_interface)
 
 # gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
 
@@ -303,6 +319,190 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
         print('-' * 89)
         return train_loss, modeler, valid_accuracy, test_accuracy, model_save_location
 
+
+
+def evaluate(device,pointwise,dataset,training_model,training_model_number):
+
+
+
+
+    # Reading and setting up config parser
+    config = ConfigParser.ConfigParser()
+    config.readfp(open('configs/macros.cfg'))
+
+    # setting up device,model name and loss types.
+    device = device
+    training_model = training_model
+    _dataset = dataset
+    pointwise = pointwise
+
+    # 19 is performing the best
+    training_model_number = training_model_number
+    _debug = False
+
+    # Loading relations file.
+    COMMON_DATA_DIR = 'data/data/common'
+    INTENTS = ['count', 'ask', 'list']
+    RDFTYPES = ['x', 'uri', 'none']
+
+    _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
+    glove_id_sf_to_glove_id_rel = dl.create_relation_lookup_table(COMMON_DATA_DIR)
+
+    # Model specific paramters
+    # #Model specific paramters
+    if pointwise:
+        training_config = 'pointwise'
+    else:
+        training_config = 'pairwise'
+
+    parameter_dict = cl.runtime_parameters(dataset=_dataset, training_model=training_model,
+                                           training_config=training_config, config_file='configs/macros.cfg')
+
+    if training_model == 'cnn_dot':
+        parameter_dict['output_dim'] = int(config.get(_dataset, 'output_dim'))
+
+    # Update parameters
+    parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
+    parameter_dict['_model_dir'] = './data/models/'
+
+    parameter_dict['corechainmodel'] = training_model
+    parameter_dict['corechainmodelnumber'] = str(training_model_number)
+
+    parameter_dict['intentmodel'] = 'bilstm_dense'
+    parameter_dict['intentmodelnumber'] = '4'
+
+    parameter_dict['rdftypemodel'] = 'bilstm_dense'
+    parameter_dict['rdftypemodelnumber'] = '3'
+
+    parameter_dict['rdfclassmodel'] = 'bilstm_dot'
+    parameter_dict['rdfclassmodelnumber'] = '4'
+
+    parameter_dict['dataset'] = _dataset
+
+
+    TEMP = aux.data_loading_parameters(_dataset, parameter_dict, runtime=True)
+
+    _dataset_specific_data_dir, _model_specific_data_dir, _file, \
+    _max_sequence_length, _neg_paths_per_epoch_train, \
+    _neg_paths_per_epoch_validation, _training_split, _validation_split, _index = TEMP
+
+    _data,  _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
+                                                                         _dataset_specific_data_dir=_dataset_specific_data_dir,
+                                                                         split_point=.80)
+
+    parameter_dict['vectors'] = _vectors
+
+    # For interpretability's sake
+    word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
+
+    """
+        Different counters and metrics to store accuracy of diff modules
+
+            Core chain accuracy counter counts the number of time the core chain predicated is same as 
+            positive path. This also includes for ask query.
+            The counter might confuse the property and the ontology. 
+
+            Similar functionality with rdf_type and intent
+
+            **word vector accuracy counter**: 
+                Counts the number of times just using  word2vec similarity, 
+                the best path came the most similar. 
+                This will only work if CANDIDATE_SPACE is not none.
+
+    """
+
+    '''
+        c_flag  is true if the core_chain was correctly predicted. 
+        same is the case for i_flag and r_flag, rt_flag (correct candidate for rdf type)
+    '''
+    c_flag, i_flag, r_flag, rt_flag = False, False, False, False
+
+    '''
+        Stores tuple of (fmeasure,precision,recall)
+    '''
+    results = []
+
+    Logging = parameter_dict.copy()
+    Logging['runtime'] = []
+
+    quesans = one.QuestionAnswering(parameter_dict, pointwise, _word_to_id, device, _dataset, False)
+
+    # Some logs which run during runtime, not after.
+    core_chain_acc_log = []
+    core_chain_mrr_log = []
+
+    startindex = 0
+
+    for index, data in enumerate(_data[startindex:]):
+        print (index)
+        if index == 16 or index == 25:
+            continue
+        print(data.keys())
+        index += startindex
+
+        log, metrics = one.answer_question(qa=quesans,
+                                       index=index,
+                                       data=data,
+                                       relations=_inv_relations,
+                                       parameter_dict=parameter_dict)
+
+        #     log, metrics = answer_question(qa=None,
+        #                                    index=None,
+        #                                    data=None,
+        #                                    gloveid_to_embeddingid=None,
+        #                                    embeddingid_to_gloveid=None,
+        #                                    relations=None,
+        #                                    parameter_dict=None)
+
+        sparql = one.create_sparql(log=log,
+                               data=data,
+                               embeddings_interface=embeddings_interface,
+                               relations=_inv_relations)
+        # sparql = ""
+        # metrics = eval(data, log, metrics)
+
+        # Update logs
+        Logging['runtime'].append({'log': log, 'metrics': metrics,
+                                   'pred_sparql': sparql, 'true_sparql': data['parsed-data']['node']['sparql_query']})
+
+        # Update metrics
+        core_chain_acc_log.append(metrics['core_chain_accuracy_counter'])
+        core_chain_mrr_log.append(metrics['core_chain_mrr_counter'])
+
+        # Make shit interpretable
+        # question = aux.id_to_word(log['question'], gloveid_to_word, remove_pad=True)
+        # true_path = aux.id_to_word(log['true_path'], gloveid_to_word, remove_pad=True)
+        # pred_path = aux.id_to_word(log['pred_path'], gloveid_to_word, remove_pad=True)
+
+        print("#%s" % index, "\t\bAcc: ", np.mean(core_chain_acc_log))
+
+        #     print("\t\bQues: ", question)
+        #     print("\t\bTPath: ", true_path, "\n\t\bPPath: ", pred_path)
+
+        #     print("\t\bTIntent: ", log['true_intent'])
+        #     print("\t\bPIntent: ", log['pred_intent'])
+        #     print("\t\bPRdftype: ", log['true_rdf_type'])
+        #     print("\t\bTRdftype: ", log['pred_rdf_type'])
+        #     print("\t\bPRdfclass: ", log['true_rdf_class'])
+        #     print("\t\bTRdfclass: ", log['pred_rdf_class'])
+
+        #     print("")
+        #     pprint(log)
+        #     print("")
+        pprint(metrics)
+        #     print("\n",sparql)
+        print("\n################################\n")
+
+    Logging = one.evaluate(Logging)
+
+    model_path = os.path.join(parameter_dict['_model_dir'], 'core_chain')
+    model_path = os.path.join(model_path, parameter_dict['corechainmodel'])
+    model_path = os.path.join(model_path, parameter_dict['dataset'])
+    model_path = os.path.join(model_path, parameter_dict['corechainmodelnumber'])
+    pickle.dump(Logging,open(model_path+'/result.pickle','wb+'))
+
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
@@ -328,6 +528,9 @@ if __name__ == "__main__":
     parser.add_argument('-bidirectional', action='store', dest='bidirectional',
                         help='train over validation', default=True)
 
+    parser.add_argument('-evals', action='store', dest='evals',
+                        help='train over validation', default=True)
+
     args = parser.parse_args()
 
     # setting up device,model namenpp and loss types.
@@ -338,7 +541,7 @@ if __name__ == "__main__":
     _train_over_validation = aux.to_bool(args.train_over_validation)
     finetune = aux.to_bool(args.finetune)
     bidirectional = aux.to_bool(args.bidirectional)
-
+    evals = aux.to_bool(args.evals)
 
     # #Model specific paramters
     if pointwise:
@@ -358,11 +561,12 @@ if __name__ == "__main__":
 
 
     data = aux.load_data(_dataset=_dataset, _train_over_validation = _train_over_validation,
-                         _parameter_dict=parameter_dict, _relations =  _inv_relations, _pointwise=pointwise, _device=device,k=1000)
+                         _parameter_dict=parameter_dict, _relations =  _inv_relations, _pointwise=pointwise, _device=device,k=-1)
 
     if training_model == 'reldet':
         schema = 'reldet'
-    elif training_model == 'slotptr' or training_model == 'slotptr_common_encoder' or training_model == 'slotptrortho':
+    elif training_model == 'slotptr' or training_model == 'slotptr_common_encoder' or training_model == 'slotptrortho'\
+            or training_model == 'ulmfit_slotptr':
         schema = 'slotptr'
     elif training_model == 'bilstm_dot_multiencoder':
         schema = 'default'
@@ -532,6 +736,13 @@ if __name__ == "__main__":
                                    weight_decay=0.0001)
             modeler.load_from(model_path)
 
+    if training_model == 'ulmfit_slotptr':
+        modeler = net.ULMFITQelosSlotPointerModel( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
+                                             _device=device,_pointwise=pointwise, _debug=False)
+
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001, lr=0.01)
+
 
     if not pointwise:
         loss_func = nn.MarginRankingLoss(margin=1,size_average=False)
@@ -560,6 +771,14 @@ if __name__ == "__main__":
     print("maximum test accuracy is , ", max(test_accuracy))
     print("correct test accuracy i.e test accuracy where validation is highest is ", test_accuracy[valid_accuracy.index(max(valid_accuracy))])
     print("model saved at, " , model_save_location )
+    msl = model_save_location.split('/')
+
+    if evals:
+        evaluate(device=device,
+                 pointwise=pointwise,
+                 dataset=msl[-2],
+                 training_model=msl[-3],
+                 training_model_number=msl[-1])
     # rsync -avz --progress corechain.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
     # rsync -avz --progress auxiliary.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/
     # rsync -avz --progress network.py qrowdgpu+titan:/shared/home/GauravMaheshwari/new_kranti/KrantikariQA/

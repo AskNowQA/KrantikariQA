@@ -736,7 +736,7 @@ def construct_paths(data, relations, qald=False):
     # inverse id version of positive path and creating a numpy version
     positive_path_id = data['parsed-data']['path']   #change this
     no_positive_path = False
-    if positive_path_id == -1:
+    if positive_path_id == -1 or positive_path_id == [-1]:
         positive_path = np.asarray([-1])
         no_positive_path = True
     else:

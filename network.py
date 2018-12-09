@@ -1095,8 +1095,8 @@ class QelosSlotPointerModel(Model):
         '''
         loss = loss_fn(pos_scores, neg_scores, y_label)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.encoder_q.parameters(), .5)
-        torch.nn.utils.clip_grad_norm_(self.encoder_p.parameters(), .5)
+        # torch.nn.utils.clip_grad_norm_(self.encoder_q.parameters(), .5)
+        # torch.nn.utils.clip_grad_norm_(self.encoder_p.parameters(), .5)
         optimizer.step()
 
         return loss
@@ -1120,8 +1120,8 @@ class QelosSlotPointerModel(Model):
         '''
         loss = loss_fn(score, y_label)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.encoder_q.parameters(), .5)
-        torch.nn.utils.clip_grad_norm_(self.encoder_p.parameters(), .5)
+        # torch.nn.utils.clip_grad_norm_(self.encoder_q.parameters(), .5)
+        # torch.nn.utils.clip_grad_norm_(self.encoder_p.parameters(), .5)
         optimizer.step()
 
         return loss

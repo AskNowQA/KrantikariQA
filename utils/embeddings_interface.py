@@ -108,6 +108,7 @@ def _init_special_characters_():
         for sp_char in SPECIAL_CHARACTERS:
             assert sp_char in vocab
 
+
     # Push special chars in the vocab, alongwith their vectors IF not already there.
     for i, sp_char in enumerate(SPECIAL_CHARACTERS):
         vocab[sp_char] = i

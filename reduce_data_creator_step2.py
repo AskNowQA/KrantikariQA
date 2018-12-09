@@ -1,10 +1,10 @@
 '''
 
-    >write a script to collect everything from a folder
-    >Use the same script to find all relations
-    >Create a piclke of relation in that specific form
-    >Idfy everything with respect to relation
-    >Store it
+        >write a script to collect everything from a folder
+        >Use the same script to find all relations
+        >Create a piclke of relation in that specific form
+        >Idfy everything with respect to relation
+        >Store it
 
         The relation file structure would be
             [
@@ -38,7 +38,7 @@ def collect_files(dir_location):
 
     return final_data
 
-def update_relation_dict(relation,relation_dict,dbp):
+def update_relation_dict(relation,relation_dict,dbp,idspace=True):
     '''
 
     Updates the relation dict if the relation doesn't exists
@@ -59,8 +59,12 @@ def update_relation_dict(relation,relation_dict,dbp):
         rel_id = len(relation_dict)
         surface_form = dbp.get_label(relation)
         surface_form_tokenized = nlutils.tokenize(surface_form)
-        relation_dict[relation] = [len(relation_dict),surface_form,surface_form_tokenized
-            ,ei.vocabularize(surface_form_tokenized)]
+        if idspace:
+            relation_dict[relation] = [len(relation_dict),surface_form,surface_form_tokenized
+                ,ei.vocabularize_idspace(surface_form_tokenized)]
+        else:
+            relation_dict[relation] = [len(relation_dict), surface_form, surface_form_tokenized
+                , ei.vocabularize(surface_form_tokenized)]
 
     return rel_id,relation_dict
 
@@ -204,7 +208,7 @@ def run(dataset):
     # keys = list(relation_dict.keys())
     # ei.update_vocab(keys)
     for rel in relation_dict:
-        relation_dict[rel].append(ei.vocabularize([rel],False))
+        relation_dict[rel].append(ei.vocabularize_idspace([rel],False))
 
     print("done dumping relation")
     pickle.dump(relation_dict,open(relation_dict_location,'wb+'))
@@ -226,13 +230,13 @@ def run(dataset):
     id_data = []
 
 
-    x_id = int(ei.vocabularize(['x'])[0])
-    uri_id = int(ei.vocabularize(['uri'])[0])
+    x_id = int(ei.vocabularize_idspace(['x'])[0])
+    uri_id = int(ei.vocabularize_idspace(['uri'])[0])
 
     for index,node in enumerate(final_combine_data):
         temp = {
             'uri' : {
-                'question-id' : [int(id) for id in list(ei.vocabularize(nlutils.tokenize(node['node']['corrected_question'])))],
+                'question-id' : [int(id) for id in list(ei.vocabularize_idspace(nlutils.tokenize(node['node']['corrected_question'])))],
                 'hop-2-properties' : node['hop2'],
                 'hop-1-properties' : node['hop1'],
                 # 'entity-id':vectorize_entity(node['entity'],dbp)
@@ -267,7 +271,5 @@ if __name__ == '__main__':
 
 #update the vector file and the vocab file
 #vocab file is word,index and the vector file is just vectors
-#ei.align_id_space()
-#ei.__check_prepared__()
-
-
+ei.align_id_space()
+ei.__check_prepared__()

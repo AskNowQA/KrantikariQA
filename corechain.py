@@ -30,6 +30,7 @@ import onefile as one
 # Other libs
 import numpy as np
 import argparse
+import json
 import time
 import os
 import sys
@@ -248,7 +249,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
             # EPOCH LEVEL
 
             # Track training loss
-            train_loss.append(sum(epoch_loss))
+            train_loss.append(epoch_loss)
 
             # test_every = False
             if test_every:
@@ -321,7 +322,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
 
 
-def evaluate(device,pointwise,dataset,training_model,training_model_number):
+def evaluate(device,pointwise,dataset,training_model,training_model_number,finetune=False):
 
 
 
@@ -346,7 +347,7 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number):
     RDFTYPES = ['x', 'uri', 'none']
 
     _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
-    glove_id_sf_to_glove_id_rel = dl.create_relation_lookup_table(COMMON_DATA_DIR)
+    # glove_id_sf_to_glove_id_rel = dl.create_relation_lookup_table(COMMON_DATA_DIR)
 
     # Model specific paramters
     # #Model specific paramters
@@ -393,7 +394,7 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number):
     parameter_dict['vectors'] = _vectors
 
     # For interpretability's sake
-    word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
+    # word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
 
     """
         Different counters and metrics to store accuracy of diff modules
@@ -494,12 +495,14 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number):
         print("\n################################\n")
 
     Logging = one.evaluate(Logging)
-
-    model_path = os.path.join(parameter_dict['_model_dir'], 'core_chain')
-    model_path = os.path.join(model_path, parameter_dict['corechainmodel'])
-    model_path = os.path.join(model_path, parameter_dict['dataset'])
-    model_path = os.path.join(model_path, parameter_dict['corechainmodelnumber'])
-    pickle.dump(Logging,open(model_path+'/result.pickle','wb+'))
+    if not finetune:
+        model_path = os.path.join(parameter_dict['_model_dir'], 'core_chain')
+        model_path = os.path.join(model_path, parameter_dict['corechainmodel'])
+        model_path = os.path.join(model_path, parameter_dict['dataset'])
+        model_path = os.path.join(model_path, parameter_dict['corechainmodelnumber'])
+        pickle.dump(Logging,open(model_path+'/result.pickle','wb+'))
+    else:
+        return np.mean(core_chain_acc_log)
 
 
 
@@ -511,7 +514,7 @@ if __name__ == "__main__":
                         help='dataset includes lcquad,qald',default = 'lcquad')
 
     parser.add_argument('-model', action='store', dest='model',
-                        help='name of the model to use',default='slotptr')
+                        help='name of the model to use',default='cnn_dot')
 
     parser.add_argument('-pointwise', action='store', dest='pointwise',
                         help='to use pointwise training procedure make it true',default=True)
@@ -664,7 +667,7 @@ if __name__ == "__main__":
             if pointwise:
                 model_path = 'data/models/core_chain/slotptr_pointwise/lcquad/8/model.torch'
             else:
-                model_path = 'data/models/core_chain/slotptr/lcquad/71/model.torch'
+                model_path = 'data/models/core_chain/slotptr/lcquad/23/model.torch'
             modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                                                _device=device, _pointwise=pointwise, _debug=False)
             optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
@@ -772,6 +775,8 @@ if __name__ == "__main__":
     print("correct test accuracy i.e test accuracy where validation is highest is ", test_accuracy[valid_accuracy.index(max(valid_accuracy))])
     print("model saved at, " , model_save_location )
     msl = model_save_location.split('/')
+    print(f"model save locaton info {msl}")
+    json.dump(train_loss,open(f"{model_save_location}/loss.json",'w+'))
 
     if evals:
         evaluate(device=device,

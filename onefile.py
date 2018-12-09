@@ -36,6 +36,7 @@ RDFTYPES = ['x', 'uri', 'none']
 # parameter_dict['rdfclassmodel'] = 'bilstm_dot'
 # parameter_dict['rdfclassmodelnumber'] = '16'
 
+glove_id_sf_to_glove_id_rel = dl.create_relation_lookup_table('data/data/common')
 
 class QuestionAnswering:
     """
@@ -59,7 +60,7 @@ class QuestionAnswering:
         self._word_to_id = word_to_id
 
         # Load models
-        self.parameters['dataset'] = 'transfer-a'
+        # self.parameters['dataset'] = 'transfer-a'
         self._load_corechain_model()
         '''
             since all auxilary components perform really bad if just trained on QALD
@@ -229,15 +230,15 @@ class QuestionAnswering:
         Q = torch.tensor(Q, dtype=torch.long, device=self.device)
         P = torch.tensor(P, dtype=torch.long, device=self.device)
         P = P[:, :self.parameters['rel_pad']]
-        if self.debug:
-            print("Q: ", Q.shape, " P: ", P.shape)
+        # if self.debug:
+            # print("Q: ", Q.shape, " P: ", P.shape)
 
             # We then pass them through a predict function and get a score array.
         if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'reldet':
-            print("path rel 1 main ", P1)
-            print("path rel 2 main ", P2)
-            print("path rel 2 main ", P1.shape)
-            print("path rel 2 main ", P2.shape)
+            # print("path rel 1 main ", P1)
+            # print("path rel 2 main ", P2)
+            # print("path rel 2 main ", P1.shape)
+            # print("path rel 2 main ", P2.shape)
 
             score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel2=P2, device=self.device)
             #Visual stuff.
@@ -674,8 +675,7 @@ def answer_question(qa, index, data, relations, parameter_dict):
 
     # ##############################################
     """
-        RDF class prediction.
-
+            RDF class prediction.
             do this only if we need to, based on the prediction of rdftype model.
     """
     # ##############################################
@@ -846,11 +846,11 @@ if __name__ == "__main__":
 
     # setting up device,model name and loss types.
     training_model = 'slotptr'
-    _dataset = 'qald'
+    _dataset = 'lcquad'
     pointwise = False
 
     # 19 is performing the best
-    training_model_number = 0
+    training_model_number = 23
     _debug = False
 
     # Loading relations file.
@@ -884,13 +884,13 @@ if __name__ == "__main__":
     parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
     parameter_dict['intentmodel'] = 'bilstm_dense'
-    parameter_dict['intentmodelnumber'] = '4'
+    parameter_dict['intentmodelnumber'] = '5'
 
     parameter_dict['rdftypemodel'] = 'bilstm_dense'
-    parameter_dict['rdftypemodelnumber'] = '3'
+    parameter_dict['rdftypemodelnumber'] = '4'
 
     parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-    parameter_dict['rdfclassmodelnumber'] = '4'
+    parameter_dict['rdfclassmodelnumber'] = '5'
 
     TEMP = aux.data_loading_parameters(_dataset, parameter_dict, runtime=True)
 

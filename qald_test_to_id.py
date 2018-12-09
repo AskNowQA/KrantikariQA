@@ -32,6 +32,10 @@ def retrive_relations(node):
     print("**path is ", path)
     if path != [-1]:
         # path = [+abc,-pqr]
+        # if path[0][0] == '+':
+        #     path[0][0] = '-'
+        # elif path[0][0] == '-':
+        #     path[0][0] = '+'
         p = [p[1:] for p in path]
         relation_list = relation_list + p
 
@@ -64,17 +68,24 @@ for node in data:
 
     hop1properties,relation_dict = idfy_path(paths=node['uri']['hop-1-properties'],relation_dict=relation_dict,dbp=dbp)
     hop2properties,relation_dict = idfy_path(paths=node['uri']['hop-2-properties'],relation_dict=relation_dict,dbp=dbp)
-    path = node['parsed-data']['path'][0]
-    if path != -1:
+
+    path = node['parsed-data']['path']
+    if path != [-1]:
         # path = [+abc,-pqr]
-        p,relation_dict = dc2.idfy_const(path[1:],relation_dict,dbp)
-        path = [path[0],p]
+        # path = node['parsed-data']['node']['path']
+        new_path = []
+        for p in path:
+            p_temp,relation_dict = dc2.idfy_const(p[1:],relation_dict,dbp)
+            new_path.append(p[0])
+            new_path.append(p_temp)
+        # p,relation_dict = dc2.idfy_const(path[1:],relation_dict,dbp)
+        path = new_path
 
     data_s = {
         'uri':{
             'hop-1-properties' : hop1properties,
             'hop-2-properties' : hop2properties,
-            'question-id' : [int(id) for id in list(ei.vocabularize_idspace(nlutils.tokenize(node['parsed-data']['corrected_question'])))]
+            'question-id' : [int(id) for id in list(ei.vocabularize(nlutils.tokenize(node['parsed-data']['corrected_question'])))]
         },
         'parsed-data':{
             'path' : path,
@@ -92,7 +103,6 @@ for node in data:
 
 pickle.dump(relation_dict,open('data/data/common/relations.pickle', 'wb+'))
 json.dump(new_data,open('data/data/qald/qald_id_big_data_test.json','w+'))
-
 
 
 

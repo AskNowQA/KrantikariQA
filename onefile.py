@@ -60,7 +60,7 @@ class QuestionAnswering:
         self._word_to_id = word_to_id
 
         # Load models
-        # self.parameters['dataset'] = 'transfer-a'
+        self.parameters['dataset'] = 'transfer-b'
         self._load_corechain_model()
         '''
             since all auxilary components perform really bad if just trained on QALD
@@ -846,11 +846,11 @@ if __name__ == "__main__":
 
     # setting up device,model name and loss types.
     training_model = 'slotptr'
-    _dataset = 'lcquad'
+    _dataset = 'qald'
     pointwise = False
 
     # 19 is performing the best
-    training_model_number = 23
+    training_model_number = 0
     _debug = False
 
     # Loading relations file.
@@ -884,13 +884,13 @@ if __name__ == "__main__":
     parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
     parameter_dict['intentmodel'] = 'bilstm_dense'
-    parameter_dict['intentmodelnumber'] = '5'
+    parameter_dict['intentmodelnumber'] = '6'
 
     parameter_dict['rdftypemodel'] = 'bilstm_dense'
-    parameter_dict['rdftypemodelnumber'] = '4'
+    parameter_dict['rdftypemodelnumber'] = '5'
 
     parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-    parameter_dict['rdfclassmodelnumber'] = '5'
+    parameter_dict['rdfclassmodelnumber'] = '6'
 
     TEMP = aux.data_loading_parameters(_dataset, parameter_dict, runtime=True)
 

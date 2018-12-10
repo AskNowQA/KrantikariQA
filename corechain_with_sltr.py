@@ -26,6 +26,9 @@ from utils import natural_language_utilities as nlutils
 import network_rdftype as net_rdftype
 import network_intent as net_intent
 import onefile as one
+import lriters
+from utils.goodies import *
+
 
 # Other libs
 import numpy as np
@@ -37,6 +40,7 @@ import sys
 import pickle
 from pprint import pprint
 from progressbar import ProgressBar
+
 
 if sys.version_info[0] == 3: import configparser as ConfigParser
 else: import ConfigParser
@@ -110,7 +114,7 @@ def curatail_padding(data,parameter_dict):
 
 
 def training_loop(training_model, parameter_dict,modeler,train_loader,
-                  optimizer,loss_func, data, dataset, device, test_every, validate_every , pointwise = False, problem='core_chain',curtail_padding_rel=True):
+                  optimizer,loss_func, data, dataset, device, test_every, validate_every , pointwise = False, problem='core_chain',lrschedule=None,curtail_padding_rel=True):
 
     model_save_location = aux.save_location(problem, training_model, dataset)
     aux_save_information = {
@@ -157,6 +161,9 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
                 # Bookkeeping and data preparation
                 batch_time = time.time()
+
+                if lr_schedule:
+                    update_lr(optimizer, lrschedule.get())
 
                 if not pointwise:
                     ques_batch = torch.tensor(np.reshape(sample_batched[0][0], (-1, parameter_dict['max_length'])),
@@ -534,6 +541,10 @@ if __name__ == "__main__":
     parser.add_argument('-evals', action='store', dest='evals',
                         help='train over validation', default=True)
 
+    parser.add_argument('-ilr', action='store', dest='ilr',
+                        help='init lr', default=0.001)
+
+
     args = parser.parse_args()
 
     # setting up device,model namenpp and loss types.
@@ -545,6 +556,7 @@ if __name__ == "__main__":
     finetune = aux.to_bool(args.finetune)
     bidirectional = aux.to_bool(args.bidirectional)
     evals = aux.to_bool(args.evals)
+    ilr = float(args.ilr)
 
     # #Model specific paramters
     if pointwise:
@@ -597,12 +609,12 @@ if __name__ == "__main__":
             if pointwise:
                 model_path = 'data/models/core_chain/bilstm_dot_pointwise/lcquad/19/model.torch'
             else:
-                model_path = 'data/models/core_chain/bilstm_dot/lcquad/30/model.torch'
+                model_path = 'data/models/core_chain/bilstm_dot/lcquad/13/model.torch'
             modeler = net.BiLstmDot(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                     _device=device, _pointwise=pointwise, _debug=False)
 
             modeler.load_from(model_path)
-            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())),lr=0.0001)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())),lr=ilr)
 
     if training_model == 'bilstm_dense':
         modeler = net.BiLstmDense( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
@@ -667,12 +679,12 @@ if __name__ == "__main__":
             if pointwise:
                 model_path = 'data/models/core_chain/slotptr_pointwise/lcquad/8/model.torch'
             else:
-                model_path = 'data/models/core_chain/slotptr/lcquad/26/model.torch'
+                model_path = 'data/models/core_chain/slotptr/transfer-b/0/model.torch'
             modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                                                _device=device, _pointwise=pointwise, _debug=False)
             optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
                                    list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
-                                   weight_decay=0.0001,lr=0.0001)
+                                   weight_decay=0.0001,lr=ilr)
             modeler.load_from(model_path)
 
 
@@ -753,7 +765,16 @@ if __name__ == "__main__":
         loss_func = nn.BCEWithLogitsLoss()
         training_model += '_pointwise'
 
+    for iterations, sample_batched in enumerate(train_loader):
+        pass
 
+    parameter_dict['epochs'] = 100
+    # lr_args = {'iterations': (iterations + 1) * parameter_dict['epochs']}
+    # lr_args = {'iterations': (iterations + 1) * parameter_dict['epochs'],'cycles':2}
+    lr_args = {'iterations': (iterations + 1) * parameter_dict['epochs'], 'cut_frac': 0.1, 'ratio': 32}
+    # lr_schedule = lriters.LearningRateScheduler(optimizer, lr_args, lriters.CosineAnnealingLR)
+    # lr_schedule = lriters.LearningRateScheduler(optimizer, lr_args, lriters.ConstantLR)
+    lr_schedule = lriters.LearningRateScheduler(optimizer, lr_args, lriters.SlantedTriangularLR)
 
     train_loss, modeler, valid_accuracy, test_accuracy,model_save_location = training_loop(training_model = training_model,
                                                                                parameter_dict = parameter_dict,
@@ -767,6 +788,7 @@ if __name__ == "__main__":
                                                                                test_every=test_every,
                                                                                validate_every=validate_every,
                                                                                 pointwise=pointwise,
+                                                                                lrschedule = lr_schedule,
                                                                                problem='core_chain')
 
     print(valid_accuracy)

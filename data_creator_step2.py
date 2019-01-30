@@ -215,12 +215,13 @@ def run(dataset):
     '''
 
     #Vocabularize everything and then padding.
-    '''location
-        Things to vocabularize
-            >question
-            >path
-            >hop1
-            >hop2
+    '''
+        location
+            Things to vocabularize
+                >question
+                >path
+                >hop1
+                >hop2
     '''
 
     id_data = []

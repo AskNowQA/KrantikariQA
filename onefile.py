@@ -117,6 +117,14 @@ class QuestionAnswering:
         if self.parameters['corechainmodel'] == 'ulmfit_slotptr':
             self.corechain_model = net.ULMFITQelosSlotPointerModel(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
                                                  _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+
+        if self.parameters['corechainmodel'] == 'bert':
+            self.corechain_model = net.Bert_Scorer(_parameter_dict = parameter_dict,
+                    _word_to_id=_word_to_id,
+                    _device=device,
+                    _pointwise=pointwise,
+                    _debug=False)
+
         # Make the model path
         model_path = os.path.join(self.parameters['_model_dir'], 'core_chain')
         if self.pointwise:
@@ -549,6 +557,7 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         mrr_output = mrr_output.tolist()
         mrr = mrr_output.index(0) + 1.0
 
+        print(output)
         if mrr != 0:
             mrr = 1.0 / mrr
 
@@ -850,7 +859,7 @@ if __name__ == "__main__":
     pointwise = False
 
     # 19 is performing the best
-    training_model_number = 0
+    training_model_number = 3
     _debug = False
 
     # Loading relations file.

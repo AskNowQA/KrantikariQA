@@ -660,6 +660,9 @@ if __name__ == "__main__":
         if not finetune:
             modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                                 _device=device, _pointwise=pointwise, _debug=False)
+
+            # modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+            #                                     _device=device, _pointwise=pointwise, _debug=False, single=True)
             optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
                                    list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001)
         else:

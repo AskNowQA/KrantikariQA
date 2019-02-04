@@ -536,6 +536,17 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    '''
+        device = 'cpu'
+        training_model = 'slotptr'
+        _dataset = 'lcquad'
+        pointwise = False
+        _train_over_validation = False
+        bidirectional = True
+        evals = False
+        
+    '''
+
     # setting up device,model namenpp and loss types.
     device = torch.device(args.device)
     training_model = args.model

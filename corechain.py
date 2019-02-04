@@ -19,7 +19,7 @@ import data_loader as dl
 import auxiliary as aux
 import network as net
 from configs import config_loader as cl
-from utils import query_graph_to_sparql as sparql_constructor
+# from utils import query_graph_to_sparql as sparql_constructor
 from utils import dbpedia_interface as db_interface
 from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
@@ -58,7 +58,7 @@ _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 #onefile stuff
 dbp = db_interface.DBPedia(_verbose=True, caching=True)
 vocabularize_relation = lambda path: embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
-sparql_constructor.init(embeddings_interface)
+# sparql_constructor.init(embeddings_interface)
 
 # gloveid_to_embeddingid , embeddingid_to_gloveid, word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()
 
@@ -803,7 +803,7 @@ if __name__ == "__main__":
     #  0.28, 0.31, 0.32, 0.29, 0.31, 0.32, 0.34, 0.32, 0.31, 0.32, 0.33, 0.33, 0.32, 0.33, 0.32, 0.32, 0.33, 0.32, 0.33,
     #  0.32, 0.37, 0.35, 0.34, 0.33, 0.34, 0.34, 0.36, 0.39]
     # [0.2, 0.235, 0.25, 0.29, 0.3, 0.325, 0.28, 0.315, 0.29, 0.325, 0.305, 0.33, 0.35, 0.315, 0.335, 0.315, 0.35, 0.345,
-    #  0.325, 0.365, 0.335, 0.35, 0.36, 0.385, 0.37, 0.355, 0.35, 0.375, 0.345, 0.345, 0.36, 0.385, 0.4, 0.375, 0.38,
+    #  0.325, 0.365, 0.335, 0.35, 0.36, 0.385, 0.37,    0.355, 0.35, 0.375, 0.345, 0.345, 0.36, 0.385, 0.4, 0.375, 0.38,
     #  0.35, 0.395, 0.385, 0.38, 0.39, 0.365, 0.4, 0.395, 0.39, 0.39, 0.4, 0.4]
     # validation
     # accuracy is, 0.39

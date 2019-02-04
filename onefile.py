@@ -60,7 +60,7 @@ class QuestionAnswering:
         self._word_to_id = word_to_id
 
         # Load models
-        self.parameters['dataset'] = 'transfer-b'
+        # self.parameters['dataset'] = 'transfer-b'
         self._load_corechain_model()
         '''
             since all auxilary components perform really bad if just trained on QALD
@@ -726,9 +726,11 @@ def answer_question(qa, index, data, relations, parameter_dict):
     return log, metrics
 
 
-def sparql_answer(sparql):
+def sparql_answer(sparql,dbi=None):
+    if not dbi:
+        dbi = dbp
     test_answer = []
-    interface_test_answer = dbp.get_answer(sparql)
+    interface_test_answer = dbi.get_answer(sparql)
     for key in interface_test_answer:
         test_answer = test_answer + interface_test_answer[key]
     return list(set(test_answer))

@@ -15,6 +15,7 @@ import pickle
 import json
 import os
 import numpy as np
+import copy
 
 from utils import dbpedia_interface as dbi
 from utils import natural_language_utilities as nlutils
@@ -188,11 +189,19 @@ def run(dataset):
         The final_combine_data needs to be re-ordered so that it could be directly split into training-validation-testing
     '''
 
+    copy_index = []
+    for index,node in enumerate(final_combine_data):
+        if 'path' not in list(node.keys()):
+            copy_index.append(index)
+
+    for i in copy_index:
+        final_combine_data[i] = copy.deepcopy(final_combine_data[731])
 
     #Now here one can create a vocabulary
 
     for index,node in enumerate(final_combine_data):
         final_combine_data[index],relation_dict = idfy_relations_in_node(node,relation_dict=relation_dict,dbp=dbp)
+
 
 
 
@@ -264,7 +273,7 @@ def run(dataset):
 
 if __name__ == '__main__':
     run('lcquad')
-    run('qald')
+    # run('qald')
 
 #update the vector file and the vocab file
 #vocab file is word,index and the vector file is just vectors

@@ -4,9 +4,11 @@
 
 '''
 import numpy as np
-from utils import embeddings_interface
-from utils import natural_language_utilities as nlutils
+# from utils import embeddings_interface
+import requests
+# from utils import natural_language_utilities as nlutils
 import traceback
+import json
 
 class CreateSubgraph:
     def __init__(self,_dbpedia_interface,_predicate_blacklist,relation_file, qald=False):
@@ -51,7 +53,10 @@ class CreateSubgraph:
                 p = _predicates[i].decode("utf-8")
             except:
                 p = _predicates[i]
-            v_p = np.mean(embeddings_interface.vectorize(nlutils.tokenize(p), _embedding=self.EMBEDDING).astype(np.float), axis=0)
+            query = {'question':p}
+            v = requests.get("http://localhost:3500/vec", json=query)
+            v = np.asarray(v.json())
+            v_p = np.mean(v.astype(np.float), axis=0)
 
             # If either of them is a zero vector, the cosine is 0.\
             if np.sum(v_p) == 0.0 or np.sum(_v_qt) == 0.0 or p.strip() == "":
@@ -306,11 +311,14 @@ class CreateSubgraph:
         #Note that for now two length entitypaths_hop2_uri has not been implemented. The two entity sub graph is handled in a different manner.
 
         # Tokenize question
-        qt = nlutils.tokenize(_question, _remove_stopwords=False)
+        # qt = nlutils.tokenize(_question, _remove_stopwords=False)
 
         # Vectorize question
         # v_qt = " "
-        v_qt = np.mean(embeddings_interface.vectorize(qt, _embedding=self.EMBEDDING).astype(np.float), axis=0)
+        query = {'question': _question}
+        v = requests.get("http://localhost:3500/vec", json=query)
+        v = np.asarray(v.json())
+        v_qt = np.mean(v.astype(np.float), axis=0)
 
         if len(_entities) == 1:
 

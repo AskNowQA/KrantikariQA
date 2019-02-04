@@ -96,6 +96,8 @@ def start():
     :return:
     '''
     global quesans, dbp, subgraph_maker, relations, parameter_dict
+    _dataset = 'lcquad'
+    _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 
     device =  torch.device("cpu")
     dbp = dbi.DBPedia(caching=False)
@@ -111,28 +113,29 @@ def start():
     # Preparing configs
     parameter_dict = cl.runtime_parameters(dataset='lcquad', training_model=training_model,
                                            training_config=training_config, config_file='configs/macros.cfg')
-    parameter_dict['_dataset_specific_data_dir'] = qa._dataset_specific_data_dir
+    parameter_dict['_dataset_specific_data_dir'] = _dataset_specific_data_dir
     parameter_dict['_model_dir'] = './data/models/'
 
     parameter_dict['corechainmodel'] = training_model
-    parameter_dict['corechainmodelnumber'] = '42'
+    parameter_dict['corechainmodelnumber'] = '0'
 
     parameter_dict['intentmodel'] = 'bilstm_dense'
-    parameter_dict['intentmodelnumber'] = '14'
+    parameter_dict['intentmodelnumber'] = '1'
 
     parameter_dict['rdftypemodel'] = 'bilstm_dense'
-    parameter_dict['rdftypemodelnumber'] = '10'
+    parameter_dict['rdftypemodelnumber'] = '0'
 
     parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-    parameter_dict['rdfclassmodelnumber'] = '14'
+    parameter_dict['rdfclassmodelnumber'] = '1'
 
     parameter_dict['vectors'] = ei.vectors
 
     # Load relations dict
     relations = pickle.load(open(os.path.join(qa.COMMON_DATA_DIR,'relations.pickle'),'rb'),encoding='bytes')
 
+    print(parameter_dict)
     quesans = qa.QuestionAnswering(parameters=parameter_dict, pointwise=training_config,
-                                        word_to_id=None, device=device, debug=False)
+                                        word_to_id=None, device=device, debug=False, _dataset=_dataset)
 
     run(host=URL, port=PORT)
 
@@ -230,7 +233,7 @@ def answer_question(question):
     _graph['sparql'] = sparql
 
     #@TODO: handle error
-    answers = qa.sparql_answer(sparql)
+    answers = qa.sparql_answer(sparql,dbp)
     _graph['answers'] = answers
 
 

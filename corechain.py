@@ -212,7 +212,6 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                 'neg_rel2_batch_randomvec' : neg_rel2_randomvec_batch[:,:parameter_dict['rel1_pad']]
                             }
 
-                            return data_batch
                         else:
                             pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
                                                           dtype=torch.long, device=device)

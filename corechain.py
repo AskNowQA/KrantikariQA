@@ -169,26 +169,71 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                     data['dummy_y'] = torch.ones(ques_batch.shape[0], device=device)
 
                     if parameter_dict['schema'] != 'default':
-                        pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
-                                                      dtype=torch.long, device=device)
-                        pos_rel2_batch = torch.tensor(np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
-                                                      dtype=torch.long, device=device)
-                        neg_rel1_batch = torch.tensor(np.reshape(sample_batched[0][5], (-1, parameter_dict['max_length'])),
-                                                      dtype=torch.long, device=device)
-                        neg_rel2_batch = torch.tensor(np.reshape(sample_batched[0][6], (-1, parameter_dict['max_length'])),
-                                                      dtype=torch.long, device=device)
+
+                        if parameter_dict['schema'] == 'slotptr_randomvec':
+                            pos_rel1_batch = torch.tensor(
+                                np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            pos_rel2_batch = torch.tensor(
+                                np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            pos_rel1_randomvec_batch = torch.tensor(
+                                np.reshape(sample_batched[0][5], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            pos_rel2_randomvec_batch = torch.tensor(
+                                np.reshape(sample_batched[0][6], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            neg_rel1_batch = torch.tensor(
+                                np.reshape(sample_batched[0][7], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            neg_rel2_batch = torch.tensor(
+                                np.reshape(sample_batched[0][8], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            neg_rel1_randomvec_batch = torch.tensor(
+                                np.reshape(sample_batched[0][9], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            neg_rel2_randomvec_batch = torch.tensor(
+                                np.reshape(sample_batched[0][10 ], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
 
 
-                        data_batch = {
-                            'ques_batch': ques_batch,
-                            'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
-                            'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
-                            'y_label': data['dummy_y'],
-                            'pos_rel1_batch': pos_rel1_batch[:,:parameter_dict['rel1_pad']],
-                            'pos_rel2_batch':pos_rel2_batch[:,:parameter_dict['rel1_pad']],
-                            'neg_rel1_batch':neg_rel1_batch[:,:parameter_dict['rel1_pad']],
-                            'neg_rel2_batch' : neg_rel2_batch[:,:parameter_dict['rel1_pad']]
-                        }
+                            data_batch = {
+                                'ques_batch': ques_batch,
+                                'pos_batch': pos_batch[:, :parameter_dict['rel_pad']],
+                                'neg_batch': neg_batch[:, :parameter_dict['rel_pad']],
+                                'y_label': data['dummy_y'],
+                                'pos_rel1_batch': pos_rel1_batch[:, :parameter_dict['rel1_pad']],
+                                'pos_rel2_batch': pos_rel2_batch[:, :parameter_dict['rel1_pad']],
+                                'neg_rel1_batch': neg_rel1_batch[:, :parameter_dict['rel1_pad']],
+                                'neg_rel2_batch': neg_rel2_batch[:, :parameter_dict['rel1_pad']],
+                                'pos_rel1_batch_randomvec': pos_rel1_randomvec_batch[:,:parameter_dict['rel1_pad']],
+                                'pos_rel2_batch_randomvec' : pos_rel2_randomvec_batch[:,:parameter_dict['rel1_pad']],
+                                'neg_rel1_batch_randomvec' : neg_rel1_randomvec_batch[:,:parameter_dict['rel1_pad']],
+                                'neg_rel2_batch_randomvec' : neg_rel2_randomvec_batch[:,:parameter_dict['rel1_pad']]
+                            }
+
+                            return data_batch
+                        else:
+                            pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
+                                                          dtype=torch.long, device=device)
+                            pos_rel2_batch = torch.tensor(np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
+                                                          dtype=torch.long, device=device)
+                            neg_rel1_batch = torch.tensor(np.reshape(sample_batched[0][5], (-1, parameter_dict['max_length'])),
+                                                          dtype=torch.long, device=device)
+                            neg_rel2_batch = torch.tensor(np.reshape(sample_batched[0][6], (-1, parameter_dict['max_length'])),
+                                                          dtype=torch.long, device=device)
+
+
+                            data_batch = {
+                                'ques_batch': ques_batch,
+                                'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
+                                'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
+                                'y_label': data['dummy_y'],
+                                'pos_rel1_batch': pos_rel1_batch[:,:parameter_dict['rel1_pad']],
+                                'pos_rel2_batch':pos_rel2_batch[:,:parameter_dict['rel1_pad']],
+                                'neg_rel1_batch':neg_rel1_batch[:,:parameter_dict['rel1_pad']],
+                                'neg_rel2_batch' : neg_rel2_batch[:,:parameter_dict['rel1_pad']]
+                            }
 
                     else:
 
@@ -584,6 +629,8 @@ if __name__ == "__main__":
         schema = 'slotptr'
     elif training_model == 'bilstm_dot_multiencoder':
         schema = 'default'
+    elif training_model == 'slotptr_randomvec':
+        schema = 'slotptr_randomvec'
     else:
         schema = 'default'
 

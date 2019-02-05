@@ -583,7 +583,7 @@ if __name__ == "__main__":
 
     '''
         device = 'cpu'
-        training_model = 'slotptr'
+        training_model = 'slotptr_randomvec' #QelosSlotPointerModelRandomVec
         _dataset = 'lcquad'
         pointwise = False
         _train_over_validation = False
@@ -753,6 +753,12 @@ if __name__ == "__main__":
                                    weight_decay=0.0001,lr=0.0001)
             modeler.load_from(model_path)
 
+    if training_model == 'slotptr_randomvec':
+        modeler = net.QelosSlotPointerModelRandomVec(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                      _device=device, _pointwise=pointwise, _debug=False)
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
+                               weight_decay=0.0001)
 
     if training_model == 'bilstm_dot_skip':
         modeler = net.BiLstmDot_skip( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,

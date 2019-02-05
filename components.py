@@ -479,7 +479,7 @@ class HRBiLSTM(nn.Module):
         sum_q = _q + __q
         if self.debug: print("\nsum_q:\t\t", sum_q.shape)
 
-        # Pool it along the se        quence
+        # Pool it along the sequence
         h_q = torch.mean(sum_q, dim=0)
         if self.debug: print("\npooled_q:\t", h_q.shape)
 
@@ -798,7 +798,6 @@ class NotSuchABetterEncoder(nn.Module):
         ])
 
 
-
 class QelosFlatEncoder(nn.Module):
     def __init__(self, max_length, hidden_dim, number_of_layer,
                  embedding_dim, vocab_size, bidirectional, device,
@@ -926,6 +925,63 @@ class QelosSlotPtrChainEncoder(nn.Module):
     def forward(self, firstrels, secondrels):
         firstrels_enc = self.enc(firstrels)
         secondrels_enc = self.enc(secondrels)
+        # cat???? # TODO
+        enc = torch.cat([firstrels_enc, secondrels_enc], 1)
+        return enc
+
+
+class QelosSlotPtrChainEncoderRandomVec(nn.Module):
+    def __init__(self, max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional, device,
+                 dropout=0.0, mode='LSTM', enable_layer_norm=False,
+                 vectors=None, residual=False, dropout_in=0., dropout_rec=0,debug=False,encoder=False):
+        '''
+               :param max_length: Max length of the sequence.
+               :param hidden_dim: dimension of the output of the LSTM.
+               :param number_of_layer: Number of LSTM to be stacked.
+               :param embedding_dim: The output dimension of the embedding layer/ important only if vectors=none
+               :param vocab_size: Size of vocab / number of rows in embedding matrix
+               :param bidirectional: boolean - if true creates BIdir LStm
+               :param vectors: embedding matrix
+               :param debug: Bool/ prints shapes and some other meta data.
+               :param enable_layer_norm: Bool/ layer normalization.
+               :param mode: LSTM/GRU.
+               :param residual: Bool/ return embedded state of the input.
+
+           TODO: Implement multilayered shit someday.
+        '''
+        super(QelosSlotPtrChainEncoder, self).__init__()
+
+        self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = \
+            int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)
+        self.enable_layer_norm = enable_layer_norm
+        self.number_of_layer = number_of_layer
+        self.bidirectional = bidirectional
+        self.dropout = dropout
+        self.dropout_in, self.dropout_rec = dropout_in, dropout_rec
+        self.debug = debug
+        self.mode = mode
+        self.residual = residual
+        self.device = device
+
+        self.enc = QelosFlatEncoder(max_length, hidden_dim, number_of_layer,
+                 embedding_dim, vocab_size, bidirectional, device, dropout=0.5, mode='LSTM',
+                 enable_layer_norm=False, vectors=vectors, residual=self.residual,
+                 dropout_in=self.dropout_in, dropout_rec=self.dropout_rec, debug=False,encoder=encoder)#.to(device)
+
+    def forward(self, firstrels,firstrels_randomvec, secondrels, secondrels_randomvec):
+        firstrels_enc = self.enc(firstrels)
+        firstrels_enc_randomvec = self.enc(firstrels_randomvec)
+        firstrels_enc = \
+            torch.mean(torch.stack((firstrels_enc, firstrels_enc_randomvec), dim=1), dim=1)
+
+
+        secondrels_enc = self.enc(secondrels)
+        secondrels_enc_randomvec = self.enc(secondrels_randomvec)
+
+        secondrels_enc = \
+            torch.mean(torch.stack((secondrels_enc, secondrels_enc_randomvec), dim=1), dim=1)
+
         # cat???? # TODO
         enc = torch.cat([firstrels_enc, secondrels_enc], 1)
         return enc

@@ -137,8 +137,18 @@ def save_model(loc, modeler, model_name='model.torch', epochs=0, optimizer=None,
 def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  modeler, device, *path_rel):
 
     if path_rel:
-        valid_pos_paths_rel1, valid_pos_paths_rel2, valid_neg_paths_rel1, valid_neg_paths_rel2 = path_rel[0],path_rel[1],path_rel[2],path_rel[3]
-
+        if len(path_rel) == 4:
+            valid_pos_paths_rel1, valid_pos_paths_rel2, valid_neg_paths_rel1, valid_neg_paths_rel2 = path_rel[0],path_rel[1],path_rel[2],path_rel[3]
+        else:
+            valid_pos_paths_rel1, valid_pos_paths_rel2, \
+            valid_pos_paths_rel1_randomvec, valid_pos_paths_rel2_randomvec, \
+            valid_neg_paths_rel1, valid_neg_paths_rel2, \
+            valid_neg_paths_rel1_randomvec, valid_neg_paths_rel2_randomvec    = path_rel[0], \
+                                                                                                     path_rel[1], \
+                                                                                                     path_rel[2], \
+                                                                                                     path_rel[3], \
+                                                                                path_rel[4], path_rel[5], path_rel[6], \
+                                                                                path_rel[7]
     precision = []
     with torch.no_grad():
         print(len(valid_questions))
@@ -148,6 +158,9 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  mode
             if path_rel:
                 vnr1 = [valid_neg_paths_rel1[i][ind] for ind in valid_index ]
                 vnr2 = [valid_neg_paths_rel2[i][ind] for ind in valid_index ]
+                if len(path_rel) > 4:
+                    vnr1_randomvec = [valid_neg_paths_rel1_randomvec[i][ind] for ind in valid_index]
+                    vnr2_randomvec = [valid_neg_paths_rel2_randomvec[i][ind] for ind in valid_index]
             # paths = np.vstack((valid_pos_paths[i].reshape(1, -1), valid_neg_paths[i]))
             paths = np.vstack((vnp,valid_pos_paths[i].reshape(1, -1)))
             question = np.repeat(valid_questions[i].reshape(1, -1), len(vnp) + 1,
@@ -157,12 +170,21 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  mode
                 paths_rel2 = np.vstack((vnr2,valid_pos_paths_rel2[i].reshape(1, -1)))
                 paths_rel1 = torch.tensor(paths_rel1, dtype=torch.long, device=device)
                 paths_rel2 = torch.tensor(paths_rel2, dtype=torch.long, device=device)
+                if len(path_rel) > 4:
+                    paths_rel1_randomvec = np.vstack((vnr1_randomvec, valid_pos_paths_rel1[i].reshape(1, -1)))
+                    paths_rel2_randomvec = np.vstack((vnr2_randomvec, valid_pos_paths_rel2[i].reshape(1, -1)))
+                    paths_rel1_randomvec = torch.tensor(paths_rel1_randomvec, dtype=torch.long, device=device)
+                    paths_rel2_randomvec = torch.tensor(paths_rel2_randomvec, dtype=torch.long, device=device)
 
             question = torch.tensor(question, dtype=torch.long, device=device)
             paths = torch.tensor(paths, dtype=torch.long, device=device)
 
             if path_rel:
-                score = modeler.predict(question, paths, paths_rel1, paths_rel2, device)
+                if len(path_rel) == 4:
+                    score = modeler.predict(question, paths, paths_rel1, paths_rel2, device)
+                else:
+                    score = modeler.predict(question,paths,paths_rel1,paths_rel1_randomvec,
+                                            paths_rel2,paths_rel2_randomvec,device)
             else:
                 score = modeler.predict(question, paths, device)
             arg_max = torch.argmax(score)

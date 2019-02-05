@@ -950,7 +950,7 @@ class QelosSlotPtrChainEncoderRandomVec(nn.Module):
 
            TODO: Implement multilayered shit someday.
         '''
-        super(QelosSlotPtrChainEncoder, self).__init__()
+        super(QelosSlotPtrChainEncoderRandomVec, self).__init__()
 
         self.max_length, self.hidden_dim, self.embedding_dim, self.vocab_size = \
             int(max_length), int(hidden_dim), int(embedding_dim), int(vocab_size)

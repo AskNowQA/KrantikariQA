@@ -1302,7 +1302,7 @@ class QelosSlotPointerModelRandomVec(Model):
 
     def _train_pointwise_(self, data, optimizer, loss_fn, device):
 
-        rasie NotImplementedError
+        raise NotImplementedError
         ques_batch, path_1_batch, path_2_batch, y_label = \
             data['ques_batch'], data['path_rel1_batch'], data['path_rel2_batch'], data['y_label']
 
@@ -1327,7 +1327,8 @@ class QelosSlotPointerModelRandomVec(Model):
 
         return loss
 
-    def predict(self, ques, paths, paths_rel1,paths_rel2, device,attention_value=False):
+    def predict(self, ques, paths, paths_rel1, paths_rel1_randomvec,
+                paths_rel2, paths_rel2_randomvec, device,attention_value=False):
         """
             Same code works for both pairwise or pointwise
         """
@@ -1338,10 +1339,12 @@ class QelosSlotPointerModelRandomVec(Model):
             # Have to manually check if the 2nd paths holds anything in this batch.
             # If not, we have to pad everything up with zeros, or even call a limited part of the comparison module.
             paths_rel2 = tu.no_one_left_behind(paths_rel2)
+            paths_rel2_randomvec = tu.no_one_left_behind(paths_rel2_randomvec)
 
             # Encoding all the data
             ques_encoded,attention_score = self.encoder_q(tu.trim(ques))
-            path_encoded = self.encoder_p(tu.trim(paths_rel1), tu.trim(paths_rel2))
+            path_encoded = self.encoder_p(tu.trim(paths_rel1), tu.trim(paths_rel1_randomvec),
+                                          tu.trim(paths_rel2), tu.trim(paths_rel2_randomvec))
 
             # Pass them to the comparison module
             score = torch.sum(ques_encoded * path_encoded, dim=-1)

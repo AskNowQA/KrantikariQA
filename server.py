@@ -115,16 +115,16 @@ def start():
     parameter_dict['_model_dir'] = './data/models/'
 
     parameter_dict['corechainmodel'] = training_model
-    parameter_dict['corechainmodelnumber'] = '42'
+    parameter_dict['corechainmodelnumber'] = '0'
 
     parameter_dict['intentmodel'] = 'bilstm_dense'
-    parameter_dict['intentmodelnumber'] = '14'
+    parameter_dict['intentmodelnumber'] = '0'
 
     parameter_dict['rdftypemodel'] = 'bilstm_dense'
-    parameter_dict['rdftypemodelnumber'] = '10'
+    parameter_dict['rdftypemodelnumber'] = '0'
 
     parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-    parameter_dict['rdfclassmodelnumber'] = '14'
+    parameter_dict['rdfclassmodelnumber'] = '0'
 
     parameter_dict['vectors'] = ei.vectors
 

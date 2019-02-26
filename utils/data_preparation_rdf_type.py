@@ -54,7 +54,7 @@ COMMON_DIR = 'data/data/common/'
 LCQUAD_DIR = 'data/data/lcquad/'
 QALD_DIR = 'data/data/qald/'
 
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
 rdf_type_lookup = []
 

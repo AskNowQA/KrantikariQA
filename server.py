@@ -100,7 +100,7 @@ def start():
     _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 
     device =  torch.device("cpu")
-    dbp = dbi.DBPedia(caching=False)
+    dbp = dbi.DBPedia(caching=True)
 
     training_config = False
     training_model = "bilstm_dot"

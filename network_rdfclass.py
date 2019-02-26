@@ -79,7 +79,7 @@ if __name__ == "__main__":
     parameter_dict['schema'] = 'default'
 
     # DBP instance is used just to get labels
-    dbp = db_interface.DBPedia(_verbose=True, caching=False)
+    dbp = db_interface.DBPedia(_verbose=True, caching=True)
 
     data = dl.load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _file, _max_sequence_length,
                         _neg_paths_per_epoch_train,

@@ -16,7 +16,7 @@ from datasetPreparation import rdf_candidates as rdfc
 
 class CreateDataNode():
     def __init__(self,_predicate_blacklist,_relation_file,_qald=False):
-        self.dbp = db_interface.DBPedia(caching=False)
+        self.dbp = db_interface.DBPedia(caching=True)
         self.relation_file = _relation_file
         self.predicate_blacklist = _predicate_blacklist
         self.qald = _qald

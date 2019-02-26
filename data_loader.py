@@ -34,7 +34,7 @@ config = ConfigParser.RawConfigParser()
 config.read('configs/macros.cfg')
 
 SEED = config.getint('Commons', 'seed')
-dbp = db_interface.DBPedia(_verbose=True, caching=False)
+dbp = db_interface.DBPedia(_verbose=True, caching=True)
 COMMON_DATA_DIR = 'data/data/common'
 
 embeddings_interface.__check_prepared__()

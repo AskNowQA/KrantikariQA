@@ -11,10 +11,11 @@
         /answer -> returns answers to the user question
         /sparql -> returns sparql formed for the user question
     >template requests code
-        import requests
+        import requests, os
+        # os.environ['NO_PROXY'] = 'localhost'
         question = 'What is the capital of India ?'
         headers = {'Accept': 'text/plain', 'Content-type': 'application/json'}
-        answer = requests.get('http://localhost:9000/answer',data={'question':question},headers=headers)
+        answer = requests.get('http://localhost:9000/graph',data={'question':question},headers=headers)
         print answer.content
     >possible error codes are
         'no_entity' --> No entity returned by the entity linker
@@ -66,6 +67,14 @@ def get_entities(question):
         :param question: question in non-vectorized version
         :return: entities list
     """
+
+    HTTP_PROXY = 'http://webproxy.iai.uni-bonn.de:3128'
+    HTTPS_PROXY = 'http://webproxy.iai.uni-bonn.de:3128'
+    proxyDict = {
+        "http": HTTP_PROXY,
+        "https": HTTPS_PROXY
+        }
+
     headers = {
         'Content-Type': 'application/json',
     }
@@ -73,7 +82,7 @@ def get_entities(question):
     # data = {"nlquery":question}
     # data = str(data)
     data = '{"nlquery":"%(p)s"}'% {"p":question}
-    response = requests.post('http://sda.tech/earl/api/processQuery', headers=headers, data=data)
+    response = requests.post('http://sda.tech/earl/api/processQuery', headers=headers, data=data, proxies=proxyDict)
     a = json.loads(response.content)
     entity_list = []
     for i in range(len(a['ertypes'])):
@@ -117,18 +126,18 @@ def start():
     parameter_dict['_model_dir'] = './data/models/'
 
     parameter_dict['corechainmodel'] = training_model
-    parameter_dict['corechainmodelnumber'] = '0'
+    parameter_dict['corechainmodelnumber'] = '1'
 
     parameter_dict['intentmodel'] = 'bilstm_dense'
 
-    parameter_dict['intentmodelnumber'] = '1'
+    parameter_dict['intentmodelnumber'] = '0'
 
     parameter_dict['rdftypemodel'] = 'bilstm_dense'
     parameter_dict['rdftypemodelnumber'] = '0'
 
     parameter_dict['rdfclassmodel'] = 'bilstm_dot'
 
-    parameter_dict['rdfclassmodelnumber'] = '1'
+    parameter_dict['rdfclassmodelnumber'] = '2'
 
 
     parameter_dict['vectors'] = ei.vectors
@@ -248,6 +257,7 @@ def answer():
     try:
         question = request.forms['question']
         _graph = answer_question(question)
+        _graph['answers'] = [i.decode('utf-8') for i in _graph['answers']]
         return json.dumps(_graph)
     except:
         raise HTTPError(500, 'Internal Server Error')
@@ -256,7 +266,7 @@ def answer():
 
 
 
-if __name__ == 'main':
+if __name__ == "__main__":
     try:
         URL = sys.argv[1]
     except IndexError:
@@ -266,6 +276,7 @@ if __name__ == 'main':
     except (IndexError, TypeError):
         pass
 
+    GPU = 'not supported for now.'
 
     print("About to start server on %(url)s:%(port)s" % {'url': URL, 'port': str(PORT), 'gpu': str(GPU)})
     print("initilizing models and databases ... ")

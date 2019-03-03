@@ -9,6 +9,9 @@ import requests
 # from utils import natural_language_utilities as nlutils
 import traceback
 import json
+import os
+os.environ['NO_PROXY'] = 'localhost'
+
 
 class CreateSubgraph:
     def __init__(self,_dbpedia_interface,_predicate_blacklist,relation_file, qald=False):

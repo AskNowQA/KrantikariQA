@@ -9,9 +9,9 @@ os.environ['QT_QPA_PLATFORM']='offscreen'
 import torch
 import traceback
 
-sys.path.append('/data/priyansh/conda/fastai')
-import fastai
-from fastai.text import *
+# sys.path.append('/data/priyansh/conda/fastai')
+# import fastai
+# from fastai.text import *
 
 # from qelos_core.scripts.lcquad.corerank import FlatEncoder
 

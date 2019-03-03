@@ -8,9 +8,9 @@ import numpy as np
 import progressbar #progressbar2
 
 # This code will NOT work locally.
-sys.path.append('/data/priyansh/conda/fastai')
+# sys.path.append('/data/priyansh/conda/fastai')
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
-from fastai.text import *
+# from fastai.text import *
 
 DEBUG = True
 vectors, vocab, temp_vocab_id = [], {}, {'_pad_':(0,False), '_unk_':(1,False), '+':(2,False), '-':(3,False),
@@ -35,7 +35,7 @@ parsed_location = './resources'
 glove_location = \
     {
         'dir': "./resources",
-        'raw': "glove.840B.300d.txt",
+        'raw': "glove.42B.300d.txt",
         'vec': "vectors_gl.npy",
         'voc': "vocab_gl.pickle"
     }

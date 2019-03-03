@@ -23,6 +23,9 @@ import pickle
 import redis
 import json
 import re
+import os
+
+os.environ['NO_PROXY'] = 'localhost'
 
 # Our scripts
 
@@ -41,7 +44,8 @@ except ImportError:
 # DBPEDIA_ENDPOINTS = ['http://localhost:8890/sparql/']
 # DBPEDIA_ENDPOINTS = ['http://131.220.153.66:7890/sparql']
 # DBPEDIA_ENDPOINTS = ['http://localhost:8164/sparql/']
-DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8164/sparql']
+DBPEDIA_ENDPOINTS = ['http://localhost:8164/sparql']
+# DBPEDIA_ENDPOINTS = ['http://sda-srv01.iai.uni-bonn.de:8164/sparql']
 REDIS_HOSTNAME = 'localhost'
 #REDIS_HOSTNAME  = '127.0.0.1'
 MAX_WAIT_TIME = 1.0

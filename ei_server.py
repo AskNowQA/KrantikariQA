@@ -1,17 +1,18 @@
 from bottle import get, request, run, response, HTTPError
-# from utils import embeddings_interface
+from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
 import numpy as np
 
+import json
 @get('/vec')
 def vocabularize():
     question = request.json['question']
     vec = embeddings_interface.vectorize(nlutils.tokenize(question), _embedding=EMBEDDING).astype(np.float).tolist()
-    return vec
+    return json.loads(vec)
 
 if __name__ == '__main__':
 
-    # embeddings_interface.__check_prepared__()
+    embeddings_interface.__check_prepared__()
 
     EMBEDDING = 'glove'
     URL = 'localhost'

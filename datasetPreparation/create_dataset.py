@@ -5,13 +5,17 @@
     >Send the entity to the entity_subgraph class to retrive the required subgraph
     >Pack it in specific manner
 '''
+import os
 import requests
 import traceback
+
 import qald_parser as qp
 import utils.natural_language_utilities as nlutils
 from datasetPreparation import entity_subgraph as es
 from utils import dbpedia_interface as db_interface
 from datasetPreparation import rdf_candidates as rdfc
+
+os.environ['NO_PROXY'] = 'localhost'
 
 
 class CreateDataNode():

@@ -16,7 +16,7 @@
         question = 'What is the capital of India ?'
         headers = {'Accept': 'text/plain', 'Content-type': 'application/json'}
         answer = requests.get('http://localhost:9000/graph',data={'question':question},headers=headers)
-        print answer.content
+                print answer.content
     >possible error codes are
         'no_entity' --> No entity returned by the entity linker
         'no_best_path' --> No candidate paths created
@@ -92,7 +92,6 @@ def get_entities(question):
 
 
 
-
 def start():
     '''
         Pulls the parameters from disk
@@ -112,7 +111,7 @@ def start():
     dbp = dbi.DBPedia(caching=True)
 
     training_config = False
-    training_model = "bilstm_dot"
+    training_model = "slotptr"
 
     predicate_blacklist = open('resources/predicate.blacklist').readlines()
     predicate_blacklist[-1] = predicate_blacklist[-1] + '\n'
@@ -126,7 +125,7 @@ def start():
     parameter_dict['_model_dir'] = './data/models/'
 
     parameter_dict['corechainmodel'] = training_model
-    parameter_dict['corechainmodelnumber'] = '1'
+    parameter_dict['corechainmodelnumber'] = '0'
 
     parameter_dict['intentmodel'] = 'bilstm_dense'
 
@@ -149,7 +148,7 @@ def start():
     quesans = qa.QuestionAnswering(parameters=parameter_dict, pointwise=training_config,
                                         word_to_id=None, device=device, debug=False, _dataset=_dataset)
 
-    run(host=URL, port=PORT)
+    # run(host=URL, port=PORT)
 
 
 def answer_question(question):
@@ -195,7 +194,7 @@ def answer_question(question):
     paths_sf = hop1+hop2
 
     if parameter_dict['corechainmodel'] == 'slotptr':
-        paths_rel1_sp, paths_rel2_sp, _, _ = qa.create_rd_sp_paths(paths)
+        paths_rel1_sp, paths_rel2_sp, _, _ = qa.create_rd_sp_paths(paths,no_reldet=True)
         output = quesans._predict_corechain(question_id, paths, paths_rel1_sp, paths_rel2_sp)
     elif parameter_dict['corechainmodel'] == 'bilstm_dot':
         output = quesans._predict_corechain(question_id, np.asarray(paths))

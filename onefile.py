@@ -450,7 +450,7 @@ def create_sparql(log, data, embeddings_interface, relations):
                                         embeddings_interface=embeddings_interface)
 
 
-def create_rd_sp_paths(paths):
+def create_rd_sp_paths(paths,no_reldet=False):
     special_char = [embeddings_interface.vocabularize(['+']), embeddings_interface.vocabularize(['-'])]
     dummy_path = [0]
     paths_rel1_sp = []
@@ -466,10 +466,16 @@ def create_rd_sp_paths(paths):
             >>>>IMPLEMENT THIS<<<<
             >>>>IMPLEMENT THIS<<<<
         '''
-        paths_rel1_rd.append([dl.relation_table_lookup_reverse(p1,glove_id_sf_to_glove_id_rel)])
+        if no_reldet:
+            paths_rel1_rd.append(p1)
+        else:
+            paths_rel1_rd.append([dl.relation_table_lookup_reverse(p1,glove_id_sf_to_glove_id_rel)])
         if p2 is not None:
             paths_rel2_sp.append(p2)
-            paths_rel2_rd.append([dl.relation_table_lookup_reverse(p2,glove_id_sf_to_glove_id_rel)])
+            if no_reldet:
+                paths_rel2_rd.append(p2)
+            else:
+                paths_rel2_rd.append([dl.relation_table_lookup_reverse(p2,glove_id_sf_to_glove_id_rel)])
         else:
             paths_rel2_sp.append(dummy_path)
             paths_rel2_rd.append(dummy_path)

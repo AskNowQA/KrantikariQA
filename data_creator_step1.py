@@ -119,8 +119,10 @@ if __name__ == "__main__":
 
     if dataset == 'lcquad':
         _save_location = 'data/data/raw/lcquad'
-    else:
+    elif dataset == 'qald':
         _save_location = 'data/data/raw/qald'
+    elif dataset == 'qg':
+        _save_location = 'data/data/raw/qg'
 
     file_name = start_index+file_name
 
@@ -139,6 +141,8 @@ if __name__ == "__main__":
     elif dataset == 'qald':
         qald_train = json.load(open('resources/qald-7-train-multilingual.json'))
         _dataset = convert_qald_to_lcquad(qald_train)
+    elif dataset == 'qg':
+        _dataset = json.load(open('resources/qg_version_1.json'))
 
 
     if end_index == -1:
@@ -159,5 +163,10 @@ if __name__ == "__main__":
             _file_name=file_name,
             _predicate_blacklist=pb, _relation_file={}, return_data=False, _qald=True)
 
+    if dataset == 'qg':
+        run(_dataset=_dataset, _save_location_success=_save_location_success
+            , _save_location_unsuccess=_save_location_unsuccess,
+            _file_name=file_name,
+            _predicate_blacklist=pb, _relation_file={}, return_data=False, _qald=True)
 
 

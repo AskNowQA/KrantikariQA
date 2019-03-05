@@ -705,12 +705,20 @@ def create_dataset_runtime(file,_dataset,_dataset_specific_data_dir,split_point=
 
     if _dataset == 'qald':
         id_data_test = json.load(open(os.path.join(_dataset_specific_data_dir , file)))
+
     elif _dataset == 'lcquad':
         # Load the main data
         id_data = json.load(open(os.path.join(_dataset_specific_data_dir , file)))
 
         # Split it.
         id_data_test = id_data[int(.80*len(id_data)):]
+
+    elif _dataset == 'qg':
+        id_data = json.load(open(os.path.join(_dataset_specific_data_dir, file)))
+
+        # Split it.
+        id_data_test = id_data[int(.80 * len(id_data)):]
+
     else:
         print("warning: Functionality for transfer-a,transfer-b,transfer-c and proper-tranfer-qald is not implemented.")
         id_data_test = []

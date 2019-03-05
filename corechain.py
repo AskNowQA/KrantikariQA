@@ -609,7 +609,7 @@ if __name__ == "__main__":
     '''
         device = 'cpu'
         training_model = 'slotptr_randomvec' #QelosSlotPointerModelRandomVec
-        _dataset = 'lcquad'
+        _dataset = 'qg'
         pointwise = False
         _train_over_validation = False
         bidirectional = True
@@ -633,11 +633,12 @@ if __name__ == "__main__":
     else:
         training_config = 'pairwise'
 
+    # CoreChain parameters needs to be updated to support qg configs
     parameter_dict = cl.corechain_parameters(dataset=_dataset,training_model=training_model,
                                              training_config=training_config,config_file='configs/macros.cfg')
 
 
-    if _dataset == 'lcquad':
+    if _dataset == 'lcquad' or _dataset == 'qg':
         test_every = parameter_dict['test_every']
     else:
         test_every = False

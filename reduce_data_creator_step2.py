@@ -276,6 +276,7 @@ def run(dataset):
 if __name__ == '__main__':
     run('lcquad')
     # run('qald')
+    # run('qg')
 
 #update the vector file and the vocab file
 #vocab file is word,index and the vector file is just vectors

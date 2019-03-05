@@ -169,26 +169,72 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                     data['dummy_y'] = torch.ones(ques_batch.shape[0], device=device)
 
                     if parameter_dict['schema'] != 'default':
-                        pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
-                                                      dtype=torch.long, device=device)
-                        pos_rel2_batch = torch.tensor(np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
-                                                      dtype=torch.long, device=device)
-                        neg_rel1_batch = torch.tensor(np.reshape(sample_batched[0][5], (-1, parameter_dict['max_length'])),
-                                                      dtype=torch.long, device=device)
-                        neg_rel2_batch = torch.tensor(np.reshape(sample_batched[0][6], (-1, parameter_dict['max_length'])),
-                                                      dtype=torch.long, device=device)
+
+                        if parameter_dict['schema'] == 'slotptr_randomvec':
+                            pos_rel1_batch = torch.tensor(
+                                np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            pos_rel2_batch = torch.tensor(
+                                np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            pos_rel1_randomvec_batch = torch.tensor(
+                                np.reshape(sample_batched[0][5], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            pos_rel2_randomvec_batch = torch.tensor(
+                                np.reshape(sample_batched[0][6], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            neg_rel1_batch = torch.tensor(
+                                np.reshape(sample_batched[0][7], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            neg_rel2_batch = torch.tensor(
+                                np.reshape(sample_batched[0][8], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            neg_rel1_randomvec_batch = torch.tensor(
+                                np.reshape(sample_batched[0][9], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+                            neg_rel2_randomvec_batch = torch.tensor(
+                                np.reshape(sample_batched[0][10 ], (-1, parameter_dict['max_length'])),
+                                dtype=torch.long, device=device)
+
+                            t = 2
+                            tt = 6
+
+                            data_batch = {
+                                'ques_batch': ques_batch,
+                                'pos_batch': pos_batch[:, :parameter_dict['rel_pad']],
+                                'neg_batch': neg_batch[:, :parameter_dict['rel_pad']],
+                                'y_label': data['dummy_y'],
+                                'pos_rel1_batch': pos_rel1_batch[:, :tt],
+                                'pos_rel2_batch': pos_rel2_batch[:, :tt],
+                                'neg_rel1_batch': neg_rel1_batch[:, :tt],
+                                'neg_rel2_batch': neg_rel2_batch[:, :tt],
+                                'pos_rel1_batch_randomvec': pos_rel1_randomvec_batch[:,:t],
+                                'pos_rel2_batch_randomvec' : pos_rel2_randomvec_batch[:,:t],
+                                'neg_rel1_batch_randomvec' : neg_rel1_randomvec_batch[:,:t],
+                                'neg_rel2_batch_randomvec' : neg_rel2_randomvec_batch[:,:t]
+                            }
+
+                        else:
+                            pos_rel1_batch = torch.tensor(np.reshape(sample_batched[0][3], (-1, parameter_dict['max_length'])),
+                                                          dtype=torch.long, device=device)
+                            pos_rel2_batch = torch.tensor(np.reshape(sample_batched[0][4], (-1, parameter_dict['max_length'])),
+                                                          dtype=torch.long, device=device)
+                            neg_rel1_batch = torch.tensor(np.reshape(sample_batched[0][5], (-1, parameter_dict['max_length'])),
+                                                          dtype=torch.long, device=device)
+                            neg_rel2_batch = torch.tensor(np.reshape(sample_batched[0][6], (-1, parameter_dict['max_length'])),
+                                                          dtype=torch.long, device=device)
 
 
-                        data_batch = {
-                            'ques_batch': ques_batch,
-                            'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
-                            'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
-                            'y_label': data['dummy_y'],
-                            'pos_rel1_batch': pos_rel1_batch[:,:parameter_dict['rel1_pad']],
-                            'pos_rel2_batch':pos_rel2_batch[:,:parameter_dict['rel1_pad']],
-                            'neg_rel1_batch':neg_rel1_batch[:,:parameter_dict['rel1_pad']],
-                            'neg_rel2_batch' : neg_rel2_batch[:,:parameter_dict['rel1_pad']]
-                        }
+                            data_batch = {
+                                'ques_batch': ques_batch,
+                                'pos_batch': pos_batch[:,:parameter_dict['rel_pad']],
+                                'neg_batch': neg_batch[:,:parameter_dict['rel_pad']],
+                                'y_label': data['dummy_y'],
+                                'pos_rel1_batch': pos_rel1_batch[:,:parameter_dict['rel1_pad']],
+                                'pos_rel2_batch':pos_rel2_batch[:,:parameter_dict['rel1_pad']],
+                                'neg_rel1_batch':neg_rel1_batch[:,:parameter_dict['rel1_pad']],
+                                'neg_rel2_batch' : neg_rel2_batch[:,:parameter_dict['rel1_pad']]
+                            }
 
                     else:
 
@@ -260,6 +306,18 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                             test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
                                                              data['test_neg_paths'],modeler, device, data['test_pos_paths_rel1_sp'],data['test_pos_paths_rel2_sp'],
                                                                  data['test_neg_paths_rel1_sp'],data['test_neg_paths_rel2_sp']))
+                        elif parameter_dict['schema'] == 'slotptr_randomvec':
+                            test_accuracy.append(
+                                aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
+                                                        data['test_neg_paths'], modeler, device,
+                                                        data['test_pos_paths_rel1_sp'],
+                                                        data['test_pos_paths_rel2_sp'],
+                                                        data['test_pos_paths_rel1_rd'],
+                                                        data['test_pos_paths_rel2_rd'],
+                                                        data['test_neg_paths_rel1_sp'],
+                                                        data['test_neg_paths_rel2_sp'],
+                                                        data['test_neg_paths_rel1_rd'],
+                                                        data['test_neg_paths_rel1_rd']))
                         else:
                             test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
                                                                          data['test_neg_paths'], modeler, device,
@@ -285,6 +343,18 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                             valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
                                                               data['valid_neg_paths'],  modeler, device, data['valid_pos_paths_rel1_sp'],data['valid_pos_paths_rel2_sp'],
                                                                  data['valid_neg_paths_rel1_sp'],data['valid_neg_paths_rel2_sp']))
+                        elif parameter_dict['schema'] == 'slotptr_randomvec':
+                            valid_accuracy.append(
+                                aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
+                                                        data['valid_neg_paths'], modeler, device,
+                                                        data['valid_pos_paths_rel1_sp'],
+                                                        data['valid_pos_paths_rel2_sp'],
+                                                        data['valid_pos_paths_rel1_rd'],
+                                                        data['valid_pos_paths_rel2_rd'],
+                                                        data['valid_neg_paths_rel1_sp'],
+                                                        data['valid_neg_paths_rel2_sp'],
+                                                        data['valid_neg_paths_rel1_rd'],
+                                                        data['valid_neg_paths_rel1_rd']))
                         else:
                             valid_accuracy.append(aux.validation_accuracy(data['valid_questions'][:-1], data['valid_pos_paths'][:-1],
                                                                           data['valid_neg_paths'][:-1], modeler, device,
@@ -538,7 +608,7 @@ if __name__ == "__main__":
 
     '''
         device = 'cpu'
-        training_model = 'slotptr'
+        training_model = 'slotptr_randomvec' #QelosSlotPointerModelRandomVec
         _dataset = 'lcquad'
         pointwise = False
         _train_over_validation = False
@@ -584,6 +654,8 @@ if __name__ == "__main__":
         schema = 'slotptr'
     elif training_model == 'bilstm_dot_multiencoder':
         schema = 'default'
+    elif training_model == 'slotptr_randomvec':
+        schema = 'slotptr_randomvec'
     else:
         schema = 'default'
 
@@ -706,6 +778,12 @@ if __name__ == "__main__":
                                    weight_decay=0.0001,lr=0.0001)
             modeler.load_from(model_path)
 
+    if training_model == 'slotptr_randomvec':
+        modeler = net.QelosSlotPointerModelRandomVec(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                      _device=device, _pointwise=pointwise, _debug=False)
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
+                               weight_decay=0.0001)
 
     if training_model == 'bilstm_dot_skip':
         modeler = net.BiLstmDot_skip( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,

@@ -812,6 +812,20 @@ class TrainingDataGenerator(Dataset):
             self.neg_paths_rel1 = data['train_neg_paths_rel1_rd']
             self.neg_paths_rel2 = data['train_neg_paths_rel2_rd']
 
+        elif schema == 'slotptr_randomvec':
+            #regular slotptr
+            self.pos_paths_rel1 = data['train_pos_paths_rel1_sp']
+            self.pos_paths_rel2 = data['train_pos_paths_rel2_sp']
+            self.neg_paths_rel1 = data['train_neg_paths_rel1_sp']
+            self.neg_paths_rel2 = data['train_neg_paths_rel2_sp']
+            #A random vector to be appended
+            self.pos_paths_rel1_randomvec = data['train_pos_paths_rel1_rd']
+            self.pos_paths_rel2_randomvec = data['train_pos_paths_rel2_rd']
+            self.neg_paths_rel1_randomvec = data['train_neg_paths_rel1_rd']
+            self.neg_paths_rel2_randomvec = data['train_neg_paths_rel2_rd']
+
+
+
         # self.questions = np.reshape(np.repeat(np.reshape(questions,
         #                                     (questions.shape[0], 1, questions.shape[1])),
         #                          neg_paths_per_epoch, axis=1), (-1, max_length))
@@ -853,6 +867,27 @@ class TrainingDataGenerator(Dataset):
                                                                   self.pos_paths_rel2.shape[0], 1, self.pos_paths_rel2.shape[1])),
                                                        self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
 
+            if self.schema == 'slotptr_randomvec':
+
+                self.neg_paths_rel1_randomvec_sampled = np.reshape(self.neg_paths_rel1_randomvec[:, sampling_index, :],
+                                                         (-1, self.max_length))
+
+                self.neg_paths_rel2_randomvec_sampled = np.reshape(self.neg_paths_rel2_randomvec[:, sampling_index, :],
+                                                         (-1, self.max_length))
+
+                self.pos_paths_rel1_randomvec = np.reshape(np.repeat(np.reshape(self.pos_paths_rel1_randomvec,
+                                                                      (
+                                                                          self.pos_paths_rel1_randomvec.shape[0], 1,
+                                                                          self.pos_paths_rel1_randomvec.shape[1])),
+                                                           self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+
+                self.pos_paths_rel2_randomvec = np.reshape(np.repeat(np.reshape(self.pos_paths_rel2_randomvec,
+                                                                      (
+                                                                          self.pos_paths_rel2_randomvec.shape[0], 1,
+                                                                          self.pos_paths_rel2_randomvec.shape[1])),
+                                                           self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+
+
         if schema == 'default':
 
             self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
@@ -860,7 +895,21 @@ class TrainingDataGenerator(Dataset):
 
         else:
 
-            self.questions_shuffled, self.pos_paths_shuffled, self.pos_paths_rel1_shuffled, self.pos_paths_rel2_shuffled, self.neg_paths_shuffled, self.neg_paths__rel1_shuffled, self.neg_paths__rel2_shuffled= \
+            if schema == 'slotptr_randomvec':
+                self.questions_shuffled, self.pos_paths_shuffled, \
+                self.pos_paths_rel1_shuffled, self.pos_paths_rel2_shuffled, \
+                self.pos_paths_rel1_randomvec_shuffled, self.pos_paths_rel2_randomvec_shuffled, \
+                self.neg_paths_shuffled, self.neg_paths__rel1_shuffled,\
+                self.neg_paths__rel2_shuffled, self.neg_paths_rel1_randomvec_shuffled, \
+                self.neg_paths_rel2_randomvec_shuffled= \
+                    shuffle(self.questions, self.pos_paths,
+                            self.pos_paths_rel1, self.pos_paths_rel2,
+                            self.pos_paths_rel1_randomvec,self.pos_paths_rel2_randomvec,
+                            self.neg_paths_sampled, self.neg_paths_rel1_sampled,
+                            self.neg_paths_rel2_sampled, self.neg_paths_rel1_randomvec_sampled,
+                            self.neg_paths_rel2_randomvec_sampled)
+            else:
+                self.questions_shuffled, self.pos_paths_shuffled, self.pos_paths_rel1_shuffled, self.pos_paths_rel2_shuffled, self.neg_paths_shuffled, self.neg_paths__rel1_shuffled, self.neg_paths__rel2_shuffled= \
                 shuffle(self.questions, self.pos_paths, self.pos_paths_rel1, self.pos_paths_rel2 ,self.neg_paths_sampled, self.neg_paths_rel1_sampled, self.neg_paths_rel2_sampled)
 
         self.batch_size = batch_size
@@ -889,6 +938,11 @@ class TrainingDataGenerator(Dataset):
             batch_neg_paths_rel2 = index(self.neg_paths__rel2_shuffled)    # Shape (batch, seqlen)
             batch_pos_paths_rel1 = index(self.pos_paths_rel1_shuffled)    # Shape (batch, seqlen)
             batch_pos_paths_rel2 = index(self.pos_paths_rel2_shuffled)    # Shape (batch, seqlen)
+            if self.schema == 'slotptr_randomvec':
+                batch_neg_paths_rel1_randomvec = index(self.neg_paths_rel1_randomvec_shuffled)
+                batch_neg_paths_rel2_randomvec = index(self.neg_paths_rel2_randomvec_shuffled)
+                batch_pos_paths_rel1_randomvec = index(self.pos_paths_rel1_randomvec_shuffled)
+                batch_pos_paths_rel2_randomvec = index(self.pos_paths_rel2_randomvec_shuffled)
 
         if self.pointwise:
             self.batch_size = batch_questions.shape[0]
@@ -897,6 +951,8 @@ class TrainingDataGenerator(Dataset):
             if self.schema != 'default':
                 paths_rel1 = np.vstack((batch_pos_paths_rel1, batch_neg_paths_rel1))
                 paths_rel2 = np.vstack((batch_pos_paths_rel2, batch_neg_paths_rel2))
+                if self.schema == 'slotptr_randomvec':
+                    raise NotImplementedError
 
             # Now sample half of thesequestions = np.repeat(batch_questions)
             sample_index = np.random.choice(np.arange(0, 2*self.batch_size), self.batch_size)
@@ -912,8 +968,18 @@ class TrainingDataGenerator(Dataset):
             if self.schema == 'default':
                 return ([batch_questions, batch_pos_paths, batch_neg_paths], self.dummy_y)
             else:
-                return ([batch_questions, batch_pos_paths, batch_neg_paths, \
-                         batch_pos_paths_rel1,batch_pos_paths_rel2,batch_neg_paths_rel1,batch_neg_paths_rel2], self.dummy_y)
+                if self.schema == 'slotptr_randomvec':
+                    return ([batch_questions, \
+                             batch_pos_paths, batch_neg_paths, \
+                         batch_pos_paths_rel1,batch_pos_paths_rel2,
+                             batch_pos_paths_rel1_randomvec,\
+                             batch_pos_paths_rel2_randomvec,\
+                             batch_neg_paths_rel1,batch_neg_paths_rel2,\
+                             batch_neg_paths_rel1_randomvec,\
+                             batch_neg_paths_rel2_randomvec], self.dummy_y)
+                else:
+                    return ([batch_questions, batch_pos_paths, batch_neg_paths, \
+                             batch_pos_paths_rel1,batch_pos_paths_rel2,batch_neg_paths_rel1,batch_neg_paths_rel2], self.dummy_y)
 
     def shuffle(self):
         """
@@ -929,26 +995,49 @@ class TrainingDataGenerator(Dataset):
 
         if self.schema != 'default':
 
-            self.neg_paths_rel1_sampled = np.reshape(self.neg_paths_rel1[:,sampling_index, :],
-                                            (-1, self.max_length))
+            if self.schema == 'slotptr_randomvec':
 
-            self.neg_paths_rel2_sampled = np.reshape(self.neg_paths_rel2[:, sampling_index, :],
-                                                     (-1, self.max_length))
-            #
-            # self.pos_paths_rel1 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel1,
-            #                                                       (
-            #                                                       self.pos_paths_rel1.shape[0], 1, self.pos_paths_rel1.shape[1])),
-            #                                            self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
-            #
-            # self.pos_paths_rel2 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel2,
-            #                                                       (
-            #                                                       self.pos_paths_rel2.shape[0], 1, self.pos_paths_rel2.shape[1])),
-            #                                            self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+                self.neg_paths_rel1_randomvec_sampled = np.reshape(self.neg_paths_rel1_randomvec[:, sampling_index, :],
+                                                         (-1, self.max_length))
 
-            self.questions_shuffled, self.pos_paths_shuffled, self.pos_paths_rel1_shuffled,\
-            self.pos_paths_rel2_shuffled, self.neg_paths_shuffled, self.neg_paths__rel1_shuffled, self.neg_paths__rel2_shuffled = \
-                shuffle(self.questions, self.pos_paths, self.pos_paths_rel1, self.pos_paths_rel2,
-                        self.neg_paths_sampled, self.neg_paths_rel1_sampled, self.neg_paths_rel2_sampled)
+                self.neg_paths_rel2_randomvec_sampled = np.reshape(self.neg_paths_rel2_randomvec[:, sampling_index, :],
+                                                         (-1, self.max_length))
+
+
+                self.questions_shuffled, self.pos_paths_shuffled, \
+                self.pos_paths_rel1_shuffled, self.pos_paths_rel2_shuffled, \
+                self.pos_paths_rel1_randomvec_shuffled, self.pos_paths_rel2_randomvec_shuffled, \
+                self.neg_paths_shuffled, self.neg_paths__rel1_shuffled, \
+                self.neg_paths__rel2_shuffled, self.neg_paths_rel1_randomvec_shuffled, \
+                self.neg_paths_rel2_randomvec_shuffled = \
+                    shuffle(self.questions, self.pos_paths,
+                            self.pos_paths_rel1, self.pos_paths_rel2,
+                            self.pos_paths_rel1_randomvec, self.pos_paths_rel2_randomvec,
+                            self.neg_paths_sampled, self.neg_paths_rel1_sampled,
+                            self.neg_paths_rel2_sampled, self.neg_paths_rel1_randomvec_sampled,
+                            self.neg_paths_rel2_randomvec_sampled)
+            else:
+
+                self.neg_paths_rel1_sampled = np.reshape(self.neg_paths_rel1[:,sampling_index, :],
+                                                (-1, self.max_length))
+
+                self.neg_paths_rel2_sampled = np.reshape(self.neg_paths_rel2[:, sampling_index, :],
+                                                         (-1, self.max_length))
+                #
+                # self.pos_paths_rel1 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel1,
+                #                                                       (
+                #                                                       self.pos_paths_rel1.shape[0], 1, self.pos_paths_rel1.shape[1])),
+                #                                            self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+                #
+                # self.pos_paths_rel2 = np.reshape(np.repeat(np.reshape(self.pos_paths_rel2,
+                #                                                       (
+                #                                                       self.pos_paths_rel2.shape[0], 1, self.pos_paths_rel2.shape[1])),
+                #                                            self.neg_paths_per_epoch, axis=1), (-1, self.max_length))
+
+                self.questions_shuffled, self.pos_paths_shuffled, self.pos_paths_rel1_shuffled,\
+                self.pos_paths_rel2_shuffled, self.neg_paths_shuffled, self.neg_paths__rel1_shuffled, self.neg_paths__rel2_shuffled = \
+                    shuffle(self.questions, self.pos_paths, self.pos_paths_rel1, self.pos_paths_rel2,
+                            self.neg_paths_sampled, self.neg_paths_rel1_sampled, self.neg_paths_rel2_sampled)
         else:
             self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
                 shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)

@@ -313,7 +313,6 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
     :return:
 
     '''
-
     TEMP = data_loading_parameters(_dataset, _parameter_dict)
 
     _dataset_specific_data_dir,_model_specific_data_dir,_file,\

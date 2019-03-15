@@ -657,7 +657,7 @@ if __name__ == "__main__":
         schema = 'slotptr'
     elif training_model == 'bilstm_dot_multiencoder':
         schema = 'default'
-    elif training_model == 'slotptr_randomvec':
+    elif training_model == 'slotptr_randomvec' or training_model == 'bert_slotptr_randomvec':
         schema = 'slotptr_randomvec'
     else:
         schema = 'default'
@@ -667,6 +667,7 @@ if __name__ == "__main__":
     #     _, data['vectors'] = vocab_master.load_ulmfit()
     parameter_dict['vectors'] = data['vectors']
     parameter_dict['schema'] = schema
+    parameter_dict['vocab'] = pickle.load(open('resources/vocab_gl.pickle','rb' ))
     if not bidirectional:
         parameter_dict['bidirectional'] = False
 
@@ -858,6 +859,20 @@ if __name__ == "__main__":
 
     if training_model == 'bert_slotptr':
         modeler = net.Bert_Scorer_slotptr(_parameter_dict=parameter_dict,
+                              _word_to_id=_word_to_id,
+                              _device=device,
+                              _pointwise=pointwise,
+                              _debug=False)
+        opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
+        # optimizer = make_opt(modeler, opt_fn, lr=0.00)
+        # optimizer.param_groups[-1]['lr'] = 0.01
+        # optimizer.param_groups[-2]['lr'] = 0.001
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())), lr=0.00001)
+
+
+
+    if training_model == 'bert_slotptr_randomvec':
+        modeler = net.Bert_Scorer_slotptr_randomvec(_parameter_dict=parameter_dict,
                               _word_to_id=_word_to_id,
                               _device=device,
                               _pointwise=pointwise,

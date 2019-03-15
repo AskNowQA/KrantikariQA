@@ -1868,7 +1868,7 @@ class ULMFITQelosSlotPtrQuestionEncoder(nn.Module):
         ret = torch.cat([summaries[:, 0, :], summaries[:, 1, :]], 1)
         return ret, scores
 
-class AdaptedBERTEncoderSingle(torch.nn.Module):
+class AdaptedEncoderSingle(torch.nn.Module):
     pad_id = 0
 
     def __init__(self, bert, numout=2, oldvocab=None, specialmaps={0: [0]}, **kw):
@@ -2181,6 +2181,55 @@ class AdaptedBERTCompareSlotPtr(AdaptedBERTCompare):
         # compute relation encodings
         rel1_enc = self.right_enc(rel1)
         rel2_enc = self.right_enc(rel2)
+        relenc = torch.cat([rel1_enc, rel2_enc], 1)     # (batsize, 2*dim)
+
+        # compute output scores
+        dots = torch.einsum("bd,bd->b", [summaries, relenc])
+
+        # normalizin dots by dim: COMMENT THIS OUT IF DON'T WANT NORM DOTS BY DIM
+        dots = dots / math.sqrt(summaries.size(1))
+        return dots
+
+
+class AdaptedBERTCompareSlotPtrRandomVec(AdaptedBERTCompare):
+    def __init__(self, bert, oldvocab=None, specialmaps={0: [0]}, share_left_right=True, **kw):
+        super(AdaptedBERTCompareSlotPtrRandomVec, self).__init__(bert, oldvocab=oldvocab, specialmaps=specialmaps,
+                                                        share_left_right=share_left_right)
+        self.linear = torch.nn.Linear(bert.dim, 2)
+        self.sm = torch.nn.Softmax(1)
+
+    def reset_parameters(self):
+        super(AdaptedBERTCompareSlotPtr, self).reset_parameters()
+        self.linear.reset_parameters()
+
+    def forward(self, q, rel1, rel1_randomvec, rel2, rel2_randomvec):
+        qenc_final, qenc_layerouts, qenc_mask = self.left_enc(q, ret_layer_outs=True)
+        ys = qenc_layerouts[-1]
+
+        # compute scores
+        scores = self.linear(ys)
+        scores = scores + torch.log(qenc_mask.float().unsqueeze(-1))
+        scores = self.sm(scores)    # (batsize, seqlen, 2)
+
+        # get summaries
+        ys = ys.unsqueeze(2)
+        scores = scores.unsqueeze(3)
+        b = ys * scores     # (batsize, seqlen, 2, dim)
+        summaries = b.sum(1)    # (batsize, 2, dim)
+        summaries = summaries.view(summaries.size(0), -1)   # (batsize, 2*dim)
+
+        # compute relation encodings
+        rel1_enc = self.right_enc(rel1)
+        rel1_randomvec_enc = self.right_enc(rel1_randomvec)
+        rel1_enc = \
+            torch.mean(torch.stack((rel1_enc, rel1_randomvec_enc), dim=1), dim=1)
+
+        rel2_enc = self.right_enc(rel2)
+        rel2_randomvec_enc = self.right_enc(rel2_randomvec)
+
+        rel2_enc = \
+            torch.mean(torch.stack((rel2_enc, rel2_randomvec_enc), dim=1), dim=1)
+
         relenc = torch.cat([rel1_enc, rel2_enc], 1)     # (batsize, 2*dim)
 
         # compute output scores

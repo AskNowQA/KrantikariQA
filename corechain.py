@@ -36,7 +36,9 @@ import os
 import sys
 import pickle
 from pprint import pprint
+from functools import partial
 from progressbar import ProgressBar
+
 
 if sys.version_info[0] == 3: import configparser as ConfigParser
 else: import ConfigParser
@@ -679,14 +681,17 @@ if __name__ == "__main__":
         else:
             print("^^^^^^^^^^^^^^^^^^finetuning^^^^^^^^^^^^^^^^")
             if pointwise:
-                model_path = 'data/models/core_chain/bilstm_dot_pointwise/lcquad/19/model.torch'
+                model_path = 'data/models/core_chain/bilstm_dot_pointwise/qg/0/model.torch'
             else:
-                model_path = 'data/models/core_chain/bilstm_dot/lcquad/30/model.torch'
+                model_path = 'data/models/core_chain/bilstm_dot/qg/1/model.torch'
             modeler = net.BiLstmDot(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                     _device=device, _pointwise=pointwise, _debug=False)
 
             modeler.load_from(model_path)
-            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())),lr=0.0001)
+            print("THE LR IN FINETUNING IS NOT CHANGED")
+            print("THE LR IN FINETUNING IS NOT CHANGED")
+            print("THE LR IN FINETUNING IS NOT CHANGED")
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())),lr=0.001)
 
     if training_model == 'bilstm_dense':
         modeler = net.BiLstmDense( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,
@@ -839,6 +844,29 @@ if __name__ == "__main__":
         optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
                                list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())), weight_decay=0.0001, lr=0.01)
 
+    if training_model == 'bert':
+        modeler = net.Bert_Scorer(_parameter_dict=parameter_dict,
+                              _word_to_id=_word_to_id,
+                              _device=device,
+                              _pointwise=pointwise,
+                              _debug=False)
+        opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
+        # optimizer = make_opt(modeler, opt_fn, lr=0.00)
+        # optimizer.param_groups[-1]['lr'] = 0.01
+        # optimizer.param_groups[-2]['lr'] = 0.001
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())), lr=0.00001)
+
+    if training_model == 'bert_slotptr':
+        modeler = net.Bert_Scorer_slotptr(_parameter_dict=parameter_dict,
+                              _word_to_id=_word_to_id,
+                              _device=device,
+                              _pointwise=pointwise,
+                              _debug=False)
+        opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
+        # optimizer = make_opt(modeler, opt_fn, lr=0.00)
+        # optimizer.param_groups[-1]['lr'] = 0.01
+        # optimizer.param_groups[-2]['lr'] = 0.001
+        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder.parameters())), lr=0.00001)
 
     if not pointwise:
         loss_func = nn.MarginRankingLoss(margin=1,size_average=False)

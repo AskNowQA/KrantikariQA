@@ -2602,7 +2602,7 @@ class ULMFITQelosSlotPointerModel(Model):
         return [('encoder_q', self.encoder_q), ('encoder_p', self.encoder_p)]
 
 
-class Bert_Scorer(Model):
+class Bert_Scorer_slotptr(Model):
 
     def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
 
@@ -2622,8 +2622,8 @@ class Bert_Scorer(Model):
 
         bert = q.bert.TransformerBERT.load_from_dir("bert")
         self.encoder = com.AdaptedBERTEncoderPairSlotPtr(bert, oldvocab=self.parameter_dict['vocab'], numout=0)
-        pretrained_weights = torch.load('transformer_qald/slotptr_init_wt_10_.wt', map_location= lambda storage, loc: storage)
-        self.encoder.load_state_dict(pretrained_weights)
+        # pretrained_weights = torch.load('transformer_qald/slotptr_init_wt_10_.wt', map_location= lambda storage, loc: storage)
+        # self.encoder.load_state_dict(pretrained_weights)
         self.encoder = self.encoder.to(self.device)
 
     def train(self, data, optimizer, loss_fn, device):
@@ -2695,6 +2695,109 @@ class Bert_Scorer(Model):
             paths_rel2 = tu.no_one_left_behind(paths_rel2)
 
             score = self.encoder(tu.trim(ques), tu.trim(paths_rel1), tu.trim(paths_rel2))
+
+            self.encoder.train()
+            return score
+
+    @property
+    def layers(self):
+        raise NotImplementedError
+
+
+class Bert_Scorer(Model):
+
+    def __init__(self, _parameter_dict, _word_to_id, _device, _pointwise=False, _debug=False):
+
+        self.debug = _debug
+        self.parameter_dict = _parameter_dict
+        self.device = _device
+        self.pointwise = _pointwise
+        self.word_to_id = _word_to_id
+
+        if self.debug:
+            print("Init Models")
+
+        #         new_vectors = self.parameter_dict['vectors']
+        #         pretrained_weights['encoder.weight'] = T(new_vectors)
+        #         pretrained_weights.pop('encoder_with_dropout.embed.weight')
+        #         pretrained_weights['encoder_with_dropout.embed.weight'] = T(np.copy(new_vectors))
+
+        bert = q.bert.TransformerBERT.load_from_dir("bert")
+        self.encoder = com.AdaptedBERTEncoderPair(bert, oldvocab=self.parameter_dict['vocab'], numout=0)
+        #         pretrained_weights = torch.load('transformer_encoder.wt', map_location= lambda storage, loc: storage)
+        #         self.encoder.load_state_dict(pretrained_weights)
+        self.encoder = self.encoder.to(self.device)
+
+    def train(self, data, optimizer, loss_fn, device):
+        # Maybe add batch reset
+        if self.pointwise:
+            return self._train_pointwise_(data, optimizer, loss_fn, device)
+        else:
+            return self._train_pairwise_(data, optimizer, loss_fn, device)
+
+    def _train_pointwise_(self, data, optimizer, loss_fn, device):
+        self.encoder.train()
+        optimizer.zero_grad()
+        ques_batch, path_batch, y_label = data['ques_batch'], data['path_batch'], data['y_label']
+
+        ques_batch = tu.trim(ques_batch)
+        path_batch = tu.trim(path_batch)
+
+        scores = self.encoder(ques_batch, path_batch)
+
+        loss = loss_fn(scores, y_label)
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def _train_pairwise_(self, data, optimizer, loss_fn, device):
+        '''
+            Given data, passes it through model, inited in constructor, returns loss and updates the weight
+            :params data: {batch of question, pos paths, neg paths and dummy y labels}
+            :params optimizer: torch.optim object
+            :params loss fn: torch.nn loss object
+            :params device: torch.device object
+
+            returns loss
+        '''
+        self.encoder.train()
+
+        # Unpacking the data and model from args
+        ques_batch, pos_batch, neg_batch, y_label = data['ques_batch'], data['pos_batch'], data['neg_batch'], data[
+            'y_label']
+
+        optimizer.zero_grad()
+        # Encoding all the data
+
+        #         print(f"Before: \t {ques_batch.shape[1]}, {pos_batch.shape[1]}, {neg_batch.shape[1]}\n"
+        #         f"After: \t\t {tu.trim(ques_batch).shape[1]}, {tu.trim(pos_batch).shape[1]}, {tu.trim(neg_batch).shape[1]}")
+
+        ques_batch = tu.trim(ques_batch)
+        pos_batch = tu.trim(pos_batch)
+        neg_batch = tu.trim(neg_batch)
+
+        pos_scores = self.encoder(ques_batch, pos_batch)
+        neg_scores = self.encoder(ques_batch, neg_batch)
+
+        loss = loss_fn(pos_scores, neg_scores, y_label)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), .5)
+        optimizer.step()
+        return loss
+
+    def predict(self, ques, paths, device):
+        """
+            Same code works for both pairwise or pointwise
+        """
+        with torch.no_grad():
+            self.encoder.eval()
+
+            ques = tu.trim(ques)
+            paths = tu.trim(paths)
+
+            score = self.encoder(ques, paths)
 
             self.encoder.train()
             return score

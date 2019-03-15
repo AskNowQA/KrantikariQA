@@ -119,6 +119,7 @@ class QuestionAnswering:
                                                  _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
 
         if self.parameters['corechainmodel'] == 'bert':
+            ### This needs to change
             self.corechain_model = net.Bert_Scorer(_parameter_dict = parameter_dict,
                     _word_to_id=_word_to_id,
                     _device=device,

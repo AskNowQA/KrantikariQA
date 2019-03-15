@@ -34,6 +34,7 @@ import sys
 import json
 import math
 import torch
+import redis
 import pickle
 import warnings
 import requests
@@ -56,6 +57,15 @@ ei.__check_prepared__()
 
 quesans, dbp, subgraph_maker, relations, parameter_dict = None, None, None, None, None
 
+CACHING = True
+
+REDIS_HOSTNAME = 'localhost'
+_db_name = 0
+
+
+
+if CACHING:
+    R = redis.StrictRedis(host=REDIS_HOSTNAME, port=6379, db=_db_name)
 
 # path --> 'http://dbpedia.org/property/stadium'
 vocabularize_relation = lambda path: ei.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
@@ -148,7 +158,7 @@ def start():
     quesans = qa.QuestionAnswering(parameters=parameter_dict, pointwise=training_config,
                                         word_to_id=None, device=device, debug=False, _dataset=_dataset)
 
-    # run(host=URL, port=PORT)
+    run(host=URL, port=PORT)
 
 
 def answer_question(question):
@@ -182,7 +192,23 @@ def answer_question(question):
 
     if not entities: raise NoEntitiesFound
 
-    hop1, hop2 = subgraph_maker.subgraph(entities, question, {}, _use_blacklist=True, _qald=False)
+
+    if CACHING:
+
+        caching_answer = R.get(str(entities))
+        if caching_answer:
+            answer = json.loads(caching_answer)
+            hop1,hop2 = answer[0],answer[1]
+        else:
+            answer = subgraph_maker.subgraph(entities, question, {}, _use_blacklist=True, _qald=False)
+            hop1, hop2 = answer[0],answer[1]
+            R.set(str(entities),
+                  json.dumps(answer))
+
+    else:
+        hop1, hop2 = subgraph_maker.subgraph(entities, question, {}, _use_blacklist=True, _qald=False)
+
+
     if len(hop1) == 0 and len(hop2) == 0: raise NoPathsFound
 
 

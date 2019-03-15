@@ -298,6 +298,21 @@ def to_bool(value):
 
 def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _pointwise,_device,k=-1):
 
+    ###### This is where we can add the question generation to have lcquad as test case.
+    '''
+
+
+
+    :param _dataset:
+    :param _train_over_validation:
+    :param _parameter_dict:
+    :param _relations:
+    :param _pointwise:
+    :param _device:
+    :param k:
+    :return:
+
+    '''
 
     TEMP = data_loading_parameters(_dataset, _parameter_dict)
 

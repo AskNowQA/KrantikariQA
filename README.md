@@ -48,6 +48,9 @@ cp qelos ../
 
 
 ### A potential bug is that he glove file datatype would be <U32
+
+
+A rdftype_lookup.json can be created using the keys of relation.pickle (data/data/common) 
 ```
 impoert numpy as np
 mat = np.load('resources/vectors_gl.npy')

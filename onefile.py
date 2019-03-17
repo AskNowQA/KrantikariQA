@@ -126,6 +126,10 @@ class QuestionAnswering:
                     _pointwise=pointwise,
                     _debug=False)
 
+        if self.parameters['corechainmodel'] == 'slotptr_randomvec':
+            self.corechain_model = net.QelosSlotPointerModelRandomVec(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
+
         # Make the model path
         model_path = os.path.join(self.parameters['_model_dir'], 'core_chain')
         if self.pointwise:
@@ -193,7 +197,7 @@ class QuestionAnswering:
 
         self.intent_model.load_from(model_path)
 
-    def _predict_corechain(self, _q, _p, _p1 = None , _p2 = None):
+    def _predict_corechain(self, _q, _p, _p1 = None , _p2 = None, _p1_randomvec = None, _p2_randomvec = None):
         """
             Given a datapoint (question, paths) encoded in  embedding_vocab,
                 run the model's predict and find the best corechain.
@@ -217,6 +221,10 @@ class QuestionAnswering:
         for i in range(len(_p)):
             P[i, :min(len(_p[i]), self.parameters['max_length'])] = _p[i][:min(len(_p[i]), self.parameters['max_length'])]
 
+        if _p1_randomvec:
+            P1_randomvec = np.zeros((len(_p), self.parameters['max_length']))
+            P2_randomvec = np.zeros((len(_p), self.parameters['max_length']))
+
         if _p1:
             # print(_p1)
             for i in range(len(_p)):
@@ -229,12 +237,29 @@ class QuestionAnswering:
             P1 = torch.tensor(P1, dtype=torch.long, device=self.device)
             P2 = torch.tensor(P2, dtype=torch.long, device=self.device)
 
-            if self.parameters['corechainmodel'] == 'slotptr':
+            if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'slotptr_randomvec':
                 P1 = P1[:,:self.parameters['relsp_pad']]
                 P2 = P2[:,:self.parameters['relsp_pad']]
             else:
                 P1 = P1[:, :self.parameters['relrd_pad']]
                 P2 = P2[:, :self.parameters['relrd_pad']]
+
+        if _p1_randomvec:
+            # print(_p1)
+            for i in range(len(_p)):
+                # print(type(_p1[i]),_p1[i],_p1[:5])
+                P1_randomvec[i, :min(len(_p1[i]), self.parameters['max_length'])] = _p1_randomvec[i][
+                                                                        :min(len(_p1_randomvec[i]), self.parameters['max_length'])]
+                P2_randomvec[i, :min(len(_p2[i]), self.parameters['max_length'])] = _p2_randomvec[i][
+                                                                          :min(len(_p2_randomvec[i]),
+                                                                                   self.parameters['max_length'])]
+            P1_randomvec = torch.tensor(P1_randomvec, dtype=torch.long, device=self.device)
+            P2_randomvec = torch.tensor(P2, dtype=torch.long, device=self.device)
+
+            P1_randomvec = P1_randomvec[:, :self.parameters['relrd_pad']]
+            P2_randomvec = P2_randomvec[:, :self.parameters['relrd_pad']]
+
+
         # Convert np to torch stuff
         Q = torch.tensor(Q, dtype=torch.long, device=self.device)
         P = torch.tensor(P, dtype=torch.long, device=self.device)
@@ -255,7 +280,9 @@ class QuestionAnswering:
             # score1 = attention_score.squeeze(-1)[0, :, 0]
             # score2 = attention_score.squeeze(-1)[0, :, 1]
             # return score.detach().cpu().numpy(), score1.detach().cpu().numpy(), score2.detach().cpu().numpy()
-
+        elif self.parameters['corechainmodel'] == 'slotptr_randomvec':
+            score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel1_randomvec=P1_randomvec,
+                    paths_rel2=P2, paths_rel2_randomvec=P2_randomvec, device=self.device)
         else:
             score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
         return score.detach().cpu().numpy()
@@ -447,6 +474,7 @@ def create_sparql(log, data, embeddings_interface, relations):
     query_graph['entities'] = data['parsed-data']['entity']
     query_graph['rdf_constraint'] = False if log['pred_rdf_type'] == 'none' else True
 
+    # return sparql_constructor.convert_runtime(_graph=query_graph)
     return sparql_constructor.convert(_graph=query_graph, relations=relations,
                                         embeddings_interface=embeddings_interface)
 
@@ -550,6 +578,12 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
             # print("paths rel1 rd are loop1 ", paths_rel1_sp)
             # print("paths rel2 rd are loop1 ", paths_rel2_sp)
             output= quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
+
+        elif model == 'slotptr_randomvec':
+            paths_rel1_sp, paths_rel2_sp, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
+            output = quesans._predict_corechain(_q=question, _p=paths, _p1 = paths_rel1_sp, _p2 = paths_rel2_sp,
+            _p1_randomvec = paths_rel1_rd, _p2_randomvec = paths_rel2_rd)
+
         else:
             output = quesans._predict_corechain(question, paths)
         best_path_index = np.argmax(output)
@@ -853,7 +887,7 @@ def evaluate(_logging):
 if __name__ == "__main__":
 
     device = torch.device("cuda")
-    sparql_constructor.init(embeddings_interface)
+    # sparql_constructor.init(embeddings_interface)
     dbp = db_interface.DBPedia(_verbose=True, caching=True)
     vocabularize_relation = lambda path: embeddings_interface.vocabularize(
         nlutils.tokenize(dbp.get_label(path))).tolist()
@@ -863,12 +897,12 @@ if __name__ == "__main__":
     config.readfp(open('configs/macros.cfg'))
 
     # setting up device,model name and loss types.
-    training_model = 'slotptr'
-    _dataset = 'qald'
+    training_model = 'slotptr_randomvec'
+    _dataset = 'lcquad'
     pointwise = False
 
     # 19 is performing the best
-    training_model_number = 3
+    training_model_number = 2
     _debug = False
 
     # Loading relations file.
@@ -902,13 +936,15 @@ if __name__ == "__main__":
     parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
     parameter_dict['intentmodel'] = 'bilstm_dense'
-    parameter_dict['intentmodelnumber'] = '6'
+    parameter_dict['intentmodelnumber'] = '0'
 
     parameter_dict['rdftypemodel'] = 'bilstm_dense'
-    parameter_dict['rdftypemodelnumber'] = '5'
+    parameter_dict['rdftypemodelnumber'] = '0'
 
     parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-    parameter_dict['rdfclassmodelnumber'] = '6'
+    parameter_dict['rdfclassmodelnumber'] = '2'
+
+    print(parameter_dict)
 
     TEMP = aux.data_loading_parameters(_dataset, parameter_dict, runtime=True)
 

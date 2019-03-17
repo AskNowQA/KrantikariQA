@@ -2791,7 +2791,7 @@ class Bert_Scorer_slotptr_randomvec(Model):
         neg_1_batch = torch.cat([neg_1_batch, neg_1_batch_randomvec], dim=1)
         neg_2_batch = torch.cat([neg_2_batch, neg_2_batch_randomvec], dim=1)
 
-        
+
         ### Stack the two inputs to create a new input
 
 
@@ -2818,12 +2818,22 @@ class Bert_Scorer_slotptr_randomvec(Model):
         optimizer.step()
         return loss
 
-    def predict(self, ques, paths, paths_rel1, paths_rel2, attention_value=False):
+    def predict(self, ques, paths, paths_rel1, paths_rel1_randomvec,
+                paths_rel2, paths_rel2_randomvec, device,attention_value=False):
         """
             Same code works for both pairwise or pointwise
         """
         with torch.no_grad():
             self.encoder.eval()
+            # self.encoder_p.eval()
+
+            # Have to manually check if the 2nd paths holds anything in this batch.
+            # If not, we have to pad everything up with zeros, or even call a limited part of the comparison module.
+            paths_rel2 = tu.no_one_left_behind(paths_rel2)
+            paths_rel2_randomvec = tu.no_one_left_behind(paths_rel2_randomvec)
+
+            paths_rel2 = torch.cat([paths_rel2,paths_rel2_randomvec],dim=1)
+            paths_rel1 = torch.cat([paths_rel1,paths_rel1_randomvec],dim=1)
 
             paths_rel2 = tu.no_one_left_behind(paths_rel2)
 

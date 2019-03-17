@@ -640,7 +640,8 @@ if __name__ == "__main__":
                                              training_config=training_config,config_file='configs/macros.cfg')
 
 
-    if _dataset == 'lcquad' or _dataset == 'qg':
+    if _dataset == 'lcquad' or _dataset == 'qg' or _dataset == 'qg_copy' or _dataset == 'qg_customcopy' or \
+        _dataset == 'transfer-d':
         test_every = parameter_dict['test_every']
     else:
         test_every = False

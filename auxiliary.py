@@ -329,7 +329,8 @@ def load_data(_dataset, _train_over_validation, _parameter_dict, _relations, _po
 #        train_questions, train_pos_paths, train_neg_paths, dummy_y_train,\
 #        valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, test_questions, test_pos_paths, test_neg_paths,vectors = _a
 
-    if _dataset != 'lcquad' and _dataset != 'qg':
+    dataset = ['lcquad','qg','qg_copy','qg_customcopy', 'transfer-d']
+    if _dataset not in dataset:
         print("warning: Test accuracy would not be calculated as the data has not been prepared.")
 
 #        train_questions, train_pos_paths, train_neg_paths, dummy_y_train, valid_questions, valid_pos_paths, valid_neg_paths, dummy_y_valid, vectors = _a
@@ -449,6 +450,28 @@ def data_loading_parameters(dataset,parameter_dict,runtime=False):
         _validation_split = .8
         _index = None
 
+    elif dataset == 'qg_copy':
+        _dataset_specific_data_dir = 'data/data/qg_copy/'
+        _model_specific_data_dir = 'data/data/core_chain_pairwise/qg_copy/'
+        _file = 'id_big_data.json'
+        _max_sequence_length = parameter_dict['max_length']
+        _neg_paths_per_epoch_train = parameter_dict['_neg_paths_per_epoch_train']
+        _neg_paths_per_epoch_validation = parameter_dict['_neg_paths_per_epoch_validation']
+        _training_split = .7
+        _validation_split = .8
+        _index = None
+
+    elif dataset == 'qg_customcopy':
+        _dataset_specific_data_dir = 'data/data/qg_customcopy/'
+        _model_specific_data_dir = 'data/data/core_chain_pairwise/qg_customcopy/'
+        _file = 'id_big_data.json'
+        _max_sequence_length = parameter_dict['max_length']
+        _neg_paths_per_epoch_train = parameter_dict['_neg_paths_per_epoch_train']
+        _neg_paths_per_epoch_validation = parameter_dict['_neg_paths_per_epoch_validation']
+        _training_split = .7
+        _validation_split = .8
+        _index = None
+
     elif dataset == 'qald':
         _dataset_specific_data_dir = 'data/data/qald/'
         _model_specific_data_dir = 'data/data/core_chain_pairwise/qald/'
@@ -505,6 +528,18 @@ def data_loading_parameters(dataset,parameter_dict,runtime=False):
         _training_split = .7
         _validation_split = .8
         _file, _index = ptl.transfer_c()
+
+    elif dataset == 'transfer-d':
+        raise NotImplementedError
+        _data_dir = 'data/data/'
+        _dataset_specific_data_dir = 'data/data/transfer-b/'
+        _model_specific_data_dir = 'data/data/core_chain_pairwise/transfer-b/'
+        _max_sequence_length = parameter_dict['max_length']
+        _neg_paths_per_epoch_train = parameter_dict['_neg_paths_per_epoch_train']
+        _neg_paths_per_epoch_validation = parameter_dict['_neg_paths_per_epoch_validation']
+        _training_split = .7
+        _validation_split = .8
+        _file, _index = ptl.transfer_b()
 
     elif dataset == 'transfer-proper-qald':
         print("the functionality is still not supported. Kill few kittens to get it to work or give me an ice cream")

@@ -61,7 +61,7 @@ def run(_dataset,_save_location_success,_save_location_unsuccess,
     '''
 
 
-    #creating dir, if it doesn't exists
+    # Creating dir, if it doesn't exists
     create_dir(_save_location_success)
     create_dir(_save_location_unsuccess)
     fullpath_success = os.path.join(_save_location_success,_file_name)
@@ -114,16 +114,16 @@ if __name__ == "__main__":
     end_index = sys.argv[2]
     dataset = sys.argv[3]
 
-
-
-
     if dataset == 'lcquad':
         _save_location = 'data/data/raw/lcquad'
     elif dataset == 'qald':
         _save_location = 'data/data/raw/qald'
     elif dataset == 'qg':
         _save_location = 'data/data/raw/qg'
-
+    elif dataset == 'qg_copy':
+        _save_location = 'data/data/raw/qg_copy'
+    elif dataset == 'qg_customcopy':
+        _save_location = 'data/data/raw/qg_customcopy'
     file_name = start_index+file_name
 
     _save_location_success = _save_location_success % {'dataset':dataset}
@@ -133,9 +133,6 @@ if __name__ == "__main__":
     pb[-1] = pb[-1] + '\n'
     pb = [r[:-1] for r in pb]
 
-
-
-
     if dataset == 'lcquad':
         _dataset = json.load(open('resources/lcquad_data_set.json'))
     elif dataset == 'qald':
@@ -143,15 +140,20 @@ if __name__ == "__main__":
         _dataset = convert_qald_to_lcquad(qald_train)
     elif dataset == 'qg':
         _dataset = json.load(open('resources/qg_version_1.json'))
-
+    elif dataset == 'qg_copy':
+        # Change the name and location later
+        _dataset = json.loads(open('resources/qg_version_1.json'))
+    elif dataset == 'qg_customcopy':
+        # Change the name and location later
+        _dataset = json.loads(open('resources/qg_version_1.json'))
 
     if end_index == -1:
         _dataset = _dataset[int(start_index):]
     else:
         _dataset = _dataset[int(start_index):int(end_index)]
 
-
-    if dataset == 'lcquad':
+    __dataset = ['lcquad','qg','qg_customcopy','qg_copy']
+    if dataset in __dataset:
         run(_dataset=_dataset, _save_location_success=_save_location_success
             , _save_location_unsuccess=_save_location_unsuccess,
             _file_name=file_name,
@@ -162,11 +164,3 @@ if __name__ == "__main__":
             , _save_location_unsuccess=_save_location_unsuccess,
             _file_name=file_name,
             _predicate_blacklist=pb, _relation_file={}, return_data=False, _qald=True)
-
-    if dataset == 'qg':
-        run(_dataset=_dataset, _save_location_success=_save_location_success
-            , _save_location_unsuccess=_save_location_unsuccess,
-            _file_name=file_name,
-            _predicate_blacklist=pb, _relation_file={}, return_data=False, _qald=True)
-
-

@@ -41,7 +41,7 @@ An Information Gain based Question Answering system over knowledge graph systems
 
 ### Setup Qelos-utils
 https://github.com/lukovnikov/qelos-util.git
-change into qelos-util dir and python setup.py build
+change into qelos-util dir and python setup.py build/develop/
 cp qelos ../
 
 ### Install few more things
@@ -52,7 +52,7 @@ cp qelos ../
 
 A rdftype_lookup.json can be created using the keys of relation.pickle (data/data/common) 
 ```
-impoert numpy as np
+import numpy as np
 mat = np.load('resources/vectors_gl.npy')
 mat = mat.astype(np.float64)
 np.save('resources/vectors_gl.npy',mat)

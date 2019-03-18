@@ -20,6 +20,9 @@ from copy import deepcopy
 
 import qelos as q
 import math
+
+
+
 class Encoder(nn.Module):
 
     """LSTM encoder."""
@@ -1868,7 +1871,7 @@ class ULMFITQelosSlotPtrQuestionEncoder(nn.Module):
         ret = torch.cat([summaries[:, 0, :], summaries[:, 1, :]], 1)
         return ret, scores
 
-class AdaptedEncoderSingle(torch.nn.Module):
+class AdaptedBERTEncoderSingle(torch.nn.Module):
     pad_id = 0
 
     def __init__(self, bert, numout=2, oldvocab=None, specialmaps={0: [0]}, **kw):

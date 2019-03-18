@@ -8,7 +8,7 @@ import json
 def vocabularize():
     question = request.json['question']
     vec = embeddings_interface.vectorize(nlutils.tokenize(question), _embedding=EMBEDDING).astype(np.float).tolist()
-    return json.loads(vec)
+    return json.dumps(vec)
 
 if __name__ == '__main__':
 

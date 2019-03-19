@@ -531,16 +531,15 @@ def data_loading_parameters(dataset,parameter_dict,runtime=False):
         _file, _index = ptl.transfer_c()
 
     elif dataset == 'transfer-d':
-        raise NotImplementedError
         _data_dir = 'data/data/'
-        _dataset_specific_data_dir = 'data/data/transfer-b/'
-        _model_specific_data_dir = 'data/data/core_chain_pairwise/transfer-b/'
+        _dataset_specific_data_dir = 'data/data/transfer-d/'
+        _model_specific_data_dir = 'data/data/core_chain_pairwise/transfer-d/'
         _max_sequence_length = parameter_dict['max_length']
         _neg_paths_per_epoch_train = parameter_dict['_neg_paths_per_epoch_train']
         _neg_paths_per_epoch_validation = parameter_dict['_neg_paths_per_epoch_validation']
         _training_split = .7
         _validation_split = .8
-        _file, _index = ptl.transfer_b()
+        _file, _index = ptl.transfer_d()
 
     elif dataset == 'transfer-proper-qald':
         print("the functionality is still not supported. Kill few kittens to get it to work or give me an ice cream")

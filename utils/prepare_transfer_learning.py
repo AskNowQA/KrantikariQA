@@ -165,7 +165,7 @@ def transfer_d(DATASET_SPECIFIC_DATA_DIR=DATA_DIR):
         # Open files.
 
         lcquad_json = json.load(open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset': 'lcquad'}, "id_big_data.json")))
-        qg_json = json.load(open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':'qg'}, "id_big_data_train.json")))
+        qg_json = json.load(open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':'qg'}, "id_big_data.json")))
         lcquad_json_valid = lcquad_json[int(len(lcquad_json)*.70):int(len(lcquad_json)*.80)]
         lcquad_json_test = lcquad_json[int(len(lcquad_json)*.80):]
         lcquad_json_train = lcquad_json[:int(len(lcquad_json)*.70)]
@@ -191,11 +191,10 @@ def transfer_d(DATASET_SPECIFIC_DATA_DIR=DATA_DIR):
         # index = len(lcquad_json) + len(qald_train_json) - 1
 
         # store index
-
+        print(index_train,index_valid)
         f = open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset': 'transfer-d'}, 'index'), 'w+')
-        f.write(str(index_train+"|"+index_valid))
+        f.write(str(index_train)+"|"+str(index_valid))
         f.close()
-
         return 'combined.json', [index_train,index_valid]
 
 if __name__ == '__main__':

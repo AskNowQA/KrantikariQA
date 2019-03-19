@@ -197,7 +197,7 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
     if not _rdf:
        data['valid_entity'] = validation_split(entity)
 
-    if not _index:
+    if not _index or type(_index) is list:
         data['test_pos_paths'] = testing_split(pos_paths)
         if not _rdf:
             data['test_pos_paths_rel1_sp'] = testing_split(pos_paths_rel1_sp)

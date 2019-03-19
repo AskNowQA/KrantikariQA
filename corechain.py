@@ -459,9 +459,11 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number,finet
     _max_sequence_length, _neg_paths_per_epoch_train, \
     _neg_paths_per_epoch_validation, _training_split, _validation_split, _index = TEMP
 
-    _data,  _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
-                                                                         _dataset_specific_data_dir=_dataset_specific_data_dir,
-                                                                         split_point=.80)
+
+    if type(_index) is list:
+        _data,  _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
+                                                                             _dataset_specific_data_dir=_dataset_specific_data_dir,
+                                                                             split_point=.80,index=_index)
 
     parameter_dict['vectors'] = _vectors
 
@@ -787,11 +789,23 @@ if __name__ == "__main__":
             modeler.load_from(model_path)
 
     if training_model == 'slotptr_randomvec':
-        modeler = net.QelosSlotPointerModelRandomVec(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
-                                                      _device=device, _pointwise=pointwise, _debug=False)
-        optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
-                               list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
-                               weight_decay=0.0001)
+
+        if not finetune:
+            modeler = net.QelosSlotPointerModelRandomVec(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                          _device=device, _pointwise=pointwise, _debug=False)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
+                                   weight_decay=0.0001)
+        else:
+            model_path = 'data/models/core_chain/slotptr_randomvec/qg/0/model.torch'
+
+            modeler = net.QelosSlotPointerModelRandomVec(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
+                                                          _device=device, _pointwise=pointwise, _debug=False)
+            optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
+                                   list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
+                                   weight_decay=0.0001)
+
+            modeler.load_from(model_path)
 
     if training_model == 'bilstm_dot_skip':
         modeler = net.BiLstmDot_skip( _parameter_dict = parameter_dict,_word_to_id=_word_to_id,

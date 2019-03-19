@@ -147,7 +147,7 @@ def transfer_c(DATASET_SPECIFIC_DATA_DIR=DATA_DIR):
 
         return 'combined.json', index
 
-def transfer_a(DATASET_SPECIFIC_DATA_DIR=DATA_DIR):
+def transfer_d(DATASET_SPECIFIC_DATA_DIR=DATA_DIR):
     """
         This function tries to see if the files needed are already in there or not.
         If they are,
@@ -165,31 +165,38 @@ def transfer_a(DATASET_SPECIFIC_DATA_DIR=DATA_DIR):
         # Open files.
 
         lcquad_json = json.load(open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset': 'lcquad'}, "id_big_data.json")))
-        qald_train_json = json.load(open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':'qald'}, "qald_id_big_data_train.json")))
-        qald_train_json = qald_train_json[:int(7.0*len(qald_train_json)/8.0)]
-        qald_valid_json = qald_train_json[int(7.0*len(qald_train_json)/8.0):]
+        qg_json = json.load(open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset':'qg'}, "id_big_data_train.json")))
+        lcquad_json_valid = lcquad_json[int(len(lcquad_json)*.70):int(len(lcquad_json)*.80)]
+        lcquad_json_test = lcquad_json[int(len(lcquad_json)*.80):]
+        lcquad_json_train = lcquad_json[:int(len(lcquad_json)*.70)]
+
+
         # qald_test_json = json.load(open(os.path.join(n.DATASET_SPECIFIC_DATA_DIR % {'dataset':'qald'}, "qald_id_big_data_test.json")))
 
         # Combine files
-        a = lcquad_json + qald_train_json
+        a = lcquad_json_train + qg_json
         np.random.shuffle(a)
 
-        combined_json = a + qald_valid_json
+        combined_json = a + lcquad_json_valid + lcquad_json_test
+
+
+        index_train = len(a)
+        index_valid = index_train + len(lcquad_json_valid)
 
         # store the combined file
         json.dump(combined_json,
 
-                  open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset': 'transfer-a'}, 'combined.json'), 'w+'))
+                  open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset': 'transfer-d'}, 'combined.json'), 'w+'))
 
-        index = len(lcquad_json) + len(qald_train_json) - 1
+        # index = len(lcquad_json) + len(qald_train_json) - 1
 
         # store index
 
-        f = open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset': 'transfer-a'}, 'index'), 'w+')
-        f.write(str(index))
+        f = open(os.path.join(DATASET_SPECIFIC_DATA_DIR % {'dataset': 'transfer-d'}, 'index'), 'w+')
+        f.write(str(index_train+"|"+index_valid))
         f.close()
 
-        return 'combined.json', index
+        return 'combined.json', [index_train,index_valid]
 
 if __name__ == '__main__':
 

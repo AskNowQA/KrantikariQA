@@ -120,26 +120,35 @@ def load_data(_dataset, _dataset_specific_data_dir, _model_specific_data_dir, _f
 
     np.random.seed(SEED)  # Random train/test splits stay the same between runs
 
-    if _index:
-        '''
-            split at the points with explicit index
-        '''
+    # if _index:
+    #     '''
+    #         split at the points with explicit index
+    #     '''
 
     # Divide the data into diff blocks
+
+
+
     if _index:
         split_point = lambda x: _index + 1
     else:
         split_point = lambda x: int(len(x) * _training_split)
 
     def training_split(x):
+        if type(_index) is list:
+            return x[:_index[0]]
         return x[:split_point(x)]
 
     def validation_split(x):
         if _index:
+            if type(_index) is list:
+                return x[_index[0]:_index[1]]
             return x[split_point(x):]
         return x[split_point(x):int(_validation_split * len(x))]
 
     def testing_split(x):
+        if type(_index) is list:
+            return x[_index[1]:]
         return x[int(_validation_split * len(x)):]
 
 
@@ -697,7 +706,7 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
 
 
 
-def create_dataset_runtime(file,_dataset,_dataset_specific_data_dir,split_point=.80):
+def create_dataset_runtime(file,_dataset,_dataset_specific_data_dir,split_point=.80,index=None):
 
     '''
         Function loads the data from the _dataset_specific_data_dir+ file and splits it in case of LCQuAD 
@@ -718,6 +727,11 @@ def create_dataset_runtime(file,_dataset,_dataset_specific_data_dir,split_point=
 
         # Split it.
         id_data_test = id_data[int(.80 * len(id_data)):]
+    elif _dataset == 'transfer-d':
+        id_data = json.load(open(os.path.join(_dataset_specific_data_dir, file)))
+
+        # Split it.
+        id_data_test = id_data[index[1]:]
 
     else:
         print("warning: Functionality for transfer-a,transfer-b,transfer-c and proper-tranfer-qald is not implemented.")

@@ -15,6 +15,7 @@ import os
 import sys
 import torch
 import pickle
+import traceback
 import numpy as np
 from pprint import pprint
 from progressbar import ProgressBar
@@ -777,7 +778,7 @@ def sparql_answer(sparql,dbi=None):
     return list(set(test_answer))
 
 
-def _evaluate_sparqls_(test_sparql, true_sparql, type, ground_type):
+def _evaluate_sparqls_(test_sparql, true_sparql, type, ground_type,dbp):
     # @TODO: If the type of test and true are differnt code would return an error.
     """
         Fmeasure for ask and count are 0/1.
@@ -794,8 +795,8 @@ def _evaluate_sparqls_(test_sparql, true_sparql, type, ground_type):
         return 0.0 ,0.0 ,0.0
 
     if type == "list":
-        test_answer = sparql_answer(test_sparql)
-        true_answer = sparql_answer(true_sparql)
+        test_answer = sparql_answer(test_sparql,dbp)
+        true_answer = sparql_answer(true_sparql,dbp)
         total_retrived_resutls = len(test_answer)
         total_relevant_resutls = len(true_answer)
         common_results = total_retrived_resutls - len(list(set(test_answer ) -set(true_answer)))
@@ -814,8 +815,8 @@ def _evaluate_sparqls_(test_sparql, true_sparql, type, ground_type):
         return f1 ,precision ,recall
 
     if type == "count":
-        count_test = sparql_answer(test_sparql)
-        count_true = sparql_answer(true_sparql)
+        count_test = sparql_answer(test_sparql,dbp)
+        count_true = sparql_answer(true_sparql,dbp)
         if count_test == count_true:
             return 1.0 ,1.0 ,1.0
         else:
@@ -828,7 +829,7 @@ def _evaluate_sparqls_(test_sparql, true_sparql, type, ground_type):
             return 0.0 ,0.0 ,1.0
 
 
-def evaluate(_logging):
+def evaluate(_logging,dbp):
     """
         After an entire run, pass the logging here.
 
@@ -857,8 +858,11 @@ def evaluate(_logging):
             f, p, r = _evaluate_sparqls_(test_sparql=log['pred_sparql'],
                                          true_sparql=log['true_sparql'],
                                          type=log['log']['pred_intent'],
-                                         ground_type=log['log']['true_intent'])
+                                         ground_type=log['log']['true_intent'],dbp=dbp)
         except:
+            print("traced backed")
+            traceback.print_exc()
+            raise IOError
             f,p,r = 0.0,0.0,0.0
         overall_p.append(p)
         overall_r.append(r)
@@ -1024,7 +1028,7 @@ if __name__ == "__main__":
                                embeddings_interface=embeddings_interface,
                                relations=_inv_relations)
         # sparql = ""
-        # metrics = eval(data, log, metrics)
+        metrics = eval(data, log, metrics)
 
         # Update logs
         Logging['runtime'].append({'log': log, 'metrics': metrics,
@@ -1058,7 +1062,7 @@ if __name__ == "__main__":
         #     print("\n",sparql)
         print("\n################################\n")
 
-    Logging = evaluate(Logging)
+    Logging = evaluate(Logging,dbp)
 
     model_path = os.path.join(parameter_dict['_model_dir'], 'core_chain')
     model_path = os.path.join(model_path, parameter_dict['corechainmodel'])

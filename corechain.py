@@ -58,7 +58,7 @@ _inv_relations = aux.load_inverse_relation(COMMON_DATA_DIR)
 _word_to_id = aux.load_word_list(COMMON_DATA_DIR)
 
 #onefile stuff
-dbp = db_interface.DBPedia(_verbose=True, caching=True)
+dbp = db_interface.DBPedia(_verbose=True, caching=False )
 vocabularize_relation = lambda path: embeddings_interface.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
 # sparql_constructor.init(embeddings_interface)
 
@@ -159,6 +159,10 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
                 # Bookkeeping and data preparation
                 batch_time = time.time()
+
+
+
+
 
                 if not pointwise:
                     ques_batch = torch.tensor(np.reshape(sample_batched[0][0], (-1, parameter_dict['max_length'])),
@@ -302,7 +306,8 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
             # test_every = False
             if test_every:
                 # Run on test set
-                if epoch%test_every == 0:
+                # epoch % test_every == 0
+                if True:
                     if parameter_dict['schema'] != 'default':
                         if parameter_dict['schema']  == 'slotptr':
                             test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
@@ -339,7 +344,8 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
 
             # Run on validation set
             if validate_every:
-                if epoch%validate_every == 0:
+                # epoch % validate_every == 0
+                if True:
                     if parameter_dict['schema'] != 'default':
                         if parameter_dict['schema'] == 'slotptr':
                             valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
@@ -368,7 +374,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                         valid_accuracy.append(aux.validation_accuracy(data['valid_questions'], data['valid_pos_paths'],
                                                                       data['valid_neg_paths'], modeler, device))
                     if valid_accuracy[-1] > best_validation_accuracy:
-                        print("MODEL WEIGHTS RIGHT NOW: ", modeler.get_parameter_sum())
+                        # print("MODEL WEIGHTS RIGHT NOW: ", modeler.get_parameter_sum())
                         best_validation_accuracy = valid_accuracy[-1]
                         aux_save_information['epoch'] = epoch
                         aux_save_information['validation_accuracy'] = best_validation_accuracy
@@ -442,13 +448,13 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number,finet
     parameter_dict['corechainmodelnumber'] = str(training_model_number)
 
     parameter_dict['intentmodel'] = 'bilstm_dense'
-    parameter_dict['intentmodelnumber'] = '4'
+    parameter_dict['intentmodelnumber'] = '0'
 
     parameter_dict['rdftypemodel'] = 'bilstm_dense'
-    parameter_dict['rdftypemodelnumber'] = '3'
+    parameter_dict['rdftypemodelnumber'] = '0'
 
     parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-    parameter_dict['rdfclassmodelnumber'] = '4'
+    parameter_dict['rdfclassmodelnumber'] = '0'
 
     parameter_dict['dataset'] = _dataset
 
@@ -465,6 +471,10 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number,finet
                                                                              _dataset_specific_data_dir=_dataset_specific_data_dir,
                                                                              split_point=.80,index=_index)
 
+    else:
+        _data, _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
+                                                    _dataset_specific_data_dir=_dataset_specific_data_dir,
+                                                    split_point=.80)
     parameter_dict['vectors'] = _vectors
 
     # For interpretability's sake
@@ -527,13 +537,13 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number,finet
         #                                    gloveid_to_embeddingid=None,
         #                                    embeddingid_to_gloveid=None,
         #                                    relations=None,
-        #                                    parameter_dict=None)
+        #                                    parameter_dictUpload=None)
 
         sparql = one.create_sparql(log=log,
                                data=data,
                                embeddings_interface=embeddings_interface,
                                relations=_inv_relations)
-        # sparql = ""
+        # sparql = ""core_chain_mrr_counter
         # metrics = eval(data, log, metrics)
 
         # Update logs
@@ -568,7 +578,7 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number,finet
         #     print("\n",sparql)
         print("\n################################\n")
 
-    Logging = one.evaluate(Logging)
+    Logging = one.evaluate(Logging,dbp)
     if not finetune:
         model_path = os.path.join(parameter_dict['_model_dir'], 'core_chain')
         model_path = os.path.join(model_path, parameter_dict['corechainmodel'])
@@ -763,12 +773,12 @@ if __name__ == "__main__":
             if pointwise:
                 model_path = 'data/models/core_chain/slotptr_pointwise/lcquad/8/model.torch'
             else:
-                model_path = 'data/models/core_chain/slotptr/lcquad/26/model.torch'
+                model_path = 'data/models/core_chain/slotptr/qg/0/model.torch'
             modeler = net.QelosSlotPointerModel(_parameter_dict=parameter_dict, _word_to_id=_word_to_id,
                                                                _device=device, _pointwise=pointwise, _debug=False)
             optimizer = optim.Adam(list(filter(lambda p: p.requires_grad, modeler.encoder_q.parameters())) +
                                    list(filter(lambda p: p.requires_grad, modeler.encoder_p.parameters())),
-                                   weight_decay=0.0001,lr=0.0001)
+                                   weight_decay=0.0001,lr=0.001)
             modeler.load_from(model_path)
 
 

@@ -501,7 +501,7 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number,finet
         #     print("\n",sparql)
         print("\n################################\n")
 
-    Logging = one.evaluate(Logging)
+    Logging = one.evaluate(Logging,dbp)
     if not finetune:
         model_path = os.path.join(parameter_dict['_model_dir'], 'core_chain')
         model_path = os.path.join(model_path, parameter_dict['corechainmodel'])

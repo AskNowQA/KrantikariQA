@@ -135,7 +135,7 @@ def save_model(loc, modeler, model_name='model.torch', epochs=0, optimizer=None,
 
 
 
-def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  modeler, device, *path_rel):
+def validation_accuracy_old(valid_questions, valid_pos_paths, valid_neg_paths,  modeler, device, *path_rel):
 
     if path_rel:
         if len(path_rel) == 4:
@@ -166,20 +166,41 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  mode
             paths = np.vstack((vnp,valid_pos_paths[i].reshape(1, -1)))
             question = np.repeat(valid_questions[i].reshape(1, -1), len(vnp) + 1,
                                  axis=0)  # +1 for positive path
+
             if path_rel:
                 paths_rel1 = np.vstack((vnr1,valid_pos_paths_rel1[i].reshape(1, -1)))
                 paths_rel2 = np.vstack((vnr2,valid_pos_paths_rel2[i].reshape(1, -1)))
-                paths_rel1 = torch.tensor(paths_rel1, dtype=torch.long, device=device)
-                paths_rel2 = torch.tensor(paths_rel2, dtype=torch.long, device=device)
+
                 if len(path_rel) > 4:
                     paths_rel1_randomvec = np.vstack((vnr1_randomvec, valid_pos_paths_rel1[i].reshape(1, -1)))
                     paths_rel2_randomvec = np.vstack((vnr2_randomvec, valid_pos_paths_rel2[i].reshape(1, -1)))
+
+
+
+            #introducing delay here. Code repeat
+            # doing it for constructing tensors as late as possible
+
+            if True:
+                print(f"question.shape {question.shape}, paths shape is {paths.shape}, "
+                      f"paths_rel1 shape is {paths_rel1.shape},"
+                      f" paths_rel2_randomvec shape is {paths_rel2_randomvec.shape} ")
+
+            if path_rel:
+                paths_rel1 = torch.tensor(paths_rel1, dtype=torch.long, device=device)
+                paths_rel2 = torch.tensor(paths_rel2, dtype=torch.long, device=device)
+                if len(path_rel) > 4:
                     paths_rel1_randomvec = torch.tensor(paths_rel1_randomvec, dtype=torch.long, device=device)
                     paths_rel2_randomvec = torch.tensor(paths_rel2_randomvec, dtype=torch.long, device=device)
+
+
 
             question = torch.tensor(question, dtype=torch.long, device=device)
             paths = torch.tensor(paths, dtype=torch.long, device=device)
 
+
+            '''
+                To write a distributed version
+            '''
             if path_rel:
                 if len(path_rel) == 4:
                     score = modeler.predict(question, paths, paths_rel1, paths_rel2, device)
@@ -195,6 +216,196 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  mode
                 precision.append(0)
         print(precision)
     return sum(precision) * 1.0 / len(precision)
+
+
+
+def tensorized_score(question, paths, modeler, device, path_rel=[]):
+    '''
+        Converts the np matrices to tensor, calculates the score and returns bool.
+
+    :return:
+    '''
+    # print(1, len(paths), len(question))
+    with torch.no_grad():
+        if path_rel:
+            if len(path_rel) == 4:
+                paths_rel1, paths_rel2,paths_rel1_randomvec,paths_rel2_randomvec = path_rel
+            else:
+                paths_rel1, paths_rel2 = path_rel
+
+        if path_rel:
+            paths_rel1 = torch.tensor(paths_rel1, dtype=torch.long, device=device)
+            paths_rel2 = torch.tensor(paths_rel2, dtype=torch.long, device=device)
+            if len(path_rel) == 4:
+                paths_rel1_randomvec = torch.tensor(paths_rel1_randomvec, dtype=torch.long, device=device)
+                paths_rel2_randomvec = torch.tensor(paths_rel2_randomvec, dtype=torch.long, device=device)
+
+        question = torch.tensor(question, dtype=torch.long, device=device)
+        paths = torch.tensor(paths, dtype=torch.long, device=device)
+
+        '''
+            To write a distributed version
+        '''
+        if path_rel:
+            if len(path_rel) == 2:
+                score = modeler.predict(question, paths, paths_rel1, paths_rel2, device)
+                del paths_rel1
+                del paths_rel2
+            else:
+                score = modeler.predict(question, paths, paths_rel1, paths_rel1_randomvec,
+                                        paths_rel2, paths_rel2_randomvec, device)
+                del paths_rel1
+                del paths_rel2
+                del paths_rel1_randomvec
+                del paths_rel2_randomvec
+        else:
+            score = modeler.predict(question, paths, device)
+
+
+        arg_max = torch.argmax(score)
+        if arg_max.item() == len(paths) - 1:  # 0 is the positive path index
+            del question
+            del paths
+            return True
+        else:
+            del question
+            del paths
+            return False
+
+
+
+def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  modeler, device, *path_rel):
+
+    if path_rel:
+        if len(path_rel) == 4:
+            valid_pos_paths_rel1, valid_pos_paths_rel2, valid_neg_paths_rel1, valid_neg_paths_rel2 = path_rel[0],path_rel[1],path_rel[2],path_rel[3]
+        else:
+            valid_pos_paths_rel1, valid_pos_paths_rel2, \
+            valid_pos_paths_rel1_randomvec, valid_pos_paths_rel2_randomvec, \
+            valid_neg_paths_rel1, valid_neg_paths_rel2, \
+            valid_neg_paths_rel1_randomvec, valid_neg_paths_rel2_randomvec    = path_rel[0], \
+                                                                                                     path_rel[1], \
+                                                                                                     path_rel[2], \
+                                                                                                     path_rel[3], \
+                                                                                path_rel[4], path_rel[5], path_rel[6], \
+                                                                                path_rel[7]
+    precision = []
+    with torch.no_grad():
+        # print(len(valid_questions))
+        c = 0
+        for i in range(len(valid_questions)):
+            # i = i + 304
+            # c = c + 1
+            # print(i)
+            vnp,valid_index = np.unique(valid_neg_paths[i],axis=0,return_index=True)
+            # print(c,len(valid_index))
+            if path_rel:
+                vnr1 = [valid_neg_paths_rel1[i][ind] for ind in valid_index ]
+                vnr2 = [valid_neg_paths_rel2[i][ind] for ind in valid_index ]
+                if len(path_rel) > 4:
+                    vnr1_randomvec = [valid_neg_paths_rel1_randomvec[i][ind] for ind in valid_index]
+                    vnr2_randomvec = [valid_neg_paths_rel2_randomvec[i][ind] for ind in valid_index]
+            # paths = np.vstack((valid_pos_paths[i].reshape(1, -1), valid_neg_paths[i]))
+            # print(valid_pos_paths[i].reshape(1, -1))
+            paths = np.vstack((vnp,valid_pos_paths[i].reshape(1, -1)))
+            question = np.repeat(valid_questions[i].reshape(1, -1), len(vnp) + 1,
+                                 axis=0)  # +1 for positive path
+
+            if path_rel:
+                paths_rel1 = np.vstack((vnr1,valid_pos_paths_rel1[i].reshape(1, -1)))
+                paths_rel2 = np.vstack((vnr2,valid_pos_paths_rel2[i].reshape(1, -1)))
+
+                if len(path_rel) > 4:
+                    paths_rel1_randomvec = np.vstack((vnr1_randomvec, valid_pos_paths_rel1[i].reshape(1, -1)))
+                    paths_rel2_randomvec = np.vstack((vnr2_randomvec, valid_pos_paths_rel2[i].reshape(1, -1)))
+
+
+
+            #introducing delay here. Code repeat
+            # doing it for constructing tensors as late as possible
+            distributed = True
+            if distributed:
+                #split it into K clusters and then pass it through tesnorized_score function
+                def distribute_it(np_array,k):
+                    # print(len(np_array))
+                    _temp = np.array_split(np_array[:-1],k,axis=0)
+                    # if True:
+                    #     print(np_array[-1])
+                    #     print(np.vstack([_temp[0],np_array[-1]]).shape )
+                    #     print(np.vstack([_temp[0], np_array[-1]])[-1])
+                    return [np.vstack([p,np_array[-1]]) for p in _temp]
+
+                k = 20
+                paths_split = distribute_it(paths,k=k)
+                # raise IOError
+                question_split = distribute_it(question,k=k)
+                if path_rel:
+                    paths_rel1_split = distribute_it(paths_rel1,k)
+                    paths_rel2_split = distribute_it(paths_rel2,k)
+
+                    if len(path_rel) > 4:
+                        paths_rel1_randomvec_split = distribute_it(paths_rel1_randomvec,k)
+                        paths_rel2_randomvec_split = distribute_it(paths_rel2_randomvec,k)
+                        score = [tensorized_score(question=x[0], paths=x[1], modeler=modeler,
+                                                  device=device,path_rel = [x[2],x[3],x[4],x[5]] ) for x in zip(
+                            question_split,paths_split,paths_rel1_split,paths_rel2_split,
+                            paths_rel1_randomvec_split,paths_rel2_randomvec_split)]
+                    else:
+                        score = [tensorized_score(question=x[0], paths=x[1], modeler=modeler,
+                                                  device=device, path_rel=[x[2], x[3]]) for x in zip(
+                            question_split, paths_split, paths_rel1_split, paths_rel2_split)]
+                else:
+                    score = [tensorized_score(question=x[0], paths=x[1], modeler=modeler,
+                                              device=device) for x in zip(
+                        question_split, paths_split)]
+
+
+                # print(score)
+                if False in score:
+                    precision.append(0)
+                else:
+                    precision.append(1)
+
+            else:
+
+                if True:
+                    print(f"question.shape {question.shape}, paths shape is {paths.shape}, "
+                          f"paths_rel1 shape is {paths_rel1.shape},"
+                          f" paths_rel2_randomvec shape is {paths_rel2_randomvec.shape} ")
+
+                if path_rel:
+                    paths_rel1 = torch.tensor(paths_rel1, dtype=torch.long, device=device)
+                    paths_rel2 = torch.tensor(paths_rel2, dtype=torch.long, device=device)
+                    if len(path_rel) > 4:
+                        paths_rel1_randomvec = torch.tensor(paths_rel1_randomvec, dtype=torch.long, device=device)
+                        paths_rel2_randomvec = torch.tensor(paths_rel2_randomvec, dtype=torch.long, device=device)
+
+
+
+                question = torch.tensor(question, dtype=torch.long, device=device)
+                paths = torch.tensor(paths, dtype=torch.long, device=device)
+
+
+                '''
+                    To write a distributed version
+                '''
+                if path_rel:
+                    if len(path_rel) == 4:
+                        score = modeler.predict(question, paths, paths_rel1, paths_rel2, device)
+                    else:
+                        score = modeler.predict(question,paths,paths_rel1,paths_rel1_randomvec,
+                                                paths_rel2,paths_rel2_randomvec,device)
+                else:
+                    score = modeler.predict(question, paths, device)
+                arg_max = torch.argmax(score)
+                if arg_max.item() == len(paths)-1:  # -1 is the positive path index
+                    precision.append(1)
+                else:
+                    precision.append(0)
+            # print(precision)
+        print(sum(precision) * 1.0 / len(precision))
+    return sum(precision) * 1.0 / len(precision)
+
 
 
 def validation_accuracy_alter(valid_questions, valid_pos_paths, valid_neg_paths, modeler, device, qa):

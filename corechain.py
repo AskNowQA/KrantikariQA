@@ -20,7 +20,8 @@ import auxiliary as aux
 import network as net
 from configs import config_loader as cl
 # from utils import query_graph_to_sparql as sparql_constructor
-from utils import dbpedia_interface as db_interface
+
+from utils import  dbpedia_interface as db_interface
 from utils import embeddings_interface
 from utils import natural_language_utilities as nlutils
 import network_rdftype as net_rdftype
@@ -622,8 +623,8 @@ if __name__ == "__main__":
 
     '''
         device = 'cpu'
-        training_model = 'slotptr_randomvec' #QelosSlotPointerModelRandomVec
-        _dataset = 'qg'
+        training_model = 'slotptr_bert' #QelosSlotPointerModelRandomVec
+        _dataset = 'lcquad'
         pointwise = False
         _train_over_validation = False
         bidirectional = True
@@ -666,7 +667,7 @@ if __name__ == "__main__":
     if training_model == 'reldet':
         schema = 'reldet'
     elif training_model == 'slotptr' or training_model == 'slotptr_common_encoder' or training_model == 'slotptrortho'\
-            or training_model == 'ulmfit_slotptr':
+            or training_model == 'ulmfit_slotptr' or training_model == 'bert_slotptr':
         schema = 'slotptr'
     elif training_model == 'bilstm_dot_multiencoder':
         schema = 'default'

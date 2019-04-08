@@ -808,8 +808,38 @@ def construct_paths(data, relations, qald=False):
         return question, positive_path, negative_paths, no_positive_path
     return question, positive_path, negative_paths
 
+class ValidationDataset(Dataset):
+    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size,total_negative_samples):
+        self.dummy_y = np.zeros(batch_size)
+        self.firstDone = False
+        self.max_length = max_length
+        self.neg_paths_per_epoch = neg_paths_per_epoch
+        self.total_negative_samples = total_negative_samples
+
+        self.questions = np.reshape(np.repeat(np.reshape(questions,
+                                            (questions.shape[0], 1, questions.shape[1])),
+                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
+
+        self.pos_paths = np.reshape(pos_paths,
+                                            (pos_paths.shape[0], 1, pos_paths.shape[1]))
+        self.neg_paths = neg_paths
+        neg_paths_sampled = self.neg_paths[:, np.random.randint(0, self.total_negative_samples, self.neg_paths_per_epoch), :]
+        self.all_paths = np.reshape(np.concatenate([self.pos_paths, neg_paths_sampled], axis=1), (-1, self.max_length))
+
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return math.ceil(len(self.questions) / self.batch_size)
+
+    def __getitem__(self, idx):
+        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
+        batch_questions = index(self.questions)
+        batch_all_paths = index(self.all_paths)
+
+        return ([batch_questions, batch_all_paths, np.zeros_like(batch_all_paths)], self.dummy_y)
+
 class TrainingDataGenerator(Dataset):
-    def __init__(self, data, max_length, neg_paths_per_epoch, batch_size,total_negative_samples,pointwise=False,schema='default',snip=800):
+    def __init__(self, data, max_length, neg_paths_per_epoch, batch_size,total_negative_samples,pointwise=False,schema='default',snip=1.0):
         self.dummy_y = np.zeros(batch_size)
         self.firstDone = False
         self.max_length = max_length
@@ -818,33 +848,36 @@ class TrainingDataGenerator(Dataset):
         self.pointwise = pointwise
         self.schema = schema
 
-        questions =  data['train_questions']
-        pos_paths = data['train_pos_paths']
-        neg_paths = data['train_neg_paths']
+        def snipper(d):
+            return int(len(d)*snip)
+
+        questions =  data['train_questions'][:snipper(data['train_questions'])]
+        pos_paths = data['train_pos_paths'][:snipper(data['train_pos_paths'])]
+        neg_paths = data['train_neg_paths'][:snipper(data['train_neg_paths'])]
 
         if schema == 'slotptr':
-            self.pos_paths_rel1 = data['train_pos_paths_rel1_sp']
-            self.pos_paths_rel2 = data['train_pos_paths_rel2_sp']
-            self.neg_paths_rel1 = data['train_neg_paths_rel1_sp']
-            self.neg_paths_rel2 = data['train_neg_paths_rel2_sp']
+            self.pos_paths_rel1 = data['train_pos_paths_rel1_sp'][:snipper(data['train_pos_paths_rel1_sp'])]
+            self.pos_paths_rel2 = data['train_pos_paths_rel2_sp'][:snipper(data['train_pos_paths_rel2_sp'])]
+            self.neg_paths_rel1 = data['train_neg_paths_rel1_sp'][:snipper(data['train_neg_paths_rel1_sp'])]
+            self.neg_paths_rel2 = data['train_neg_paths_rel2_sp'][:snipper(data['train_neg_paths_rel2_sp'])]
 
         elif schema == 'reldet':
-            self.pos_paths_rel1 = data['train_pos_paths_rel1_rd']
-            self.pos_paths_rel2 = data['train_pos_paths_rel2_rd']
-            self.neg_paths_rel1 = data['train_neg_paths_rel1_rd']
-            self.neg_paths_rel2 = data['train_neg_paths_rel2_rd']
+            self.pos_paths_rel1 = data['train_pos_paths_rel1_rd'][:snipper(data['train_pos_paths_rel1_rd'])]
+            self.pos_paths_rel2 = data['train_pos_paths_rel2_rd'][:snipper(data['train_pos_paths_rel2_rd'])]
+            self.neg_paths_rel1 = data['train_neg_paths_rel1_rd'][:snipper(data['train_neg_paths_rel1_rd'])]
+            self.neg_paths_rel2 = data['train_neg_paths_rel2_rd'][:snipper(data['train_neg_paths_rel2_rd'])]
 
         elif schema == 'slotptr_randomvec':
             #regular slotptr
-            self.pos_paths_rel1 = data['train_pos_paths_rel1_sp']
-            self.pos_paths_rel2 = data['train_pos_paths_rel2_sp']
-            self.neg_paths_rel1 = data['train_neg_paths_rel1_sp']
-            self.neg_paths_rel2 = data['train_neg_paths_rel2_sp']
+            self.pos_paths_rel1 = data['train_pos_paths_rel1_sp'][:snipper(data['train_pos_paths_rel1_sp'])]
+            self.pos_paths_rel2 = data['train_pos_paths_rel2_sp'][:snipper(data['train_pos_paths_rel2_sp'])]
+            self.neg_paths_rel1 = data['train_neg_paths_rel1_sp'][:snipper(data['train_neg_paths_rel1_sp'])]
+            self.neg_paths_rel2 = data['train_neg_paths_rel2_sp'][:snipper(data['train_neg_paths_rel2_sp'])]
             #A random vector to be appended
-            self.pos_paths_rel1_randomvec = data['train_pos_paths_rel1_rd']
-            self.pos_paths_rel2_randomvec = data['train_pos_paths_rel2_rd']
-            self.neg_paths_rel1_randomvec = data['train_neg_paths_rel1_rd']
-            self.neg_paths_rel2_randomvec = data['train_neg_paths_rel2_rd']
+            self.pos_paths_rel1_randomvec = data['train_pos_paths_rel1_rd'][:snipper(data['train_pos_paths_rel1_rd'])]
+            self.pos_paths_rel2_randomvec = data['train_pos_paths_rel2_rd'][:snipper(data['train_pos_paths_rel2_rd'])]
+            self.neg_paths_rel1_randomvec = data['train_neg_paths_rel1_rd'][:snipper(data['train_neg_paths_rel1_rd'])]
+            self.neg_paths_rel2_randomvec = data['train_neg_paths_rel2_rd'][:snipper(data['train_neg_paths_rel2_rd'])]
 
 
 
@@ -1063,35 +1096,5 @@ class TrainingDataGenerator(Dataset):
         else:
             self.questions_shuffled, self.pos_paths_shuffled, self.neg_paths_shuffled = \
                 shuffle(self.questions, self.pos_paths, self.neg_paths_sampled)
-
-class ValidationDataset(Dataset):
-    def __init__(self, questions, pos_paths, neg_paths, max_length, neg_paths_per_epoch, batch_size,total_negative_samples):
-        self.dummy_y = np.zeros(batch_size)
-        self.firstDone = False
-        self.max_length = max_length
-        self.neg_paths_per_epoch = neg_paths_per_epoch
-        self.total_negative_samples = total_negative_samples
-
-        self.questions = np.reshape(np.repeat(np.reshape(questions,
-                                            (questions.shape[0], 1, questions.shape[1])),
-                                 neg_paths_per_epoch+1, axis=1), (-1, max_length))
-
-        self.pos_paths = np.reshape(pos_paths,
-                                            (pos_paths.shape[0], 1, pos_paths.shape[1]))
-        self.neg_paths = neg_paths
-        neg_paths_sampled = self.neg_paths[:, np.random.randint(0, self.total_negative_samples, self.neg_paths_per_epoch), :]
-        self.all_paths = np.reshape(np.concatenate([self.pos_paths, neg_paths_sampled], axis=1), (-1, self.max_length))
-
-        self.batch_size = batch_size
-
-    def __len__(self):
-        return math.ceil(len(self.questions) / self.batch_size)
-
-    def __getitem__(self, idx):
-        index = lambda x: x[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_questions = index(self.questions)
-        batch_all_paths = index(self.all_paths)
-
-        return ([batch_questions, batch_all_paths, np.zeros_like(batch_all_paths)], self.dummy_y)
 
 

@@ -200,7 +200,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                 np.reshape(sample_batched[0][9], (-1, parameter_dict['max_length'])),
                                 dtype=torch.long, device=device)
                             neg_rel2_randomvec_batch = torch.tensor(
-                                np.reshape(sample_batched[0][10 ], (-1, parameter_dict['max_length'])),
+                                np.reshape(sample_batched[0][10], (-1, parameter_dict['max_length'])),
                                 dtype=torch.long, device=device)
 
                             t = 2
@@ -325,7 +325,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                                         data['test_neg_paths_rel1_sp'],
                                                         data['test_neg_paths_rel2_sp'],
                                                         data['test_neg_paths_rel1_rd'],
-                                                        data['test_neg_paths_rel1_rd']))
+                                                        data['test_neg_paths_rel2_rd']))
                         else:
                             test_accuracy.append(aux.validation_accuracy(data['test_questions'], data['test_pos_paths'],
                                                                          data['test_neg_paths'], modeler, device,
@@ -363,7 +363,7 @@ def training_loop(training_model, parameter_dict,modeler,train_loader,
                                                         data['valid_neg_paths_rel1_sp'],
                                                         data['valid_neg_paths_rel2_sp'],
                                                         data['valid_neg_paths_rel1_rd'],
-                                                        data['valid_neg_paths_rel1_rd']))
+                                                        data['valid_neg_paths_rel2_rd']))
                         else:
                             valid_accuracy.append(aux.validation_accuracy(data['valid_questions'][:-1], data['valid_pos_paths'][:-1],
                                                                           data['valid_neg_paths'][:-1], modeler, device,
@@ -477,6 +477,10 @@ def evaluate(device,pointwise,dataset,training_model,training_model_number,finet
                                                     _dataset_specific_data_dir=_dataset_specific_data_dir,
                                                     split_point=.80)
     parameter_dict['vectors'] = _vectors
+
+    parameter_dict['vocab'] = pickle.load(open('resources/vocab_gl.pickle', 'rb'))
+
+    print(parameter_dict.keys())
 
     # For interpretability's sake
     # word_to_gloveid, gloveid_to_word = aux.load_embeddingid_gloveid()

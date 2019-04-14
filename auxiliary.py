@@ -368,10 +368,10 @@ def validation_accuracy(valid_questions, valid_pos_paths, valid_neg_paths,  mode
 
             else:
 
-                if True:
-                    print(f"question.shape {question.shape}, paths shape is {paths.shape}, "
-                          f"paths_rel1 shape is {paths_rel1.shape},"
-                          f" paths_rel2_randomvec shape is {paths_rel2_randomvec.shape} ")
+                # if True:
+                #     print(f"question.shape {question.shape}, paths shape is {paths.shape}, "
+                #           f"paths_rel1 shape is {paths_rel1.shape},"
+                #           f" paths_rel2_randomvec shape is {paths_rel2_randomvec.shape} ")
 
                 if path_rel:
                     paths_rel1 = torch.tensor(paths_rel1, dtype=torch.long, device=device)

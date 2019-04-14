@@ -131,6 +131,15 @@ class QuestionAnswering:
             self.corechain_model = net.QelosSlotPointerModelRandomVec(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
                                                  _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
 
+
+        if self.parameters['corechainmodel'] == 'bert_slotptr':
+            self.corechain_model = net.Bert_Scorer_slotptr(_parameter_dict=self.parameters,
+                                          _word_to_id=self._word_to_id,
+                                          _device=self.device,
+                                          _pointwise=self.pointwise,
+                                          _debug=self.debug)
+
+
         # Make the model path
         model_path = os.path.join(self.parameters['_model_dir'], 'core_chain')
         if self.pointwise:
@@ -198,7 +207,7 @@ class QuestionAnswering:
 
         self.intent_model.load_from(model_path)
 
-    def _predict_corechain(self, _q, _p, _p1 = None , _p2 = None, _p1_randomvec = None, _p2_randomvec = None):
+    def _predict_corechain_old(self, _q, _p, _p1 = None , _p2 = None, _p1_randomvec = None, _p2_randomvec = None):
         """
             Given a datapoint (question, paths) encoded in  embedding_vocab,
                 run the model's predict and find the best corechain.
@@ -238,7 +247,8 @@ class QuestionAnswering:
             P1 = torch.tensor(P1, dtype=torch.long, device=self.device)
             P2 = torch.tensor(P2, dtype=torch.long, device=self.device)
 
-            if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'slotptr_randomvec':
+            if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'slotptr_randomvec'\
+                    or self.parameters['corechainmodel'] == 'bert_slotptr':
                 P1 = P1[:,:self.parameters['relsp_pad']]
                 P2 = P2[:,:self.parameters['relsp_pad']]
             else:
@@ -269,7 +279,8 @@ class QuestionAnswering:
             # print("Q: ", Q.shape, " P: ", P.shape)
 
             # We then pass them through a predict function and get a score array.
-        if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'reldet':
+        if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'reldet' or \
+                self.parameters['corechainmodel'] == 'bert_slotptr':
             # print("path rel 1 main ", P1)
             # print("path rel 2 main ", P2)
             # print("path rel 2 main ", P1.shape)
@@ -286,6 +297,207 @@ class QuestionAnswering:
                     paths_rel2=P2, paths_rel2_randomvec=P2_randomvec, device=self.device)
         else:
             score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
+        return score.detach().cpu().numpy()
+
+
+    def _predict_corechain(self, _q, _p, _p1 = None , _p2 = None, _p1_randomvec = None, _p2_randomvec = None):
+        """
+            Given a datapoint (question, paths) encoded in  embedding_vocab,
+                run the model's predict and find the best corechain.
+
+            _q: (<var len>)
+            _p: (100/500, <var len>)
+
+            returns score: (100/500)
+        """
+
+        # Pad questions
+        Q = np.zeros((len(_p), self.parameters['max_length']))
+        Q[:, :min(len(_q), self.parameters['max_length'])] = \
+            np.repeat(_q[np.newaxis, :min(len(_q), self.parameters['max_length'])], repeats=len(_p), axis=0)
+
+        # Pad paths
+        P = np.zeros((len(_p), self.parameters['max_length']))
+        if _p1:
+            P1 = np.zeros((len(_p), self.parameters['max_length']))
+            P2 = np.zeros((len(_p), self.parameters['max_length']))
+        for i in range(len(_p)):
+            P[i, :min(len(_p[i]), self.parameters['max_length'])] = _p[i][:min(len(_p[i]), self.parameters['max_length'])]
+
+        if _p1_randomvec:
+            P1_randomvec = np.zeros((len(_p), self.parameters['max_length']))
+            P2_randomvec = np.zeros((len(_p), self.parameters['max_length']))
+
+        if _p1:
+            # print(_p1)
+            for i in range(len(_p)):
+                # print(type(_p1[i]),_p1[i],_p1[:5])
+                P1[i, :min(len(_p1[i]), self.parameters['max_length'])] = _p1[i][
+                                                                        :min(len(_p1[i]), self.parameters['max_length'])]
+                P2[i, :min(len(_p2[i]), self.parameters['max_length'])] = _p2[i][
+                                                                          :min(len(_p2[i]),
+                                                                                   self.parameters['max_length'])]
+
+
+
+            if self.parameters['corechainmodel'] == 'slotptr' or \
+                    self.parameters['corechainmodel'] == 'slotptr_randomvec' or self.parameters['corechainmodel'] == 'bert_slotptr':
+                P1 = P1[:,:self.parameters['relsp_pad']]
+                P2 = P2[:,:self.parameters['relsp_pad']]
+            else:
+                P1 = P1[:, :self.parameters['relrd_pad']]
+                P2 = P2[:, :self.parameters['relrd_pad']]
+
+
+            # P1 = torch.tensor(P1, dtype=torch.long, device=self.device)
+            # P2 = torch.tensor(P2, dtype=torch.long, device=self.device)
+
+
+
+        if _p1_randomvec:
+            # print(_p1)
+            for i in range(len(_p)):
+                # print(type(_p1[i]),_p1[i],_p1[:5])
+                P1_randomvec[i, :min(len(_p1[i]), self.parameters['max_length'])] = _p1_randomvec[i][
+                                                                        :min(len(_p1_randomvec[i]), self.parameters['max_length'])]
+                P2_randomvec[i, :min(len(_p2[i]), self.parameters['max_length'])] = _p2_randomvec[i][
+                                                                          :min(len(_p2_randomvec[i]),
+                                                                                   self.parameters['max_length'])]
+
+            P1_randomvec = P1_randomvec[:, :self.parameters['relrd_pad']]
+            P2_randomvec = P2_randomvec[:, :self.parameters['relrd_pad']]
+
+            # P1_randomvec = torch.tensor(P1_randomvec, dtype=torch.long, device=self.device)
+            # P2_randomvec = torch.tensor(P2_randomvec, dtype=torch.long, device=self.device)
+
+
+
+
+        # Tensorize things here
+
+        # Convert np to torch stuff
+        P = P[:, :self.parameters['rel_pad']]
+
+
+        #Check what variables are None and which are not none.
+        if not _p1_randomvec:
+            P1_randomvec,P2_randomvec = None, None
+        if not _p1:
+            P1,P2 = None,None
+
+        def distribute_it(np_array, k):
+            # print(len(np_array))
+            return np.array_split(np_array[:-1], k, axis=0)
+
+
+        distribute = True
+        k = 10
+
+        if len(Q) < k+1:
+            distribute = False
+        if distribute:
+
+            print("in distributed setting")
+            if _p1_randomvec:
+                Q_dist, P_dist, P1_dist, P2_dist, P1_randomvec_dist, P2_randomvec_dist = distribute_it(Q,k), \
+                                                                                         distribute_it(P,k), \
+                                                                                         distribute_it(P1,k), \
+                                                                                         distribute_it(P2,k), \
+                                                                                         distribute_it(P1_randomvec,k),\
+                                                                                         distribute_it(P2_randomvec,k)
+
+                temp_score = []
+                for q,p,p1,p2,p1_rv,p2_rv in zip(Q_dist,P_dist,P1_dist,P2_dist,P1_randomvec_dist,P2_randomvec_dist):
+                    temp_score.append(self.tensorized_Score(q,p,p1,p1_rv,p2,p2_rv))
+            if not _p1_randomvec and _p1:
+                Q_dist, P_dist, P1_dist, P2_dist = distribute_it(Q, k), \
+                                                                                         distribute_it(P, k), \
+                                                                                         distribute_it(P1, k), \
+                                                                                         distribute_it(P2, k)
+
+                temp_score = []
+                for q, p, p1, p2 in zip(Q_dist, P_dist, P1_dist, P2_dist):
+                    temp_score.append(self.tensorized_Score(q, p, p1, None, p2, None))
+
+            if not _p1_randomvec and not _p1:
+                Q_dist, P_dist = distribute_it(Q, k), \
+                                                   distribute_it(P, k)
+
+                temp_score = []
+                for q, p in zip(Q_dist, P_dist):
+                    temp_score.append(self.tensorized_Score(q, p, None, None, None, None))
+
+            final_score = []
+            for scores in temp_score:
+                for s in scores:
+                    final_score.append(s)
+
+            return np.asarray(final_score)
+
+
+
+        else:
+            return self.tensorized_Score(Q,P,P1=P1,P1_randomvec=P1_randomvec,P2=P2,P2_randomvec=P2_randomvec)
+        # # Q = torch.tensor(Q, dtype=torch.long, device=self.device)
+        # # P = torch.tensor(P, dtype=torch.long, device=self.device)
+        # # if self.debug:
+        #     # print("Q: ", Q.shape, " P: ", P.shape)
+        #
+        #     # We then pass them through a predict function and get a score array.
+        # if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'reldet':
+        #     # print("path rel 1 main ", P1)
+        #     # print("path rel 2 main ", P2)
+        #     # print("path rel 2 main ", P1.shape)
+        #     # print("path rel 2 main ", P2.shape)
+        #
+        #     score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel2=P2, device=self.device)
+        #     #Visual stuff.
+        #     # score,attention_score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel2=P2, device=self.device,attention_value=True)
+        #     # score1 = attention_score.squeeze(-1)[0, :, 0]
+        #     # score2 = attention_score.squeeze(-1)[0, :, 1]
+        #     # return score.detach().cpu().numpy(), score1.detach().cpu().numpy(), score2.detach().cpu().numpy()
+        # elif self.parameters['corechainmodel'] == 'slotptr_randomvec':
+        #     score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel1_randomvec=P1_randomvec,
+        #             paths_rel2=P2, paths_rel2_randomvec=P2_randomvec, device=self.device)
+        # else:
+        #     score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
+        # return score.detach().cpu().numpy()
+
+
+    def tensorized_Score(self,Q,P,P1=None,P1_randomvec=None,P2=None,P2_randomvec=None):
+
+        # with torch.no_grad:
+            # Tensorize vectors:
+
+
+
+
+
+        Q = torch.tensor(Q, dtype=torch.long, device=self.device)
+        P = torch.tensor(P, dtype=torch.long, device=self.device)
+        # P = P[:, :self.parameters['rel_pad']]
+
+        if type(P1) != type(None):
+            # Then P2 also exists
+            P1 = torch.tensor(P1, dtype=torch.long, device=self.device)
+            P2 = torch.tensor(P2, dtype=torch.long, device=self.device)
+
+        if type(P1_randomvec) != type(None):
+            # Then P2 randomvec also exists
+            P1_randomvec = torch.tensor(P1_randomvec, dtype=torch.long, device=self.device)
+            P2_randomvec = torch.tensor(P2_randomvec, dtype=torch.long, device=self.device)
+
+        # Send it to the module and expect some scores
+        if self.parameters['corechainmodel'] == 'slotptr' or self.parameters['corechainmodel'] == 'reldet' or self.parameters['corechainmodel'] == 'bert_slotptr':
+            score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel2=P2, device=self.device)
+
+        elif self.parameters['corechainmodel'] == 'slotptr_randomvec':
+            score = self.corechain_model.predict(ques=Q, paths=P, paths_rel1=P1, paths_rel1_randomvec=P1_randomvec,
+                                                 paths_rel2=P2, paths_rel2_randomvec=P2_randomvec,
+                                                 device=self.device)
+        else:
+            score = self.corechain_model.predict(ques=Q, paths=P, device=self.device)
+
         return score.detach().cpu().numpy()
 
     def _predict_rdfclass(self, _q, _p):
@@ -554,9 +766,13 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
             # print("paths rel1 rd are loop1 ", paths_rel1_rd)
             # print("paths rel2 rd are loop1 ", paths_rel2_rd)
             output = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
-        elif model == 'slotptr':
+        elif model == 'slotptr' or model == 'bert_slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
             output= quesans._predict_corechain(question,paths,paths_rel1_sp,paths_rel2_sp)
+        elif model == 'slotptr_randomvec':
+            paths_rel1_sp, paths_rel2_sp, paths_rel1_rd, paths_rel2_rd = create_rd_sp_paths(paths)
+            output = quesans._predict_corechain(_q=question, _p=paths, _p1=paths_rel1_sp, _p2=paths_rel2_sp,
+                                                _p1_randomvec=paths_rel1_rd, _p2_randomvec=paths_rel2_rd)
         else:
             output = quesans._predict_corechain(question, paths)
         best_path_index = np.argmax(output)
@@ -574,7 +790,7 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
             # print("paths rel2 rd are loop1 ", paths_rel2_rd)
 
             output = quesans._predict_corechain(question,paths,paths_rel1_rd,paths_rel2_rd)
-        elif model == 'slotptr':
+        elif model == 'slotptr' or model == 'bert_slotptr':
             paths_rel1_sp, paths_rel2_sp, _, _ = create_rd_sp_paths(paths)
             # print("paths rel1 rd are loop1 ", paths_rel1_sp)
             # print("paths rel2 rd are loop1 ", paths_rel2_sp)
@@ -906,7 +1122,7 @@ if __name__ == "__main__":
     pointwise = False
 
     # 19 is performing the best
-    training_model_number = 2
+    training_model_number = 7
     _debug = False
 
     # Loading relations file.
@@ -946,9 +1162,11 @@ if __name__ == "__main__":
     parameter_dict['rdftypemodelnumber'] = '0'
 
     parameter_dict['rdfclassmodel'] = 'bilstm_dot'
-    parameter_dict['rdfclassmodelnumber'] = '2'
+    parameter_dict['rdfclassmodelnumber'] = '0'
 
     print(parameter_dict)
+
+    parameter_dict['vocab'] = pickle.load(open('resources/vocab_gl.pickle', 'rb'))
 
     TEMP = aux.data_loading_parameters(_dataset, parameter_dict, runtime=True)
 
@@ -1028,7 +1246,7 @@ if __name__ == "__main__":
                                embeddings_interface=embeddings_interface,
                                relations=_inv_relations)
         # sparql = ""
-        metrics = eval(data, log, metrics)
+        # metrics = eval(data, log, metrics)
 
         # Update logs
         Logging['runtime'].append({'log': log, 'metrics': metrics,

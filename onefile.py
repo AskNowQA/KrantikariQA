@@ -17,6 +17,7 @@ import torch
 import pickle
 import traceback
 import numpy as np
+import pandas as pd
 from pprint import pprint
 from progressbar import ProgressBar
 
@@ -62,7 +63,10 @@ class QuestionAnswering:
 
         # Load models
         # self.parameters['dataset'] = 'transfer-b'
+
         self._load_corechain_model()
+        if self.parameters['dataset'] == 'transfer-d':
+            self.parameters['dataset'] = 'lcquad'
         '''
             since all auxilary components perform really bad if just trained on QALD
             We always use ones trained on LC-QuAD.'        
@@ -391,7 +395,7 @@ class QuestionAnswering:
 
 
         distribute = True
-        k = 10
+        k = 200
 
         if len(Q) < k+1:
             distribute = False
@@ -591,7 +595,7 @@ def construct_paths(data, relations, gloveid_to_embeddingid, qald=False):
     # inverse id version of positive path and creating a numpy version
     positive_path_id = data['parsed-data']['path']
     no_positive_path = False
-    print("**", positive_path_id)
+    # print("**", positive_path_id)
     if positive_path_id == -1:
         positive_path = np.asarray([-1])
         no_positive_path = True
@@ -815,7 +819,7 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         mrr_output = mrr_output.tolist()
         mrr = mrr_output.index(0) + 1.0
 
-        print(output)
+        # print(output)
         if mrr != 0:
             mrr = 1.0 / mrr
 
@@ -1107,8 +1111,23 @@ def evaluate(_logging,dbp):
 if __name__ == "__main__":
 
     device = torch.device("cuda")
+    paraphrase = False
+
+
+    if paraphrase:
+        df = pd.read_csv(open('resources/final_paraphrase.csv'))
+        paraphrased_data = {}
+        for q1, a1, id1, q2, a2, id2 in zip(df['Input.INPUT_QUESTION1'],
+                                            df['Answer.rephrased_question1'], df['Input.UID1'],
+                                            df['Input.INPUT_QUESTION2'],
+                                            df['Answer.rephrased_question2'], df['Input.UID2']):
+            if id1 not in paraphrased_data.keys():
+                paraphrased_data[id1] = a1
+            if id2 not in paraphrased_data.keys():
+                paraphrased_data[id2] = a2
+
     # sparql_constructor.init(embeddings_interface)
-    dbp = db_interface.DBPedia(_verbose=True, caching=True)
+    dbp = db_interface.DBPedia(_verbose=True, caching=False)
     vocabularize_relation = lambda path: embeddings_interface.vocabularize(
         nlutils.tokenize(dbp.get_label(path))).tolist()
 
@@ -1117,7 +1136,7 @@ if __name__ == "__main__":
     config.readfp(open('configs/macros.cfg'))
 
     # setting up device,model name and loss types.
-    training_model = 'slotptr_randomvec'
+    training_model = 'bert_slotptr'
     _dataset = 'lcquad'
     pointwise = False
 
@@ -1142,8 +1161,15 @@ if __name__ == "__main__":
     else:
         training_config = 'pairwise'
 
-    parameter_dict = cl.runtime_parameters(dataset=_dataset, training_model=training_model,
-                                           training_config=training_config, config_file='configs/macros.cfg')
+    if _dataset == 'transfer-d':
+        _dataset = 'lcquad'
+        parameter_dict = cl.runtime_parameters(dataset=_dataset, training_model=training_model,
+                                               training_config=training_config, config_file='configs/macros.cfg')
+        _dataset = 'transfer-d'
+    else:
+        parameter_dict = cl.runtime_parameters(dataset=_dataset, training_model=training_model,
+                                               training_config=training_config, config_file='configs/macros.cfg')
+
 
     if training_model == 'cnn_dot':
         parameter_dict['output_dim'] = int(config.get(_dataset, 'output_dim'))
@@ -1174,9 +1200,16 @@ if __name__ == "__main__":
     _max_sequence_length, _neg_paths_per_epoch_train, \
     _neg_paths_per_epoch_validation, _training_split, _validation_split, _index = TEMP
 
-    _data,  _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
-                                                                         _dataset_specific_data_dir=_dataset_specific_data_dir,
-                                                                         split_point=.80)
+    if _dataset == 'transfer-d':
+        _dataset = 'lcquad'
+        _data,  _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
+                                                                             _dataset_specific_data_dir=_dataset_specific_data_dir,
+                                                                             split_point=.80)
+        _dataset = 'transfer-d'
+    else:
+        _data, _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
+                                                    _dataset_specific_data_dir=_dataset_specific_data_dir,
+                                                    split_point=.80)
 
     parameter_dict['vectors'] = _vectors
 
@@ -1213,6 +1246,7 @@ if __name__ == "__main__":
     Logging = parameter_dict.copy()
     Logging['runtime'] = []
 
+    # took care of transfer-d in QuestionAnswering class.
     quesans = QuestionAnswering(parameter_dict, pointwise, _word_to_id, device,_dataset, False)
 
     # Some logs which run during runtime, not after.
@@ -1220,12 +1254,20 @@ if __name__ == "__main__":
     core_chain_mrr_log = []
 
     startindex = 0
+    print(f"length of _data is {len(_data)}")
     for index, data in enumerate(_data[startindex:]):
         print (index)
         if index == 16 or index == 25:
             continue
-        print(data.keys())
+        # print(data.keys())
         index += startindex
+
+        if paraphrase:
+            new_question = paraphrased_data[data['parsed-data']['node']['_id']]
+            new_question_id = embeddings_interface.vocabularize\
+                (nlutils.tokenize(new_question))
+            data['uri']['question-id'] = new_question_id
+            data['parsed-data']['node']['corrected_question'] = new_question
 
         log, metrics = answer_question(qa=quesans,
                                        index=index,
@@ -1286,5 +1328,8 @@ if __name__ == "__main__":
     model_path = os.path.join(model_path, parameter_dict['corechainmodel'])
     model_path = os.path.join(model_path, parameter_dict['dataset'])
     model_path = os.path.join(model_path, parameter_dict['corechainmodelnumber'])
-    pickle.dump(Logging,open(model_path+'/result.pickle','wb+'))
+    if paraphrase:
+        pickle.dump(Logging, open(model_path + '/paraphrase_result.pickle', 'wb+'))
+    else:
+        pickle.dump(Logging,open(model_path+'/result.pickle','wb+'))
 

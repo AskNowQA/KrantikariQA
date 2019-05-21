@@ -13,6 +13,7 @@ import network as net
 
 import os
 import sys
+import json
 import torch
 import pickle
 import traceback
@@ -125,11 +126,8 @@ class QuestionAnswering:
 
         if self.parameters['corechainmodel'] == 'bert':
             ### This needs to change
-            self.corechain_model = net.Bert_Scorer(_parameter_dict = parameter_dict,
-                    _word_to_id=_word_to_id,
-                    _device=device,
-                    _pointwise=pointwise,
-                    _debug=False)
+            self.corechain_model = net.Bert_Scorer(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
+                                                 _device=self.device, _pointwise=self.pointwise, _debug=self.debug)
 
         if self.parameters['corechainmodel'] == 'slotptr_randomvec':
             self.corechain_model = net.QelosSlotPointerModelRandomVec(_parameter_dict=self.parameters, _word_to_id=self._word_to_id,
@@ -395,7 +393,7 @@ class QuestionAnswering:
 
 
         distribute = True
-        k = 200
+        k = 1000
 
         if len(Q) < k+1:
             distribute = False
@@ -760,7 +758,7 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         best_path = positive_path
         mrr = 1
         path_predicted_correct = True
-
+        print("here here is the code")
     elif no_positive_path and len(negative_paths) != 0:
         '''
             There exists no correct/true path and there are few negative paths.
@@ -815,10 +813,16 @@ def corechain_prediction(question, paths, positive_path, negative_paths, no_posi
         if best_path_index == 0:
             path_predicted_correct = True
 
+        if model == 'bert':
+            output = [i[0] for i in output]
+        print(output)
         mrr_output = np.argsort(output)[::-1]
+        # print("mrr_output is 1 ", mrr_output)
         mrr_output = mrr_output.tolist()
+        # print("mrr_output is", mrr_output)
         mrr = mrr_output.index(0) + 1.0
 
+        # raise IOError
         # print(output)
         if mrr != 0:
             mrr = 1.0 / mrr
@@ -1111,20 +1115,46 @@ def evaluate(_logging,dbp):
 if __name__ == "__main__":
 
     device = torch.device("cuda")
-    paraphrase = False
+    paraphrase = True
+    paraphrase_number = 4
+    # setting up device,model name and loss types.
+    training_model = 'bert'
+    _dataset = 'lcquad'
+    # _dataset = 'transfer-d'
+    pointwise = False
 
+    # 19 is performing the best
+    training_model_number = 4
+    _debug = False
+
+    exc = 0
 
     if paraphrase:
-        df = pd.read_csv(open('resources/final_paraphrase.csv'))
-        paraphrased_data = {}
-        for q1, a1, id1, q2, a2, id2 in zip(df['Input.INPUT_QUESTION1'],
-                                            df['Answer.rephrased_question1'], df['Input.UID1'],
-                                            df['Input.INPUT_QUESTION2'],
-                                            df['Answer.rephrased_question2'], df['Input.UID2']):
-            if id1 not in paraphrased_data.keys():
-                paraphrased_data[id1] = a1
-            if id2 not in paraphrased_data.keys():
-                paraphrased_data[id2] = a2
+        if paraphrase_number == 1:
+            df = pd.read_csv(open('resources/final_paraphrase.csv'))
+            paraphrased_data = {}
+            for q1, a1, id1, q2, a2, id2 in zip(df['Input.INPUT_QUESTION1'],
+                                                df['Answer.rephrased_question1'], df['Input.UID1'],
+                                                df['Input.INPUT_QUESTION2'],
+                                                df['Answer.rephrased_question2'], df['Input.UID2']):
+                if id1 not in paraphrased_data.keys():
+                    paraphrased_data[id1] = a1
+                if id2 not in paraphrased_data.keys():
+                    paraphrased_data[id2] = a2
+        else:
+            dd = json.load(open('resources/inflected_data.json'))
+            paraphrased_data = {}
+            if paraphrase_number == 2:
+                for d in dd:
+                    paraphrased_data[d['_id']] = d['syn_replacement']
+            if paraphrase_number == 3:
+                for d in dd:
+                    paraphrased_data[d['_id']] = d['syn_replacement_vocab']
+            if paraphrase_number == 4:
+                for d in dd:
+                    paraphrased_data[d['_id']] = d['dropped']
+
+
 
     # sparql_constructor.init(embeddings_interface)
     dbp = db_interface.DBPedia(_verbose=True, caching=False)
@@ -1135,14 +1165,7 @@ if __name__ == "__main__":
     config = ConfigParser.ConfigParser()
     config.readfp(open('configs/macros.cfg'))
 
-    # setting up device,model name and loss types.
-    training_model = 'bert_slotptr'
-    _dataset = 'lcquad'
-    pointwise = False
 
-    # 19 is performing the best
-    training_model_number = 7
-    _debug = False
 
     # Loading relations file.
     COMMON_DATA_DIR = 'data/data/common'
@@ -1166,6 +1189,7 @@ if __name__ == "__main__":
         parameter_dict = cl.runtime_parameters(dataset=_dataset, training_model=training_model,
                                                training_config=training_config, config_file='configs/macros.cfg')
         _dataset = 'transfer-d'
+        parameter_dict['dataset'] = 'transfer-d'
     else:
         parameter_dict = cl.runtime_parameters(dataset=_dataset, training_model=training_model,
                                                training_config=training_config, config_file='configs/macros.cfg')
@@ -1194,16 +1218,21 @@ if __name__ == "__main__":
 
     parameter_dict['vocab'] = pickle.load(open('resources/vocab_gl.pickle', 'rb'))
 
+
     TEMP = aux.data_loading_parameters(_dataset, parameter_dict, runtime=True)
+
 
     _dataset_specific_data_dir, _model_specific_data_dir, _file, \
     _max_sequence_length, _neg_paths_per_epoch_train, \
     _neg_paths_per_epoch_validation, _training_split, _validation_split, _index = TEMP
 
+
+
     if _dataset == 'transfer-d':
         _dataset = 'lcquad'
+        _file = 'id_big_data.json'
         _data,  _vectors = dl.create_dataset_runtime(file=_file, _dataset=_dataset,
-                                                                             _dataset_specific_data_dir=_dataset_specific_data_dir,
+                                                                             _dataset_specific_data_dir='data/data/lcquad/',
                                                                              split_point=.80)
         _dataset = 'transfer-d'
     else:
@@ -1263,11 +1292,16 @@ if __name__ == "__main__":
         index += startindex
 
         if paraphrase:
-            new_question = paraphrased_data[data['parsed-data']['node']['_id']]
-            new_question_id = embeddings_interface.vocabularize\
-                (nlutils.tokenize(new_question))
-            data['uri']['question-id'] = new_question_id
-            data['parsed-data']['node']['corrected_question'] = new_question
+            try:
+                new_question = paraphrased_data[data['parsed-data']['node']['_id']]
+
+                new_question_id = embeddings_interface.vocabularize\
+                    (nlutils.tokenize(new_question))
+                data['uri']['question-id'] = new_question_id
+                data['parsed-data']['node']['corrected_question'] = new_question
+            except:
+                exc = exc+1
+                continue
 
         log, metrics = answer_question(qa=quesans,
                                        index=index,

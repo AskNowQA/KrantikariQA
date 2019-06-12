@@ -222,7 +222,7 @@ class DBPedia:
                 temp_query = GET_RIGHT_PROPERTIES_OF_RESOURCE % {'target_resource': _resource_uri}
             else:
                 temp_query = GET_LEFT_PROPERTIES_OF_RESOURCE % {'target_resource': _resource_uri}
-        response = self.shoot_custom_query(temp_query)
+            response = self.shoot_custom_query(temp_query)
 
         try:
             if _with_connected_resource:

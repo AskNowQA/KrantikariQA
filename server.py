@@ -1,4 +1,3 @@
-
 '''
     >File starts a simple bottle server which can then be used for accessing Krantikari.
         >it inits the model as well as all other peripherals needed
@@ -27,8 +26,6 @@
     >To receive sparql, instead of sending the request at /answer send it on /sparql . Currently ask queries are not supported.
 '''
 
-
-
 import os
 import sys
 import json
@@ -42,7 +39,6 @@ import traceback
 import numpy as np
 from bottle import get, request, run, response, HTTPError
 
-
 import onefile as qa
 
 from datasetPreparation import rdf_candidates as rdfc
@@ -53,6 +49,7 @@ from utils import natural_language_utilities as nlutils
 from utils.goodies import *
 from utils import embeddings_interface as ei
 from utils import query_graph_to_sparql as qgts
+
 ei.__check_prepared__()
 
 quesans, dbp, subgraph_maker, relations, parameter_dict = None, None, None, None, None
@@ -62,13 +59,13 @@ CACHING = True
 REDIS_HOSTNAME = 'localhost'
 _db_name = 0
 
-
-
 if CACHING:
     R = redis.StrictRedis(host=REDIS_HOSTNAME, port=6379, db=_db_name)
 
 # path --> 'http://dbpedia.org/property/stadium'
 vocabularize_relation = lambda path: ei.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
+
+
 # vocabularize_specia_char = lambda char: [ei.SPECIAL_CHARACTERS.index(char)]
 
 def get_entities(question):
@@ -83,7 +80,7 @@ def get_entities(question):
     proxyDict = {
         "http": HTTP_PROXY,
         "https": HTTPS_PROXY
-        }
+    }
 
     headers = {
         'Content-Type': 'application/json',
@@ -91,15 +88,15 @@ def get_entities(question):
 
     # data = {"nlquery":question}
     # data = str(data)
-    data = '{"nlquery":"%(p)s"}'% {"p":question}
-    response = requests.post('http://sda.tech/earl/api/processQuery', headers=headers, data=data, proxies=proxyDict)
+    data = '{"nlquery":"%(p)s"}' % {"p": question}
+    response = requests.post(' http://asknow02.sda.tech/earl/api/processQuery', headers=headers, data=data,
+                             proxies=proxyDict)
     a = json.loads(response.content)
     entity_list = []
     for i in range(len(a['ertypes'])):
         if a['ertypes'][i] == 'entity':
             entity_list.append(a['rerankedlists'][str(i)][0][1])
     return entity_list
-
 
 
 def start():
@@ -117,7 +114,7 @@ def start():
     _dataset = 'lcquad'
     _dataset_specific_data_dir = 'data/data/%(dataset)s/' % {'dataset': _dataset}
 
-    device =  torch.device("cpu")
+    device = torch.device("cuda")
     dbp = dbi.DBPedia(caching=True)
 
     training_config = False
@@ -148,20 +145,19 @@ def start():
 
     parameter_dict['rdfclassmodelnumber'] = '2'
 
-
     parameter_dict['vectors'] = ei.vectors
 
     # Load relations dict
-    relations = pickle.load(open(os.path.join(qa.COMMON_DATA_DIR,'relations.pickle'),'rb'),encoding='bytes')
+    relations = pickle.load(open(os.path.join(qa.COMMON_DATA_DIR, 'relations.pickle'), 'rb'), encoding='bytes')
 
     print(parameter_dict)
     quesans = qa.QuestionAnswering(parameters=parameter_dict, pointwise=training_config,
-                                        word_to_id=None, device=device, debug=False, _dataset=_dataset)
+                                   word_to_id=None, device=device, debug=False, _dataset=_dataset)
 
     run(host=URL, port=PORT)
 
 
-def answer_question(question):
+def answer_question(question, entities=None):
     """
         Will get entities for the question.
         Generate subgraph
@@ -174,53 +170,51 @@ def answer_question(question):
     global relations, dbp
 
     _graph = {
-        'entities' : [],
-        'best_path' : [],
-        'intent' : "",
-        'rdf_constraint':False,
-        'rdf_constraint_type':'',
-        'rdf_best_path':'',
-        'answers':[],
-        'sparql':''
+        'entities': [],
+        'best_path': [],
+        'intent': "",
+        'rdf_constraint': False,
+        'rdf_constraint_type': '',
+        'rdf_best_path': '',
+        'answers': [],
+        'sparql': ''
     }
 
     # @TODO: put in type checks if needed here.
     question_id = ei.vocabularize(nlutils.tokenize(question))
 
-    entities = get_entities(question)
+    if not entities:
+        entities = get_entities(question)
     _graph['entities'] = entities
 
+    print(_graph)
     if not entities: raise NoEntitiesFound
-
 
     if CACHING:
 
         caching_answer = R.get(str(entities))
         if caching_answer:
             answer = json.loads(caching_answer)
-            hop1,hop2 = answer[0],answer[1]
+            hop1, hop2 = answer[0], answer[1]
         else:
             answer = subgraph_maker.subgraph(entities, question, {}, _use_blacklist=True, _qald=False)
-            hop1, hop2 = answer[0],answer[1]
+            hop1, hop2 = answer[0], answer[1]
             R.set(str(entities),
                   json.dumps(answer))
 
     else:
         hop1, hop2 = subgraph_maker.subgraph(entities, question, {}, _use_blacklist=True, _qald=False)
 
-
     if len(hop1) == 0 and len(hop2) == 0: raise NoPathsFound
 
-
-
-    _hop1 = [vocabularize_relation(h[0])+vocabularize_relation(h[1]) for h in hop1]
-    _hop2 = [vocabularize_relation(h[0])+vocabularize_relation(h[1])+
-             vocabularize_relation(h[2])+vocabularize_relation(h[3]) for h in hop2]
-    paths = _hop1+ _hop2
-    paths_sf = hop1+hop2
+    _hop1 = [vocabularize_relation(h[0]) + vocabularize_relation(h[1]) for h in hop1]
+    _hop2 = [vocabularize_relation(h[0]) + vocabularize_relation(h[1]) +
+             vocabularize_relation(h[2]) + vocabularize_relation(h[3]) for h in hop2]
+    paths = _hop1 + _hop2
+    paths_sf = hop1 + hop2
 
     if parameter_dict['corechainmodel'] == 'slotptr':
-        paths_rel1_sp, paths_rel2_sp, _, _ = qa.create_rd_sp_paths(paths,no_reldet=True)
+        paths_rel1_sp, paths_rel2_sp, _, _ = qa.create_rd_sp_paths(paths, no_reldet=True)
         output = quesans._predict_corechain(question_id, paths, paths_rel1_sp, paths_rel2_sp)
     elif parameter_dict['corechainmodel'] == 'bilstm_dot':
         output = quesans._predict_corechain(question_id, np.asarray(paths))
@@ -247,16 +241,15 @@ def answer_question(question):
     _graph['best_path'] = best_path_sf
     _graph['intent'] = intent
 
-
-
     if rdftype != 'none':
         _graph['rdf_constraint'] = True
-        x_constraint,uri_constraint = rdfc.generate_rdf_candidates(path=best_path_sf,topic_entity=entities,dbp=dbp)
-        constraint_sf = x_constraint+uri_constraint
-        x_constraint = [ei.vocabularize(nlutils.tokenize(" ".join(['x',dbp.get_label(x)]))) for x in x_constraint]
-        uri_constraint = [ei.vocabularize(nlutils.tokenize(" ".join(['uri',dbp.get_label(uri)]))) for uri in uri_constraint]
-        constraint = x_constraint+uri_constraint
-        constraint_output_index = np.argmax(quesans._predict_rdfclass(question_id,constraint))
+        x_constraint, uri_constraint = rdfc.generate_rdf_candidates(path=best_path_sf, topic_entity=entities, dbp=dbp)
+        constraint_sf = x_constraint + uri_constraint
+        x_constraint = [ei.vocabularize(nlutils.tokenize(" ".join(['x', dbp.get_label(x)]))) for x in x_constraint]
+        uri_constraint = [ei.vocabularize(nlutils.tokenize(" ".join(['uri', dbp.get_label(uri)]))) for uri in
+                          uri_constraint]
+        constraint = x_constraint + uri_constraint
+        constraint_output_index = np.argmax(quesans._predict_rdfclass(question_id, constraint))
         constraint_output_sf = constraint_sf[constraint_output_index]
         if constraint[constraint_output_index][0] == 'x':
             _graph['rdf_constraint_type'] = 'x'
@@ -265,14 +258,12 @@ def answer_question(question):
             _graph['rdf_constraint_type'] = 'uri'
             _graph['rdf_best_path'] = constraint_output_sf
 
-
     sparql = qgts.convert_runtime(_graph)
     _graph['sparql'] = sparql
 
-    #@TODO: handle error
-    answers = qa.sparql_answer(sparql,dbp)
+    # @TODO: handle error
+    answers = qa.sparql_answer(sparql, dbp)
     _graph['answers'] = answers
-
 
     return _graph
 
@@ -288,7 +279,16 @@ def answer():
         raise HTTPError(500, 'Internal Server Error')
 
 
-
+@get('/answer')
+def answer_with_entites():
+    try:
+        question = request.forms['question']
+        entities = request.forms['entities']
+        _graph = answer_question(question, json.loads(entities))
+        _graph['answers'] = [i.decode('utf-8') for i in _graph['answers']]
+        return json.dumps(_graph)
+    except:
+        raise HTTPError(500, 'Internal Server Error')
 
 
 if __name__ == "__main__":

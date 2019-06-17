@@ -126,7 +126,7 @@ def __parse_line__(line):
     tokens = line.split(' ')
     tokens[-1] = tokens[-1][:-1]
     word = [tokens[0]]
-    tokens = tokens[1:]
+    tokens = float(tokens[1:])
     while True:
         token = tokens[0]
         #         print(tokreen)

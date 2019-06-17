@@ -107,7 +107,6 @@ GET_LEFT_RIGHT_PROPERTIES_OF_RESOURCE_WITH_RIGHT_PROPERTY = '''SELECT DISTINCT ?
                                                                 {optional {?useless_resource ?property1 ?useless_resource_2}}
                                                                 UNION
                                                                 {optional {?useless_resource_3 ?property2 ?useless_resource}}
-                                                                FILTER(!isLiteral(?useless_resource) && !isLiteral(?useless_resource_2) && !isLiteral(?useless_resource_3))
                                                                 } LIMIT 10000 OFFSET %(offset)s '''
 GET_LEFT_RIGHT_PROPERTIES_OF_RESOURCE_WITH_LEFT_PROPERTY = '''SELECT DISTINCT ?property1 ?property2 
                                                                 WHERE {   
@@ -115,7 +114,6 @@ GET_LEFT_RIGHT_PROPERTIES_OF_RESOURCE_WITH_LEFT_PROPERTY = '''SELECT DISTINCT ?p
                                                                 {optional {?useless_resource ?property1 ?useless_resource_2}}
                                                                 UNION
                                                                 {optional {?useless_resource_3 ?property2 ?useless_resource}}
-                                                                FILTER(!isLiteral(?useless_resource) && !isLiteral(?useless_resource_2) && !isLiteral(?useless_resource_3))
                                                                 } LIMIT 10000 OFFSET %(offset)s'''
 class DBPedia:
     def __init__(self, _method='round-robin', _verbose=False, _db_name=0, caching=True):

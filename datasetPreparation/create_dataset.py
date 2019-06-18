@@ -211,7 +211,7 @@ class CreateDataNode():
 
 
         hop1,hop2  = self.create_subgraph.subgraph\
-            (entity,_data_node['corrected_question'],self.relation_file,_use_blacklist=True,_qald=self.qald)
+            (entity,_data_node['corrected_question'],self.relation_file,_use_blacklist=True,_qald=self.qald,hop2=True)
 
 
 

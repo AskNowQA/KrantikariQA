@@ -295,7 +295,7 @@ class CreateSubgraph:
         return data
 
     # data.append(cls.get_something(SPARQL3, te2, te1, 3, dbp))
-    def subgraph(self,_entities,_question,_relations,_use_blacklist=True,_qald=False):
+    def subgraph(self,_entities,_question,_relations,_use_blacklist=True,_qald=False,hop2=True):
         '''
 
 
@@ -363,6 +363,9 @@ class CreateSubgraph:
             paths_hop1_uri += [['-', _p] for _p in left_properties_filtered_uri]
 
             left_properties_filtered, right_properties_filtered = left_properties_filtered_uri, right_properties_filtered_uri
+
+            if not hop2:
+                return [list(x) for x in set(tuple(x) for x in paths_hop1_uri)],[]
 
             """
             				2 - Hop COMMENCES

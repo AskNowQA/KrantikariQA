@@ -13,6 +13,7 @@ import os
 os.environ['NO_PROXY'] = 'localhost'
 
 
+EI_URL = "http://localhost:3500/vec"
 class CreateSubgraph:
     def __init__(self,_dbpedia_interface,_predicate_blacklist,relation_file, qald=False):
 
@@ -57,7 +58,7 @@ class CreateSubgraph:
             except:
                 p = _predicates[i]
             query = {'question':p}
-            v = requests.get("http://localhost:3500/vec", json=query)
+            v = requests.get(EI_URL, json=query)
             v = np.asarray(v.json())
             v_p = np.mean(v.astype(np.float), axis=0)
 
@@ -319,7 +320,7 @@ class CreateSubgraph:
         # Vectorize question
         # v_qt = " "
         query = {'question': _question}
-        v = requests.get("http://localhost:3500/vec", json=query)
+        v = requests.get(EI_URL, json=query)
         v = np.asarray(v.json())
         v_qt = np.mean(v.astype(np.float), axis=0)
 

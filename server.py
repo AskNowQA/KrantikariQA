@@ -157,7 +157,7 @@ def start():
     run(host=URL, port=PORT)
 
 
-def answer_question(question, entities=None):
+def answer_question(question, entities=None, simple=False):
     """
         Will get entities for the question.
         Generate subgraph
@@ -204,6 +204,9 @@ def answer_question(question, entities=None):
 
     else:
         hop1, hop2 = subgraph_maker.subgraph(entities, question, {}, _use_blacklist=True, _qald=False)
+
+    if simple:
+        hop2 = []
 
     if len(hop1) == 0 and len(hop2) == 0: raise NoPathsFound
 

@@ -661,7 +661,7 @@ def create_dataset_rdf(file, max_sequence_length, _dataset, _dataset_specific_da
             # Question
             question = np.zeros((max_sequence_length), dtype=np.int64)
             unpadded_question = np.asarray(datum['uri']['question-id'])
-            question[:min(len(unpadded_question), max_sequence_length)] = unpadded_question
+            question[:min(len(unpadded_question), max_sequence_length)] = unpadded_question[:min(len(unpadded_question), max_sequence_length)]
             questions.append(question)
 
             # Negative Path

@@ -392,7 +392,7 @@ class QuestionAnswering:
             return np.array_split(np_array[:-1], k, axis=0)
 
 
-        distribute = True
+        distribute = False
         k = 1000
 
         if len(Q) < k+1:
@@ -1115,16 +1115,16 @@ def evaluate(_logging,dbp):
 if __name__ == "__main__":
 
     device = torch.device("cuda")
-    paraphrase = True
-    paraphrase_number = 4
+    paraphrase = False
+    paraphrase_number = 0
     # setting up device,model name and loss types.
-    training_model = 'bert'
+    training_model = 'slotptr'
     _dataset = 'lcquad'
     # _dataset = 'transfer-d'
     pointwise = False
 
     # 19 is performing the best
-    training_model_number = 4
+    training_model_number = 0
     _debug = False
 
     exc = 0

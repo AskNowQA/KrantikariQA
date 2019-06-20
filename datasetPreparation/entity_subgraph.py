@@ -4,16 +4,20 @@
 
 '''
 import numpy as np
-# from utils import embeddings_interface
 import requests
-# from utils import natural_language_utilities as nlutils
 import traceback
-import json
 import os
+from utils import embeddings_interface
+from utils import natural_language_utilities as nlutils
+
 os.environ['NO_PROXY'] = 'localhost'
-
-
+embeddings_interface.__check_prepared__()
 EI_URL = "http://localhost:3500/vec"
+
+def vocabularize(question):
+    vec = embeddings_interface.vectorize(nlutils.tokenize(question), _embedding=EMBEDDING).astype(np.float).tolist()
+    return vec
+
 class CreateSubgraph:
     def __init__(self,_dbpedia_interface,_predicate_blacklist,relation_file, qald=False):
 
@@ -57,9 +61,10 @@ class CreateSubgraph:
                 p = _predicates[i].decode("utf-8")
             except:
                 p = _predicates[i]
-            query = {'question':p}
-            v = requests.get(EI_URL, json=query)
-            v = np.asarray(v.json())
+            v = vocabularize(p)
+            # query = {'question':p}
+            # v = requests.get(EI_URL, json=query)
+            # v = np.asarray(v.json())
             v_p = np.mean(v.astype(np.float), axis=0)
 
             # If either of them is a zero vector, the cosine is 0.\
@@ -320,8 +325,9 @@ class CreateSubgraph:
         # Vectorize question
         # v_qt = " "
         query = {'question': _question}
-        v = requests.get(EI_URL, json=query)
-        v = np.asarray(v.json())
+        v = vocabularize(question=_question)
+        # v = requests.get(EI_URL, json=query)
+        # v = np.asarray(v.json())
         v_qt = np.mean(v.astype(np.float), axis=0)
 
         if len(_entities) == 1:

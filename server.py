@@ -143,7 +143,7 @@ def start():
 
     parameter_dict['rdfclassmodel'] = 'bilstm_dot'
 
-    parameter_dict['rdfclassmodelnumber'] = '2'
+    parameter_dict['rdfclassmodelnumber'] = '0'
 
     parameter_dict['vectors'] = ei.vectors
 

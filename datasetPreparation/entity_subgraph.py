@@ -13,6 +13,8 @@ from utils import natural_language_utilities as nlutils
 os.environ['NO_PROXY'] = 'localhost'
 embeddings_interface.__check_prepared__()
 EI_URL = "http://localhost:3500/vec"
+EMBEDDING = 'glove'
+
 
 def vocabularize(question):
     vec = embeddings_interface.vectorize(nlutils.tokenize(question), _embedding=EMBEDDING).astype(np.float).tolist()
@@ -65,7 +67,10 @@ class CreateSubgraph:
             # query = {'question':p}
             # v = requests.get(EI_URL, json=query)
             # v = np.asarray(v.json())
-            v_p = np.mean(v.astype(np.float), axis=0)
+            # v_p = np.mean(v.astype(np.float), axis=0)
+
+            # May be need to change the above line to
+            v_p = np.mean(v, axis=0)
 
             # If either of them is a zero vector, the cosine is 0.\
             if np.sum(v_p) == 0.0 or np.sum(_v_qt) == 0.0 or p.strip() == "":
@@ -328,7 +333,10 @@ class CreateSubgraph:
         v = vocabularize(question=_question)
         # v = requests.get(EI_URL, json=query)
         # v = np.asarray(v.json())
-        v_qt = np.mean(v.astype(np.float), axis=0)
+        # print(type(v[0]))
+        # v_qt = np.mean(v.astype(np.float), axis=0)
+
+        v_qt = np.mean(v, axis=0)
 
         if len(_entities) == 1:
 

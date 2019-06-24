@@ -33,7 +33,7 @@ import math
 import torch
 import redis
 import pickle
-import warnings
+import logging
 import requests
 import traceback
 import numpy as np
@@ -64,6 +64,14 @@ if CACHING:
 
 # path --> 'http://dbpedia.org/property/stadium'
 vocabularize_relation = lambda path: ei.vocabularize(nlutils.tokenize(dbp.get_label(path))).tolist()
+
+
+logging.basicConfig(filename='krantikari_server.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
+
+
+# logging
+logging.info(f'the redis database name used for caching is {_db_name}')
+
 
 
 # vocabularize_specia_char = lambda char: [ei.SPECIAL_CHARACTERS.index(char)]
@@ -154,6 +162,12 @@ def start():
     quesans = qa.QuestionAnswering(parameters=parameter_dict, pointwise=training_config,
                                    word_to_id=None, device=device, debug=False, _dataset=_dataset)
 
+
+    logging.info(f"core chain model number is {parameter_dict['corechainmodelnumber']}")
+    logging.info(f"intent model number is {parameter_dict['intentmodel']}")
+    logging.info(f"rdf type model number is {parameter_dict['rdftypemodelnumber']}")
+    logging.info(f"rdf class model number is {parameter_dict['rdfclassmodelnumber']}")
+
     run(host=URL, port=PORT)
 
 
@@ -188,7 +202,9 @@ def answer_question(question, entities=None, simple=False):
     _graph['entities'] = entities
 
     print(_graph)
-    if not entities: raise NoEntitiesFound
+    if not entities:
+        logging.warning(f'no entites were found for this question: {question}')
+        raise NoEntitiesFound
 
     if CACHING:
 
@@ -218,10 +234,12 @@ def answer_question(question, entities=None, simple=False):
             _graph['best_path'] = []
             _graph['intent'] = qa.INTENTS[intent_pred]
             _graph['sparql'] = ''
-            _graph['answers'] = False
+            _graph['answers'] = [b'False']
             _graph['rdf_constraint'] = False
             return _graph
         else:
+            logging.warning(f'no paths were found for this question with entity as {entities} and question as '
+                            f'{question}')
             raise NoPathsFound
 
     _hop1 = [vocabularize_relation(h[0]) + vocabularize_relation(h[1]) for h in hop1]
@@ -236,19 +254,12 @@ def answer_question(question, entities=None, simple=False):
     elif parameter_dict['corechainmodel'] == 'bilstm_dot':
         output = quesans._predict_corechain(question_id, np.asarray(paths))
     else:
+        logging.critical('Incorrect model name was selected. Choose from slotptr and bilstm_dot')
         raise BadParameters('corechainmodel')
 
     best_path_index = np.argmax(output)
     best_path_sf = paths_sf[best_path_index]
-    # # ##############################################
-    # """
-    #     Intent, rdftype prediction
-    #
-    #     Straightforward.
-    #
-    #     Metrics: accuracy
-    # """
-    # # ##############################################
+
 
     rdftype_pred = np.argmax(quesans._predict_rdftype(question_id))
     intent = qa.INTENTS[intent_pred]
@@ -278,8 +289,11 @@ def answer_question(question, entities=None, simple=False):
     _graph['sparql'] = sparql
 
     # @TODO: handle error
-    answers = qa.sparql_answer(sparql, dbp)
-    _graph['answers'] = answers
+    if _graph['intent'] == 'ask':
+        _graph['answers'] = [b'True']
+    else:
+        answers = qa.sparql_answer(sparql, dbp)
+        _graph['answers'] = answers
 
     return _graph
 
@@ -288,10 +302,13 @@ def answer_question(question, entities=None, simple=False):
 def answer():
     try:
         question = request.forms['question']
+        logging.info(f'received question {question}')
         _graph = answer_question(question)
         _graph['answers'] = [i.decode('utf-8') for i in _graph['answers']]
         return json.dumps(_graph)
     except:
+        logging.critical(traceback.print_exc())
+        print(traceback.print_exc())
         raise HTTPError(500, 'Internal Server Error')
 
 
@@ -300,10 +317,13 @@ def answer_with_entites():
     try:
         question = request.forms['question']
         entities = request.forms['entities']
+        logging.info(f'received question {question} and entities as {entities}')
         _graph = answer_question(question, json.loads(entities))
         _graph['answers'] = [i.decode('utf-8') for i in _graph['answers']]
         return json.dumps(_graph)
     except:
+        logging.critical(traceback.print_exc())
+        print(traceback.print_exc())
         raise HTTPError(500, 'Internal Server Error')
 
 
@@ -321,6 +341,8 @@ if __name__ == "__main__":
 
     print("About to start server on %(url)s:%(port)s" % {'url': URL, 'port': str(PORT), 'gpu': str(GPU)})
     print("initilizing models and databases ... ")
+
+    logging.info("About to start server on %(url)s:%(port)s" % {'url': URL, 'port': str(PORT), 'gpu': str(GPU)})
 
     start()
     try:

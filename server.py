@@ -298,11 +298,22 @@ def answer_question(question, entities=None, simple=False):
     return _graph
 
 
+def reformat_question(question):
+    question = question.strip()
+    if question[-1] != '?':
+        return question + ' ?'
+    else:
+        if question[-2] != ' ':
+            return question[:-1] + ' ?'
+        else:
+            return question
+
 @get('/graph')
 def answer():
     try:
         question = request.forms['question']
         logging.info(f'received question {question}')
+        question = reformat_question(question)
         _graph = answer_question(question)
         _graph['answers'] = [i.decode('utf-8') for i in _graph['answers']]
         return json.dumps(_graph)
@@ -316,6 +327,8 @@ def answer():
 def answer_with_entites():
     try:
         question = request.forms['question']
+        logging.info(f'received question {question}')
+        question = reformat_question(question)
         entities = request.forms['entities']
         logging.info(f'received question {question} and entities as {entities}')
         _graph = answer_question(question, json.loads(entities))

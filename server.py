@@ -208,7 +208,21 @@ def answer_question(question, entities=None, simple=False):
     if simple:
         hop2 = []
 
-    if len(hop1) == 0 and len(hop2) == 0: raise NoPathsFound
+        # # Get intent
+
+    intent_pred = np.argmax(quesans._predict_intent(question_id))
+
+
+    if len(hop1) == 0 and len(hop2) == 0:
+        if qa.INTENTS[intent_pred] == 'ask':
+            _graph['best_path'] = []
+            _graph['intent'] = qa.INTENTS[intent_pred]
+            _graph['sparql'] = ''
+            _graph['answers'] = False
+            _graph['rdf_constraint'] = False
+            return _graph
+        else:
+            raise NoPathsFound
 
     _hop1 = [vocabularize_relation(h[0]) + vocabularize_relation(h[1]) for h in hop1]
     _hop2 = [vocabularize_relation(h[0]) + vocabularize_relation(h[1]) +
@@ -235,8 +249,7 @@ def answer_question(question, entities=None, simple=False):
     #     Metrics: accuracy
     # """
     # # ##############################################
-    # # Get intent
-    intent_pred = np.argmax(quesans._predict_intent(question_id))
+
     rdftype_pred = np.argmax(quesans._predict_rdftype(question_id))
     intent = qa.INTENTS[intent_pred]
     rdftype = qa.RDFTYPES[rdftype_pred]

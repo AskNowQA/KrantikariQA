@@ -62,4 +62,21 @@ change embedding in configs to 300d
 ```
 
 
+#### Once the dataset is prepared
+
+Check for the following files 
+1. in /resources check for vectors_gl.npy and vocab_gl.npy
+2. in /data/data/common check for rdf_type_lookup.json and relations.pickle 
+3. in /data/data/lcquad check for id_big_data.json (To reproduce experiments related to lcquad)
+4. in /data/data/qald check for id_big_data.json (To reproduce experiments related to qald)
+
+@TODO: Write a script to automate the above task.
+
+Once the data is at appropriate place run the following command. 
+
+```
+CUDA_VISIBLE_DEVICES=3 python corechain.py -model slotptr -device cuda -dataset lcquad -pointwise False
+```
+
+
 

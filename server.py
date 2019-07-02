@@ -57,7 +57,7 @@ quesans, dbp, subgraph_maker, relations, parameter_dict = None, None, None, None
 CACHING = True
 
 REDIS_HOSTNAME = 'localhost'
-_db_name = 0
+_db_name = 1
 
 if CACHING:
     R = redis.StrictRedis(host=REDIS_HOSTNAME, port=6379, db=_db_name)
@@ -219,7 +219,7 @@ def answer_question(question, entities=None, simple=False):
                   json.dumps(answer))
 
     else:
-        hop1, hop2 = subgraph_maker.subgraph(entities, question, {}, _use_blacklist=True, _qald=False)
+        hop1, hop2 = subgraph_maker.subgraph(entities, question, {}, _use_blacklist=True, _qald=True)
 
     if simple:
         hop2 = []
@@ -242,11 +242,27 @@ def answer_question(question, entities=None, simple=False):
                             f'{question}')
             raise NoPathsFound
 
-    _hop1 = [vocabularize_relation(h[0]) + vocabularize_relation(h[1]) for h in hop1]
+
+    hop2_ontology = []
+    for cc in hop2:
+        if 'ontology' in cc[1] and 'ontology' in cc[3]:
+            hop2_ontology.append(cc)
+
+    hop1_ontology = []
+    for cc in hop1:
+        if 'ontology' in cc[1]:
+            hop1_ontology.append(cc)
+
+    hop2_ontology = [list(i) for i in set(tuple(i) for i in hop2_ontology)]
+    hop1_ontology = [list(i) for i in set(tuple(i) for i in hop1_ontology)]
+
+
+
+    _hop1 = [vocabularize_relation(h[0]) + vocabularize_relation(h[1]) for h in hop1_ontology]
     _hop2 = [vocabularize_relation(h[0]) + vocabularize_relation(h[1]) +
-             vocabularize_relation(h[2]) + vocabularize_relation(h[3]) for h in hop2]
+             vocabularize_relation(h[2]) + vocabularize_relation(h[3]) for h in hop2_ontology]
     paths = _hop1 + _hop2
-    paths_sf = hop1 + hop2
+    paths_sf = hop1_ontology + hop2_ontology
 
     if parameter_dict['corechainmodel'] == 'slotptr':
         paths_rel1_sp, paths_rel2_sp, _, _ = qa.create_rd_sp_paths(paths, no_reldet=True)
